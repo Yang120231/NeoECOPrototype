@@ -34,6 +34,9 @@ public final class SimplifyTooltipHandler {
     /** The 3-type small bulk matrix is upgraded to 10 types with a crafting-table recipe. */
     private static final String SMALL_BULK_CELL_KEY =
             "item.neoecoprototype.simplify_small_bulk_storage_cell.desc";
+    /** The expansion card has no screen, so its rules have to be readable on the item itself. */
+    private static final String EXPANSION_CARD_KEY =
+            "item.neoecoprototype.simplify_structure_expansion_card.desc";
     /** Trinity is implemented but withheld from players; every one of its parts says so in red. */
     private static final String NOT_IMPLEMENTED_KEY = "item.neoecoprototype.not_implemented";
 
@@ -83,6 +86,9 @@ public final class SimplifyTooltipHandler {
         // "ECO - L4 存储组件" / "ECO - L4 Storage Component".
         if (stack.is(ModRegistration.SIMPLIFY_STORAGE_COMPONENT_4M.get())) {
             return L4_COMPONENT_KEY;
+        }
+        if (stack.is(ModRegistration.SIMPLIFY_STRUCTURE_EXPANSION_CARD.get())) {
+            return EXPANSION_CARD_KEY;
         }
         return null;
     }

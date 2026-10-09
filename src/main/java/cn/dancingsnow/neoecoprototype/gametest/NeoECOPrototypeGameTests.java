@@ -25,12 +25,17 @@ import appeng.core.definitions.AEParts;
 import appeng.helpers.InterfaceLogicHost;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.me.helpers.IGridConnectedBlockEntity;
+import cn.dancingsnow.neoecoae.all.NEMultiBlocks;
 import cn.dancingsnow.neoecoae.blocks.entity.NEBlockEntity;
 import cn.dancingsnow.neoecoae.blocks.entity.computation.ECOComputationSystemBlockEntity;
 import cn.dancingsnow.neoecoae.api.storage.ECOStorageCells;
 import cn.dancingsnow.neoecoae.gui.GuiTitleProvider;
 import cn.dancingsnow.neoecoae.integration.megacells.backend.ECOMegaLongBulkStorageCell;
 import cn.dancingsnow.neoecoae.multiblock.cluster.NEComputationCluster;
+import cn.dancingsnow.neoecoae.multiblock.definition.MultiBlockDefinition;
+import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementPlan;
+import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementService;
+import cn.dancingsnow.neoecoae.multiblock.placement.WorldPlannedBlock;
 import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockBuildController;
 import cn.dancingsnow.neoecoprototype.api.SimplifyTier;
 import cn.dancingsnow.neoecoprototype.block.computation.SimplifyComputationSystemBlock;
@@ -58,6 +63,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -81,6 +87,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
@@ -5544,5 +5552,70 @@ public final class NeoECOPrototypeGameTests {
                     }
                     helper.succeed();
                 });
+    }
+
+    /**
+     * The expansion card swaps a machine's tier by walking the two tiers' plans cell against cell,
+     * which holds only while both tiers of one family fill the same cells and stop at the same
+     * length. Both halves are eco's to change - each definition reads its own ceiling off the config
+     * - and the failure mode is the card quietly refusing every machine, so the premise is pinned
+     * here rather than the behaviour.
+     */
+    @GameTest(template = "empty", batch = "tier_swap_plans_line_up", timeoutTicks = 200,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void bothTiersOfEachFamilyPlanTheSameCells(GameTestHelper helper) {
+        MultiBlockDefinition[][] ladder = {
+                {NEMultiBlocks.STORAGE_SYSTEM_L4, NEMultiBlocks.STORAGE_SYSTEM_L9},
+                {NEMultiBlocks.COMPUTATION_SYSTEM_L4, NEMultiBlocks.COMPUTATION_SYSTEM_L9},
+                {NEMultiBlocks.CRAFTING_SYSTEM_L4, NEMultiBlocks.CRAFTING_SYSTEM_L9},
+        };
+        BlockPos anchor = new BlockPos(8, 8, 8);
+        for (MultiBlockDefinition[] pair : ladder) {
+            String family = pair[0].getName().getString();
+            if (pair[0].getExpandMax() != pair[1].getExpandMax()) {
+                helper.fail("the two tiers of " + family + " stop at different lengths ("
+                        + pair[0].getExpandMax() + " and " + pair[1].getExpandMax()
+                        + "), so a machine filled out for one is not filled out for the other");
+                return;
+            }
+            Map<BlockPos, Block> lower = plannedCells(helper.getLevel(), anchor, pair[0]);
+            Map<BlockPos, Block> higher = plannedCells(helper.getLevel(), anchor, pair[1]);
+            if (!lower.keySet().equals(higher.keySet())) {
+                helper.fail("the two tiers of " + family + " fill different cells, so there is no"
+                        + " shared shape to trade block for block");
+                return;
+            }
+            int traded = 0;
+            for (Map.Entry<BlockPos, Block> cell : lower.entrySet()) {
+                Block next = higher.get(cell.getKey());
+                if (next == cell.getValue()) {
+                    continue;
+                }
+                traded++;
+                if (cell.getValue().asItem() == Items.AIR || next.asItem() == Items.AIR) {
+                    helper.fail("a cell " + family + " trades between tiers has no item to hand back"
+                            + " or to pay for at " + cell.getKey());
+                    return;
+                }
+            }
+            if (traded == 0) {
+                helper.fail("the two tiers of " + family + " plan the very same blocks, so an upgrade"
+                        + " would have nothing to swap");
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /** Which block each cell of one shape wants at length 2, mirroring off. */
+    private static Map<BlockPos, Block> plannedCells(ServerLevel level, BlockPos anchor,
+                                                     MultiBlockDefinition definition) {
+        MultiBlockPlacementPlan plan = MultiBlockPlacementService.preview(level, anchor,
+                definition.getOwner().value().defaultBlockState(), definition, 2, false);
+        Map<BlockPos, Block> cells = new HashMap<>();
+        for (WorldPlannedBlock block : plan.getAllBlocks()) {
+            cells.put(block.worldPos(), block.targetState().getBlock());
+        }
+        return cells;
     }
 }

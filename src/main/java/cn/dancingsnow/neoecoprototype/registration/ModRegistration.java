@@ -86,6 +86,7 @@ import cn.dancingsnow.neoecoprototype.items.PigmeeStorageMatrixHousingItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyComputationCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyConcreteStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem;
+import cn.dancingsnow.neoecoprototype.items.SimplifyStructureExpansionCardItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkFluidStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem;
@@ -593,6 +594,11 @@ public class ModRegistration {
     public static final Supplier<SimplifySingularityCellItem> SIMPLIFY_SINGULARITY_CELL =
             ITEMS.register("simplify_singularity_cell",
                     () -> new SimplifySingularityCellItem(new Item.Properties().stacksTo(1)));
+
+    /** eco's own builder refuses to touch a formed machine, so this card is the only way to grow one. */
+    public static final Supplier<SimplifyStructureExpansionCardItem> SIMPLIFY_STRUCTURE_EXPANSION_CARD =
+            ITEMS.register("simplify_structure_expansion_card",
+                    () -> new SimplifyStructureExpansionCardItem(new Item.Properties().stacksTo(1)));
 
     public static final Supplier<Item> SIMPLIFY_ITEM_STORAGE_MATRIX_HOUSING =
              ITEMS.register("simplify_item_storage_matrix_housing", () -> new Item(new Item.Properties()));
@@ -1258,6 +1264,7 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                           output.accept(SIMPLIFY_CONCRETE_STORAGE_MATRIX_HOUSING.get());
                           output.accept(SIMPLIFY_CONCRETE_STORAGE_CELL.get());
                           output.accept(SIMPLIFY_SINGULARITY_CELL.get());
+                        output.accept(SIMPLIFY_STRUCTURE_EXPANSION_CARD.get());
                          output.accept(SIMPLIFY_GREEN_CRYSTAL_MATRIX.get());
                          output.accept(SIMPLIFY_ITEM_STORAGE_MATRIX_HOUSING.get());
                          output.accept(PIGMEE_STORAGE_MATRIX_HOUSING.get());
