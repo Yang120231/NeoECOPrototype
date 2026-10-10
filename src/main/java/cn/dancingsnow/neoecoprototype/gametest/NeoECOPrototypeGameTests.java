@@ -5618,4 +5618,182 @@ public final class NeoECOPrototypeGameTests {
         }
         return cells;
     }
+
+    /** Where the card tests anchor their room: an L1 machine grown to its ceiling still fits the box. */
+    private static final BlockPos CARD_HOST = new BlockPos(13, 3, 8);
+
+    /**
+     * The card prices a bigger shape before it breaks anything, because the other order takes a
+     * working machine apart and hands the player a hole. This is that promise: with nothing to pay
+     * from, the room must still stand exactly as it did.
+     */
+    @GameTest(template = "l1_room", batch = "structure_card_unpaid", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void expansionCardLeavesTheMachineAloneWhenItCannotBePaidFor(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var before = machineSnapshot(helper);
+                    var mock = helper.makeMockPlayer(GameType.SURVIVAL);
+                    if (!(mock instanceof ServerPlayer player)) {
+                        helper.fail("the game test mock player is not a ServerPlayer, so the card's"
+                                + " server half cannot be reached at all: " + mock.getClass());
+                        return;
+                    }
+                    player.setShiftKeyDown(true);
+                    useExpansionCard(helper, player);
+                    var after = machineSnapshot(helper);
+                    if (before.isEmpty()) {
+                        helper.fail("the snapshot box held no machine, so this test proved nothing");
+                        return;
+                    }
+                    if (!before.equals(after)) {
+                        helper.fail("the card broke blocks before it checked whether the player could"
+                                + " pay for the bigger shape: " + changed(before, after));
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * Every block the card moves has to come back as exactly one item - it reclaims the outer column
+     * by hand rather than by breaking it with a tool, because the card itself is what is in hand and a
+     * drop table that asks for a pickaxe would quietly return nothing. The ledger is the honest
+     * reading: for each block, what stands in the world plus what the player carries plus what lies on
+     * the floor must add up to the same number before and after.
+     */
+    @GameTest(template = "l1_room", batch = "structure_card_grow", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void expansionCardTradesEveryBlockItMovesOneForOne(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var mock = helper.makeMockPlayer(GameType.SURVIVAL);
+                    if (!(mock instanceof ServerPlayer player)) {
+                        helper.fail("the game test mock player is not a ServerPlayer, so the card's"
+                                + " server half cannot be reached at all: " + mock.getClass());
+                        return;
+                    }
+                    player.setShiftKeyDown(true);
+                    for (var state : machineSnapshot(helper).values()) {
+                        for (int stack = 0; stack < 4; stack++) {
+                            player.getInventory().add(new ItemStack(state.getBlock()));
+                        }
+                    }
+                    var before = ledger(helper, player);
+                    int standingBefore = machineSnapshot(helper).size();
+                    useExpansionCard(helper, player);
+                    var after = ledger(helper, player);
+                    int standingAfter = machineSnapshot(helper).size();
+                    boolean formed = host.isFormed();
+
+                    clearMachineBox(helper);
+                    if (standingAfter <= standingBefore) {
+                        helper.fail("the room did not grow (" + standingBefore + " -> " + standingAfter
+                                + " blocks), so the balanced ledger below proves nothing");
+                        return;
+                    }
+                    if (!before.equals(after)) {
+                        helper.fail("the card lost or invented blocks while growing the room; before "
+                                + before + " after " + after);
+                        return;
+                    }
+                    if (!formed) {
+                        helper.fail("the grown room never re-formed, so the card left a broken machine");
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /** Right-click the host with the card, sneaking, the way a player does it. */
+    private static void useExpansionCard(GameTestHelper helper,
+                                         net.minecraft.server.level.ServerPlayer player) {
+        var stack = new ItemStack(ModRegistration.SIMPLIFY_STRUCTURE_EXPANSION_CARD.get());
+        BlockPos absolute = helper.absolutePos(CARD_HOST);
+        var hit = new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(absolute), Direction.EAST,
+                absolute, false);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+        stack.getItem().useOn(new UseOnContext(helper.getLevel(), player, InteractionHand.MAIN_HAND,
+                stack, hit));
+    }
+
+    /** Every non-air block in the box the card can reach, keyed by world position. */
+    private static Map<BlockPos, BlockState> machineSnapshot(GameTestHelper helper) {
+        Map<BlockPos, BlockState> blocks = new HashMap<>();
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        for (BlockPos pos : BlockPos.betweenClosed(origin,
+                origin.offset(L1_ROOM_SIZE - 1, 8, L1_ROOM_SIZE - 1))) {
+            BlockState state = helper.getLevel().getBlockState(pos);
+            if (!state.isAir()) {
+                blocks.put(pos.immutable(), state);
+            }
+        }
+        return blocks;
+    }
+
+    /** What one machine block is worth, counted in all three places it can be. */
+    private static Map<Item, Integer> ledger(GameTestHelper helper,
+                                             net.minecraft.server.level.ServerPlayer player) {
+        Map<Item, Integer> totals = new HashMap<>();
+        for (var stack : player.getInventory().items) {
+            if (!stack.isEmpty()) {
+                totals.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+        for (var stack : player.getInventory().offhand) {
+            if (!stack.isEmpty()) {
+                totals.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        for (BlockPos pos : BlockPos.betweenClosed(origin,
+                origin.offset(L1_ROOM_SIZE - 1, 8, L1_ROOM_SIZE - 1))) {
+            Item asItem = helper.getLevel().getBlockState(pos).getBlock().asItem();
+            if (asItem != Items.AIR) {
+                totals.merge(asItem, 1, Integer::sum);
+            }
+        }
+        var box = new net.minecraft.world.phys.AABB(origin.getX(), origin.getY(), origin.getZ(),
+                origin.getX() + L1_ROOM_SIZE, origin.getY() + 9, origin.getZ() + L1_ROOM_SIZE);
+        for (var dropped : helper.getLevel().getEntitiesOfClass(
+                net.minecraft.world.entity.item.ItemEntity.class, box)) {
+            var stack = dropped.getItem();
+            if (!stack.isEmpty()) {
+                totals.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+        return totals;
+    }
+
+    /** The grown columns fall outside what the template restores, so only a manual sweep puts them back. */
+    private static void clearMachineBox(GameTestHelper helper) {
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        for (BlockPos pos : BlockPos.betweenClosed(origin,
+                origin.offset(L1_ROOM_SIZE - 1, 8, L1_ROOM_SIZE - 1))) {
+            if (!helper.getLevel().getBlockState(pos).isAir()) {
+                helper.getLevel().setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+            }
+        }
+    }
+
+    private static String changed(Map<BlockPos, BlockState> before, Map<BlockPos, BlockState> after) {
+        StringBuilder text = new StringBuilder();
+        for (var entry : before.entrySet()) {
+            BlockState now = after.get(entry.getKey());
+            if (now != entry.getValue()) {
+                if (text.length() > 0) {
+                    text.append("; ");
+                }
+                text.append(entry.getKey()).append(" went from ").append(entry.getValue().getBlock())
+                        .append(" to ").append(now == null ? "air" : now.getBlock());
+            }
+        }
+        return text.length() == 0 ? "nothing" : text.toString();
+    }
 }
