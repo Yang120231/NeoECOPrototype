@@ -194,5 +194,10 @@
   "block.neoecoprototype.large_frigit_bud": "大型弗瑞格特芽",
   "block.neoecoprototype.frigit_cluster": "弗瑞格特簇",
   "block.neoecoprototype.frigit_crystal_block": "弗瑞格特水晶块",
-  "item.neoecoprototype.frigit_crystal": "弗瑞格特水晶"
+  "item.neoecoprototype.frigit_crystal": "弗瑞格特水晶",
+  "block.neoecoprototype.meteorite_core": "陨石核心",
+  "item.neoecoprototype.sky_stone_dust": "陨石粉",
+  "block.neoecoprototype.dissolution_solution": "解离液",
+  "fluid_type.neoecoprototype.dissolution_solution": "解离液",
+  "item.neoecoprototype.dissolution_bucket": "解离液桶"
 }

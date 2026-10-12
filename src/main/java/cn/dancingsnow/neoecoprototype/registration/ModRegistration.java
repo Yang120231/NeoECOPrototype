@@ -224,6 +224,13 @@ public class ModRegistration {
             RECIPE_TYPES.register("processor_assembler", () -> ProcessorAssemblerRecipe.TYPE);
     public static final Supplier<RecipeSerializer<ProcessorAssemblerRecipe>> PROCESSOR_ASSEMBLER_RECIPE_SERIALIZER =
             RECIPE_SERIALIZERS.register("processor_assembler", ProcessorAssemblerRecipe.Serializer::new);
+    /** What a comet core can be taken apart into. KubeJS writes these tables; the machine is stage two. */
+    public static final Supplier<RecipeType<cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe>>
+            DISSOCIATION_TYPE = RECIPE_TYPES.register("dissociation",
+            () -> cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe.TYPE);
+    public static final Supplier<RecipeSerializer<cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe>>
+            DISSOCIATION_SERIALIZER = RECIPE_SERIALIZERS.register("dissociation",
+            cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe.Serializer::new);
 
     /** 闁绘せ鏅涢幖褔宕ュ鍕槣濡増顭囩挒銏ゆ晬濮樿翰鍋欓柛婊冭嫰鐎规娊宕ｉ弽顒€鍨遍柛銉ュ⒔閸嬶絿绱撻埀顒勬嚌鐠囇呯#80FFAE 闁稿绻楁竟瀣晬婢跺鐟㈢紒顔碱槸閸嶅灚鎯旈弴鈥愁棌闁?A8DCA8 闁稿绻戠拹浼存晬婢跺顓洪梻鍌涚暘閳?*/
     private static final int NAME_THEME_GREEN = 0xFF94EDAB;
@@ -393,6 +400,56 @@ public class ModRegistration {
     public static final Supplier<BlockItem> FLAWLESS_BUDDING_FRIGIT_ITEM =
             ITEMS.register("flawless_budding_frigit",
                     () -> new BlockItem(FLAWLESS_BUDDING_FRIGIT.get(), new Item.Properties()));
+
+    // ============================ 解离器的材料（陨石系列） ============================
+
+    public static final DeferredRegister<net.neoforged.neoforge.fluids.FluidType> FLUID_TYPES =
+            DeferredRegister.create(net.neoforged.neoforge.registries.NeoForgeRegistries.Keys.FLUID_TYPES,
+                    NeoECOPrototype.MOD_ID);
+    public static final DeferredRegister<net.minecraft.world.level.material.Fluid> FLUIDS =
+            DeferredRegister.create(Registries.FLUID, NeoECOPrototype.MOD_ID);
+
+    /** What every comet carries at its middle, and the only thing a dissociation table takes as input. */
+    public static final Supplier<Block> METEORITE_CORE = BLOCKS.register("meteorite_core",
+            () -> new Block(BlockBehaviour.Properties.of().mapColor(MapColor.STONE).strength(4.0F, 12.0F)
+                    .requiresCorrectToolForDrops()));
+    public static final Supplier<BlockItem> METEORITE_CORE_ITEM = ITEMS.register("meteorite_core",
+            () -> new BlockItem(METEORITE_CORE.get(), new Item.Properties()));
+    /** The dust one table grinds a core into. Stacks like every other dust. */
+    public static final Supplier<Item> SKY_STONE_DUST = ITEMS.register("sky_stone_dust",
+            () -> new Item(new Item.Properties()));
+
+    public static final Supplier<net.neoforged.neoforge.fluids.FluidType> DISSOLUTION_SOLUTION_TYPE =
+            FLUID_TYPES.register("dissolution_solution",
+                    () -> new net.neoforged.neoforge.fluids.FluidType(
+                            net.neoforged.neoforge.fluids.FluidType.Properties.create()
+                                    .supportsBoating(true)));
+    /** The bath a run leaves behind: eco's coolant goes in, this comes out, so the two are different fluids. */
+    public static final Supplier<net.minecraft.world.level.material.FlowingFluid> DISSOLUTION_SOLUTION =
+            FLUIDS.register("dissolution_solution",
+                    () -> new net.neoforged.neoforge.fluids.BaseFlowingFluid.Source(dissolutionProps()));
+    public static final Supplier<net.minecraft.world.level.material.FlowingFluid> FLOWING_DISSOLUTION_SOLUTION =
+            FLUIDS.register("flowing_dissolution_solution",
+                    () -> new net.neoforged.neoforge.fluids.BaseFlowingFluid.Flowing(dissolutionProps()));
+    public static final Supplier<net.minecraft.world.level.block.LiquidBlock> DISSOLUTION_SOLUTION_BLOCK =
+            BLOCKS.register("dissolution_solution",
+                    () -> new net.minecraft.world.level.block.LiquidBlock(DISSOLUTION_SOLUTION.get(),
+                            BlockBehaviour.Properties.of().noCollission().strength(100.0F).noLootTable()));
+    public static final Supplier<net.minecraft.world.item.BucketItem> DISSOLUTION_BUCKET =
+            ITEMS.register("dissolution_bucket",
+                    () -> new net.minecraft.world.item.BucketItem(DISSOLUTION_SOLUTION.get(),
+                            new Item.Properties().stacksTo(1)));
+
+    /**
+     * A method rather than a field: the two halves of a fluid name each other, and a static field may not
+     * reach for one declared below it. Every link is a supplier, so this runs after all four are bound.
+     */
+    private static net.neoforged.neoforge.fluids.BaseFlowingFluid.Properties dissolutionProps() {
+        return new net.neoforged.neoforge.fluids.BaseFlowingFluid.Properties(
+                () -> DISSOLUTION_SOLUTION_TYPE.get(), () -> DISSOLUTION_SOLUTION.get(),
+                () -> FLOWING_DISSOLUTION_SOLUTION.get())
+                .block(() -> DISSOLUTION_SOLUTION_BLOCK.get()).bucket(() -> DISSOLUTION_BUCKET.get());
+    }
     public static final Supplier<BlockItem> FLAWED_BUDDING_FRIGIT_ITEM = ITEMS.register("flawed_budding_frigit",
             () -> new BlockItem(FLAWED_BUDDING_FRIGIT.get(), new Item.Properties()));
     public static final Supplier<BlockItem> CHIPPED_BUDDING_FRIGIT_ITEM =

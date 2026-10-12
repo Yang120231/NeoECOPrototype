@@ -2110,6 +2110,9 @@ public final class NeoECOPrototypeGameTests {
         for (var entry : BuiltInRegistries.BLOCK.entrySet()) {
             var id = entry.getKey().location();
             if (!id.getNamespace().equals(NeoECOPrototype.MOD_ID)) continue;
+            // A liquid block drops nothing on purpose - water and lava declare it the same way - and the
+            // bucket, not the block, is the thing a player can pick up.
+            if (entry.getValue() instanceof net.minecraft.world.level.block.LiquidBlock) continue;
             var table = ResourceLocation.fromNamespaceAndPath(id.getNamespace(),
                     "loot_table/blocks/" + id.getPath() + ".json");
             if (resourceManager.getResource(table).isEmpty()) {
@@ -5274,6 +5277,193 @@ public final class NeoECOPrototypeGameTests {
             return;
         }
         helper.succeed();
+    }
+
+
+    /**
+     * The dissociation machine's materials, registered before any of the machine exists. The wiring between
+     * a fluid, its flowing half, its type and its bucket is the part worth asserting: get it crossed and
+     * nothing complains at runtime, the bucket just comes out empty in the hand.
+     */
+    @GameTest(template = "empty", batch = "dissociation_materials", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void dissociationMaterialsAreWiredToEachOther(GameTestHelper helper) {
+        var coreItem = ModRegistration.METEORITE_CORE_ITEM.get();
+        if (!(coreItem instanceof net.minecraft.world.item.BlockItem coreBlockItem)
+                || coreBlockItem.getBlock() != ModRegistration.METEORITE_CORE.get()) {
+            helper.fail("the meteorite core block has no item pointing back at it, the item is " + coreItem);
+            return;
+        }
+        var dust = new ItemStack(ModRegistration.SKY_STONE_DUST.get());
+        if (dust.getMaxStackSize() != 64) {
+            helper.fail("sky stone dust should stack like any other dust, it stacks to "
+                    + dust.getMaxStackSize());
+            return;
+        }
+        var still = ModRegistration.DISSOLUTION_SOLUTION.get();
+        var flowing = ModRegistration.FLOWING_DISSOLUTION_SOLUTION.get();
+        if (!(still instanceof net.minecraft.world.level.material.FlowingFluid stillFlowing)
+                || !(flowing instanceof net.minecraft.world.level.material.FlowingFluid)) {
+            helper.fail("both halves of a fluid have to be FlowingFluid or the world can place neither");
+            return;
+        }
+        if (stillFlowing.getFlowing() != flowing) {
+            helper.fail("the source half does not name our own flowing half as its pair, it answers "
+                    + stillFlowing.getFlowing());
+            return;
+        }
+        if (still.getFluidType() != ModRegistration.DISSOLUTION_SOLUTION_TYPE.get()) {
+            helper.fail("the fluid is not carrying our own fluid type, so the client would ask the wrong "
+                    + "extension for its artwork");
+            return;
+        }
+        var bucketItem = ModRegistration.DISSOLUTION_BUCKET.get();
+        var bucket = new ItemStack(bucketItem);
+        if (bucket.getMaxStackSize() != 1) {
+            helper.fail("a filled bucket must not stack, it stacks to " + bucket.getMaxStackSize());
+            return;
+        }
+        if (bucketItem.content != still) {
+            helper.fail("the bucket carries " + bucketItem.content + " instead of the dissolution solution -"
+                    + " crossed wiring shows up as an empty bucket in the hand, not as an error");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The dissociation table: the shipped one has to load, and the arithmetic that turns weights into shares
+     * has to hold without a level, a grid or a GUI. The refusals are asserted too - a table that cannot be
+     * turned into a distribution must fail at load, where the recipe manager names the file, rather than
+     * silently rolling nothing at the player.
+     */
+    @GameTest(template = "empty", batch = "dissociation_table", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void dissociationTableLoadsAndNormalises(GameTestHelper helper) {
+        var loaded = helper.getLevel().getRecipeManager()
+                .getAllRecipesFor(cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe.TYPE);
+        cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe table = null;
+        for (var holder : loaded) {
+            if (holder.value().input().getItem() == ModRegistration.METEORITE_CORE.get().asItem()) {
+                table = holder.value();
+                break;
+            }
+        }
+        if (table == null) {
+            helper.fail("the shipped dissociation table for the meteorite core did not load - "
+                    + loaded.size() + " dissociation recipe(s) are registered");
+            return;
+        }
+        double sum = 0.0D;
+        for (double share : table.weights().values()) {
+            sum += share;
+        }
+        var core = net.minecraft.world.item.Items.COPPER_INGOT;
+        var dust = net.minecraft.world.item.Items.GLOWSTONE_DUST;
+        if (Math.abs(sum - 1.0D) > 1.0E-9D) {
+            helper.fail("normalised shares must add up to exactly one, they add to " + sum);
+            return;
+        }
+        var skyStone = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+                net.minecraft.resources.ResourceLocation.parse("ae2:sky_stone_block"));
+        var skyStoneDust = ModRegistration.SKY_STONE_DUST.get();
+        if (skyStone == null || skyStone == net.minecraft.world.item.Items.AIR) {
+            helper.fail("the shipped table names ae2:sky_stone_block, which is not registered here");
+            return;
+        }
+        if (Math.abs(table.weights().getOrDefault(skyStone, 0.0D) - 0.4D) > 1.0E-9D
+                || Math.abs(table.weights().getOrDefault(skyStoneDust, 0.0D) - 0.4D) > 1.0E-9D) {
+            helper.fail("the meteorite and its dust should each hold 0.4 of the shares, the table reads "
+                    + table.weights());
+            return;
+        }
+        if (table.maxPerProduct() != 120 || table.draws() != 12 || table.perHit() != 10) {
+            helper.fail("one run should be able to put " + table.maxPerProduct()
+                    + " of a single product into one slot (12 draws x 10), the table says draws="
+                    + table.draws() + " perHit=" + table.perHit());
+            return;
+        }
+        if (table.ticksPerRun() != 200 || Math.abs(table.powerPerRun() - 100000.0D) > 1.0E-9D) {
+            helper.fail("the shipped table should run 200 ticks on 100000 AE, it says "
+                    + table.ticksPerRun() + " ticks / " + table.powerPerRun() + " AE");
+            return;
+        }
+        int counted = 0;
+        for (int n : table.roll(net.minecraft.util.RandomSource.create(20261008L)).values()) {
+            counted += n;
+        }
+        if (counted != 120) {
+            helper.fail("a roll must hand out exactly draws x perHit = 120 items, it handed out " + counted);
+            return;
+        }
+        var again = table.roll(net.minecraft.util.RandomSource.create(20261008L));
+        if (!again.equals(table.roll(net.minecraft.util.RandomSource.create(20261008L)))) {
+            helper.fail("the same seed must give the same roll, or the result cannot be tested at all");
+            return;
+        }
+        var water = new net.neoforged.neoforge.fluids.FluidStack(
+                net.minecraft.world.level.material.Fluids.WATER, 1000);
+        var thirds = new cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe(
+                new ItemStack(ModRegistration.METEORITE_CORE.get()),
+                java.util.Map.of(core.asItem(), 1.0D, dust.asItem(), 1.0D,
+                        net.minecraft.world.item.Items.IRON_INGOT, 1.0D),
+                12, 10, water, water, 100000.0D, 200);
+        if (Math.abs(thirds.weights().get(core.asItem()) - 1.0D / 3.0D) > 1.0E-9D) {
+            helper.fail("1/1/1 should normalise to a third each, it reads " + thirds.weights());
+            return;
+        }
+        double thirdsSum = 0.0D;
+        for (double share : thirds.weights().values()) {
+            thirdsSum += share;
+        }
+        if (thirdsSum != 1.0D) {
+            helper.fail("the remainder must be handed to the last product so the shares close exactly, sum is "
+                    + thirdsSum);
+            return;
+        }
+        if (!refusesZeroWeights(water)) {
+            helper.fail("a table whose weights all add to zero should be refused at load, it was accepted");
+            return;
+        }
+        if (!refusesTooManyProducts(water)) {
+            helper.fail("a table with more products than the machine has slots should be refused, it was"
+                    + " accepted - the extra products would be rolled into slots that do not exist");
+            return;
+        }
+        helper.succeed();
+    }
+
+    private static boolean refusesZeroWeights(net.neoforged.neoforge.fluids.FluidStack water) {
+        try {
+            new cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe(
+                    ItemStack.EMPTY,
+                    java.util.Map.of(net.minecraft.world.item.Items.COAL, 0.0D),
+                    12, 10, water, water, 100000.0D, 200);
+            return false;
+        } catch (IllegalArgumentException expected) {
+            return true;
+        }
+    }
+
+    private static boolean refusesTooManyProducts(net.neoforged.neoforge.fluids.FluidStack water) {
+        java.util.Map<net.minecraft.world.item.Item, Double> tooMany = new java.util.LinkedHashMap<>();
+        var items = java.util.List.of(net.minecraft.world.item.Items.COAL, net.minecraft.world.item.Items.IRON_INGOT,
+                net.minecraft.world.item.Items.GOLD_INGOT, net.minecraft.world.item.Items.DIAMOND,
+                net.minecraft.world.item.Items.EMERALD, net.minecraft.world.item.Items.LAPIS_LAZULI,
+                net.minecraft.world.item.Items.REDSTONE, net.minecraft.world.item.Items.QUARTZ,
+                net.minecraft.world.item.Items.AMETHYST_SHARD, net.minecraft.world.item.Items.COPPER_INGOT,
+                net.minecraft.world.item.Items.GLOWSTONE_DUST, net.minecraft.world.item.Items.GUNPOWDER,
+                net.minecraft.world.item.Items.SLIME_BALL);
+        for (var item : items) {
+            tooMany.put(item, 1.0D / items.size());
+        }
+        try {
+            new cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe(
+                    ItemStack.EMPTY, tooMany, 12, 10, water, water, 100000.0D, 200);
+            return false;
+        } catch (IllegalArgumentException expected) {
+            return true;
+        }
     }
 
     /**

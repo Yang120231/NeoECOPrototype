@@ -32,6 +32,9 @@ public class NeoECOPrototype {
         container.registerConfig(net.neoforged.fml.config.ModConfig.Type.SERVER, NeoECOPrototypeServerConfig.SPEC);
 
         // Register blocks / items / block entity types / creative tab.
+        // The fluids come first: LiquidBlock is built from the fluid itself, not from a supplier of it.
+        ModRegistration.FLUID_TYPES.register(modBus);
+        ModRegistration.FLUIDS.register(modBus);
         ModRegistration.BLOCKS.register(modBus);
         if (ModList.get().isLoaded("mekanism") && ModList.get().isLoaded("appmek")) {
             cn.dancingsnow.neoecoprototype.integration.mekanism.MekanismIntegration.register(ModRegistration.ITEMS);

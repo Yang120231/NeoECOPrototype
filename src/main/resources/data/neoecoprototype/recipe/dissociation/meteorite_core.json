@@ -1,0 +1,24 @@
+{
+  "type": "neoecoprototype:dissociation",
+  "input": { "id": "neoecoprototype:meteorite_core" },
+  "products": {
+    "ae2:sky_stone_block": 0.4,
+    "neoecoprototype:sky_stone_dust": 0.4,
+    "neoecoae:energized_crystal_block": 0.02,
+    "neoecoae:tungsten_dust": 0.02,
+    "neoecoae:aluminum_dust": 0.02,
+    "neoecoae:energized_crystal": 0.02,
+    "neoecoae:energized_crystal_dust": 0.02,
+    "neoecoae:energized_fluix_crystal": 0.02,
+    "neoecoae:energized_fluix_crystal_dust": 0.02,
+    "minecraft:diamond": 0.02,
+    "ae2:certus_quartz_crystal": 0.02,
+    "ae2:charged_certus_quartz_crystal": 0.02
+  },
+  "coolant": { "id": "neoecoae:cryotheum_solution", "amount": 5000 },
+  "solution": { "id": "neoecoprototype:dissolution_solution", "amount": 5000 },
+  "draws": 12,
+  "per_hit": 10,
+  "power": 100000.0,
+  "ticks": 200
+}

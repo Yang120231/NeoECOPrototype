@@ -194,5 +194,10 @@
   "block.neoecoprototype.large_frigit_bud": "Large Frigit Bud",
   "block.neoecoprototype.frigit_cluster": "Frigit Cluster",
   "block.neoecoprototype.frigit_crystal_block": "Frigit Crystal Block",
-  "item.neoecoprototype.frigit_crystal": "Frigit Crystal"
+  "item.neoecoprototype.frigit_crystal": "Frigit Crystal",
+  "block.neoecoprototype.meteorite_core": "Meteorite Core",
+  "item.neoecoprototype.sky_stone_dust": "Sky Stone Dust",
+  "block.neoecoprototype.dissolution_solution": "Dissolution Solution",
+  "fluid_type.neoecoprototype.dissolution_solution": "Dissolution Solution",
+  "item.neoecoprototype.dissolution_bucket": "Bucket of Dissolution Solution"
 }
