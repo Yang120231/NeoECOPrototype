@@ -238,22 +238,12 @@ public class SimplifyStructureExpansionCardItem extends Item {
         // Paid for first, so a player who cannot afford the larger shape keeps the machine they had.
         // The price is the difference, not the whole shape: the loop below hands every moved block back
         // into this same inventory, and eco's builder re-checks the full list only after that has landed.
-        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build path (grow): def="
-                + definition + " length=" + current + "->" + target + " creative=" + player.isCreative()
-                + " billKinds=" + grown.bill().size() + " netKinds=" + net.size()
-                + " moved=" + grown.moved().size() + " missing=" + plan.getMissingBlocks().size()
-                + " conflicts=" + plan.getConflictPositions().size());
         for (WorldPlannedBlock moved : grown.moved()) {
             giveBack(level, moved.worldPos(), player);
         }
 
         host.setSelectedBuildLength(target);
         if (!MultiBlockPlacementService.buildInstant(level, plan, player)) {
-            cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build refused (grow): payable="
-                    + MultiBlockPlacementService.hasRequiredItems(player, plan.getRequiredItems())
-                    + " conflicts=" + plan.getConflictPositions().size()
-                    + " missing=" + plan.getMissingBlocks().size()
-                    + " billKinds=" + plan.getRequiredItems().size());
             // buildInstant only refuses here because a placement failed part-way through, so the
             // structure really did change. Re-form anyway: leaving the length bumped without telling
             // the cluster is the worse failure.
@@ -308,19 +298,11 @@ public class SimplifyStructureExpansionCardItem extends Item {
             return;
         }
 
-        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build path (upgrade): def="
-                + current + "->" + target + " length=" + length + " creative=" + player.isCreative()
-                + " billKinds=" + bill.size() + " netKinds=" + net.size()
-                + " moved=" + swap.moved().size());
         for (WorldPlannedBlock moved : swap.moved()) {
             giveBack(level, moved.worldPos(), player);
         }
         giveBack(level, pos, player);
         if (!MultiBlockPlacementService.buildInstant(level, swap.plan(), player)) {
-            cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build refused (upgrade): payable="
-                    + MultiBlockPlacementService.hasRequiredItems(player, swap.plan().getRequiredItems())
-                    + " conflicts=" + swap.plan().getConflictPositions().size()
-                    + " missing=" + swap.plan().getMissingBlocks().size());
             finishAnchor(level, pos, anchor, player);
             say(player, "card.neoecoprototype.expansion.partly_built");
             return;
@@ -365,8 +347,6 @@ public class SimplifyStructureExpansionCardItem extends Item {
         }
         level.setBlock(pos, anchor, Block.UPDATE_ALL);
         rebuildHost(level, pos);
-        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card free swap (upgrade): def=" + current + "->" + target
-                + " positions=" + (swap.moved().size() + 1));
         if (consumedOnSuccess() && !player.hasInfiniteMaterials()) {
             var held = player.getItemInHand(hand);
             if (held.is(this)) {
@@ -525,10 +505,6 @@ public class SimplifyStructureExpansionCardItem extends Item {
      */
     private void handOverTicket(ServerLevel level, ServerPlayer player, @Nullable Item workOrder,
                                 List<RequiredItem> bill, Component missing) {
-        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card ticket: order="
-                + (workOrder == null ? "none"
-                        : net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(workOrder))
-                + " billKinds=" + bill.size());
         if (workOrder == null) {
             return;
         }
@@ -556,8 +532,6 @@ public class SimplifyStructureExpansionCardItem extends Item {
         }
         handTo(level, player.blockPosition(), PatternDetailsHelper.encodeProcessingPattern(inputs,
                 List.of(new GenericStack(AEItemKey.of(workOrder), 1))), player);
-        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card ticket printed: parts=" + parts
-                + " inputKinds=" + inputs.size());
         say(player, Component.translatable("card.neoecoprototype.expansion.pattern", parts));
     }
 
