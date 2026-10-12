@@ -19,6 +19,9 @@ public final class NeoECOPrototypeServerConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DISABLED_PROCESSOR_RECIPES;
     /** Only the /prototypefumo hand-out; the dolls themselves ship switched on. */
     public static final ModConfigSpec.BooleanValue FUMO_COMMAND_ENABLED;
+    /** Kept as a plain constant so a test can pin the shipped default without loading a config file. */
+    public static final boolean STRUCTURE_CARD_CONSUMES_ITEMS_DEFAULT = true;
+    public static final ModConfigSpec.BooleanValue STRUCTURE_CARD_CONSUMES_ITEMS;
     /**
      * Computation threads per L1 threading core. Each core allocates one {@code ECOCraftingCPU} per
      * thread when it is created, so a core already standing keeps its old count until it is replaced.
@@ -80,6 +83,12 @@ public final class NeoECOPrototypeServerConfig {
                         "The dolls themselves are not switched off here: their worn effects, their creative tab",
                         "entries and the creepers that keep their distance from a placed one all ship on.")
                 .define("fumo_command_enabled", false);
+        STRUCTURE_CARD_CONSUMES_ITEMS = builder
+                .comment("Whether the structure expansion card eats the ticket it works from: one paper to",
+                        "write a shortfall note, and one blank AE2 pattern to write an exchange pattern.",
+                        "On by default - off, every shift-click prints either of them for nothing, and a",
+                        "pattern is a real recipe that stays in the world once it is made.")
+                .define("structure_card_consumes_items", STRUCTURE_CARD_CONSUMES_ITEMS_DEFAULT);
         DERIVE_PROCESSOR_RECIPES_FROM_INSCRIBER = builder
                 .comment("Also accept processor recipes derived from AE2's inscriber (press-mode recipes, with",
                         "printed parts unfolded into the material inscribed into them).",

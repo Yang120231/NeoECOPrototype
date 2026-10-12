@@ -19,6 +19,8 @@ import appeng.api.networking.ticking.TickingRequest;
 import appeng.blockentity.powersink.IExternalPowerSink;
 import appeng.me.energy.StoredEnergyAmount;
 import com.lowdragmc.lowdraglib2.syncdata.annotation.Persisted;
+import com.lowdragmc.lowdraglib2.syncdata.holder.blockentity.ISyncPersistRPCBlockEntity;
+import com.lowdragmc.lowdraglib2.syncdata.storage.FieldManagedStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -29,7 +31,11 @@ import net.minecraft.world.level.block.state.BlockState;
  * eco's {@code ECOEnergyCellBlockEntity} with the L1 tier numbers.
  */
 public class SimplifyEnergyCellBlockEntity extends NEBlockEntity<SimplifyStorageCluster, SimplifyEnergyCellBlockEntity>
-        implements IExternalPowerSink, IGridTickable {
+        implements IExternalPowerSink, IGridTickable, ISyncPersistRPCBlockEntity {
+
+    // LDLib writes @Persisted fields only for a block entity that is itself a persist-managed holder,
+    // so without this interface the charge reset to zero on every reload. eco's cell implements it.
+    private final FieldManagedStorage syncStorage = new FieldManagedStorage(this);
 
     @Persisted
     private final StoredEnergyAmount energyStored;
@@ -40,6 +46,11 @@ public class SimplifyEnergyCellBlockEntity extends NEBlockEntity<SimplifyStorage
     public SimplifyEnergyCellBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
         super(type, pos, blockState, SimplifyStorageClusterCalculator::new);
         this.energyStored = new StoredEnergyAmount(0, SimplifyTier.L1.getPowerStorageSize(), this::emitPowerEvent);
+    }
+
+    @Override
+    public FieldManagedStorage getSyncStorage() {
+        return syncStorage;
     }
 
     private void emitPowerEvent(GridPowerStorageStateChanged.PowerEventType type) {

@@ -43,6 +43,7 @@ import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingSystemBlock
 import cn.dancingsnow.neoecoprototype.block.storage.SimplifyStorageControllerBlock;
 import cn.dancingsnow.neoecoprototype.blockentity.crafting.SimplifySuperconductiveInterfaceBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.decoration.FumoBlockEntity;
+import cn.dancingsnow.neoecoprototype.blockentity.storage.SimplifyEnergyCellBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.storage.SimplifyStorageHostBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.trinity.SimplifyTrinityComputationModuleBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.trinity.SimplifyTrinityControllerBlockEntity;
@@ -4564,6 +4565,19 @@ public final class NeoECOPrototypeGameTests {
     private static void buildL1Room(GameTestHelper helper, BlockPos controllerPos, Block hostBlock,
                                     Block planInterface, Block wantedInterface,
                                     java.util.function.Consumer<MultiBlockBuildController.Host> onFormed) {
+        buildRoom(helper, controllerPos, hostBlock, planInterface, wantedInterface, false, onFormed);
+    }
+
+    /** The same builder, run at the machine's own maximum length instead of its minimum. */
+    private static void buildRoomToMaxLength(GameTestHelper helper, BlockPos controllerPos, Block hostBlock,
+                                             Block planInterface,
+                                             java.util.function.Consumer<MultiBlockBuildController.Host> onFormed) {
+        buildRoom(helper, controllerPos, hostBlock, planInterface, planInterface, true, onFormed);
+    }
+
+    private static void buildRoom(GameTestHelper helper, BlockPos controllerPos, Block hostBlock,
+                                  Block planInterface, Block wantedInterface, boolean atMax,
+                                  java.util.function.Consumer<MultiBlockBuildController.Host> onFormed) {
         helper.setBlock(controllerPos, hostBlock);
         BlockPos absolute = helper.absolutePos(controllerPos);
         helper.runAfterDelay(5, () -> {
@@ -4571,7 +4585,7 @@ public final class NeoECOPrototypeGameTests {
                 helper.fail(name(hostBlock) + " has no one-click builder at " + absolute);
                 return;
             }
-            host.setSelectedBuildLength(host.getMinBuildLength());
+            host.setSelectedBuildLength(atMax ? host.getMaxBuildLength() : host.getMinBuildLength());
             var plan = new MultiBlockBuildController(host).createLocalPreviewPlan();
             if (plan == null || plan.getAllBlocks().isEmpty()) {
                 helper.fail("the builder produced no placement plan for " + name(hostBlock));
@@ -5171,6 +5185,46 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * The charge has to be on disk. eco writes no NBT hook at all for its cell and leaves the
+     * {@code @Persisted} field to LDLib's block entity mixin, which only serialises anything for a
+     * block entity that is itself a persist-managed holder - so this reads back through the same call
+     * a chunk load makes, and the fresh cell is what proves the number came off the tag rather than
+     * out of a field default.
+     */
+    @GameTest(template = "empty", batch = "energy_cell_charge_reload", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void energyCellChargeSurvivesAChunkSave(GameTestHelper helper) {
+        var plotPos = new BlockPos(0, 1, 0);
+        helper.setBlock(plotPos, ModRegistration.SIMPLIFY_ENERGY_CELL_BLOCK.get());
+        var level = helper.getLevel();
+        var pos = helper.absolutePos(plotPos);
+        if (!(level.getBlockEntity(pos) instanceof SimplifyEnergyCellBlockEntity cell)) {
+            helper.fail("the energy cell block placed without a block entity of its own type");
+            return;
+        }
+        cell.injectAEPower(42_000D, Actionable.MODULATE);
+        if (cell.getAECurrentPower() <= 0D) {
+            helper.fail("charging the cell by hand left it at " + cell.getAECurrentPower()
+                    + " AE, so there is nothing here for a save to carry");
+            return;
+        }
+        var reloaded = net.minecraft.world.level.block.entity.BlockEntity.loadStatic(
+                pos, level.getBlockState(pos), cell.saveWithFullMetadata(level.registryAccess()),
+                level.registryAccess());
+        if (!(reloaded instanceof SimplifyEnergyCellBlockEntity read)) {
+            helper.fail("the chunk tag of a charged cell no longer reads back as its own block entity,"
+                    + " it came up as " + (reloaded == null ? "nothing" : reloaded.getClass().getName()));
+            return;
+        }
+        if (Math.abs(read.getAECurrentPower() - 42_000D) > 0.001D) {
+            helper.fail("a cell charged to 42000 AE reloaded holding " + read.getAECurrentPower()
+                    + " AE: the charge is not being written to disk");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
      * The induction card must install into our interfaces and pattern providers, and must not start
      * naming them: AE2's card tooltip folds every machine that shares a group key into that group's
      * one line, while an ungrouped machine prints its own name instead. Our names differ from AE2's,
@@ -5636,13 +5690,17 @@ public final class NeoECOPrototypeGameTests {
                 ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
                 host -> {
                     var before = machineSnapshot(helper);
-                    var mock = helper.makeMockPlayer(GameType.SURVIVAL);
-                    if (!(mock instanceof ServerPlayer player)) {
-                        helper.fail("the game test mock player is not a ServerPlayer, so the card's"
-                                + " server half cannot be reached at all: " + mock.getClass());
-                        return;
-                    }
+                    var player = cardPlayer(helper);
                     player.setShiftKeyDown(true);
+                    giveExpansionCard(player);
+                    // Two sheets go in so the arithmetic means something: the card eats one and hands
+                    // back one note, so exactly one sheet may be left, and it has to be the renamed one.
+                    // Hand it one sheet and an eating card would look identical to a printing one.
+                    // Two sheets and one blank pattern go in: the card owes one sheet eaten, one pattern
+                    // eaten, and exactly one pattern printed. Hand it no blank pattern and the card falls
+                    // back to the renamed paper, which this count would also catch.
+                    player.getInventory().add(new ItemStack(Items.PAPER, 2));
+                    player.getInventory().add(new ItemStack(AEItems.BLANK_PATTERN));
                     useExpansionCard(helper, player);
                     var after = machineSnapshot(helper);
                     if (before.isEmpty()) {
@@ -5654,7 +5712,69 @@ public final class NeoECOPrototypeGameTests {
                                 + " pay for the bigger shape: " + changed(before, after));
                         return;
                     }
-                    helper.succeed();
+                    // The other half of the same promise: a player who cannot pay gets a demolition
+                    // notice instead. Stop the card eating the sheet, or print the wrong work order, and
+                    // this goes red.
+                    int paperItems = 0;
+                    int printed = 0;
+                    int orders = 0;
+                    ItemStack printedStack = ItemStack.EMPTY;
+                    for (var held : player.getInventory().items) {
+                        if (held.is(Items.PAPER)) {
+                            // Count items, not stacks: two sheets share a slot, so a stack count cannot
+                            // tell "ate one and handed one back" from "handed one out of nothing".
+                            paperItems += held.getCount();
+                        }
+                        if (held.is(ModRegistration.SIMPLIFY_WORK_ORDER_GROW_L1_STORAGE.get())) {
+                            orders += held.getCount();
+                        }
+                        if (held.is(AEItems.PROCESSING_PATTERN.asItem())) {
+                            printed++;
+                            printedStack = held;
+                        }
+                    }
+                    if (paperItems != 1 || printed != 1 || orders != 1) {
+                        helper.fail("the refused grow left " + paperItems + " paper, " + orders
+                                + " work order(s) and " + printed + " printed pattern(s): two sheets and"
+                                + " one blank pattern went in, so the card owes one sheet eaten, one blank"
+                                + " eaten, and one ticket plus one pattern handed over");
+                        return;
+                    }
+                    var details = PatternDetailsHelper.decodePattern(printedStack, helper.getLevel());
+                    var want = AEItemKey.of(ModRegistration.SIMPLIFY_WORK_ORDER_GROW_L1_STORAGE.get());
+                    // The parts go in and the ticket comes out. Reverse that and one cheap sheet buys 48
+                    // machine parts, which is the reading he caught in game. Only the key is compared,
+                    // never the amount:
+                    // an input's count is multiplier-dependent, which is the exact trap the assembler
+                    // fell into once already.
+                    var outputs = details == null ? java.util.List.<appeng.api.stacks.GenericStack>of()
+                            : details.getOutputs();
+                    if (outputs.size() != 1 || !want.equals(outputs.get(0).what())
+                            || details.getInputs().length == 0) {
+                        helper.fail("the pattern it printed does not deliver exactly the L1 work order as"
+                                + " its output (decoded=" + (details == null ? "null"
+                                : details.getInputs().length + " in / " + outputs.size() + " out")
+                                + ") - a ticket must never be the ingredient, or it is a part printer");
+                        return;
+                    }
+                    // The card hands back every block it moves before it builds, so a work order that
+                    // still asks for them is overcharging: on this room that is the outer casing column,
+                    // reclaimed whole and therefore absent from the input list.
+                    var casing = AEItemKey.of(ModRegistration.SIMPLIFY_STORAGE_CASING_ITEM.get());
+                    var asked = new StringBuilder();
+                    for (var input : details.getInputs()) {
+                        for (var option : input.getPossibleInputs()) {
+                            if (casing.equals(option.what())) {
+                                asked.append('c');
+                            }
+                        }
+                    }
+                    if (asked.length() > 0) {
+                        helper.fail("the work order still asks for the casings the card gives back - the"
+                                + " bill was not netted against the reclaim (matched " + asked + ")");
+                        return;
+                    }
+                    // buildL1Room ends the test once this callback returns without failing.
                 });
     }
 
@@ -5673,54 +5793,700 @@ public final class NeoECOPrototypeGameTests {
                 ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
                 ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
                 host -> {
-                    var mock = helper.makeMockPlayer(GameType.SURVIVAL);
-                    if (!(mock instanceof ServerPlayer player)) {
-                        helper.fail("the game test mock player is not a ServerPlayer, so the card's"
-                                + " server half cannot be reached at all: " + mock.getClass());
-                        return;
-                    }
+                    var player = cardPlayer(helper);
                     player.setShiftKeyDown(true);
+                    giveExpansionCard(player);
+                    // Two full stacks of each distinct block, not of each position: eleven columns need
+                    // 33 drives and 22 energy cells, and a 36-slot inventory fills up long before that if
+                    // the hand-out is per position. A refused add is a fixture bug, so it says so.
+                    var kinds = new java.util.LinkedHashSet<Item>();
                     for (var state : machineSnapshot(helper).values()) {
-                        for (int stack = 0; stack < 4; stack++) {
-                            player.getInventory().add(new ItemStack(state.getBlock()));
+                        kinds.add(state.getBlock().asItem());
+                    }
+                    for (Item kind : kinds) {
+                        for (int stack = 0; stack < 2; stack++) {
+                            var given = new ItemStack(kind);
+                            given.setCount(given.getMaxStackSize());
+                            if (!player.getInventory().add(given)) {
+                                helper.fail("the fixture inventory had no room for a stack of " + kind);
+                                return;
+                            }
                         }
                     }
                     var before = ledger(helper, player);
+                    var worldBefore = blockCounts(helper);
+                    var carriedBefore = carried(player);
+                    String missingBill = describeMissingBill(helper, host);
                     int standingBefore = machineSnapshot(helper).size();
                     useExpansionCard(helper, player);
                     var after = ledger(helper, player);
+                    var worldAfter = blockCounts(helper);
+                    var carriedAfter = carried(player);
                     int standingAfter = machineSnapshot(helper).size();
                     boolean formed = host.isFormed();
+                    // Read before the sweep: once the cells are air the host block entity is gone and
+                    // every one of these answers would be a lie.
+                    boolean couldInteract = host.canPlayerInteract(player);
+                    boolean building = host.isBuildInProgress();
+                    int chosenLength = host.getSelectedBuildLength();
 
                     clearMachineBox(helper);
                     if (standingAfter <= standingBefore) {
+                        var def = host.getBuildDefinition();
+                        BlockPos absoluteHost = helper.absolutePos(CARD_HOST);
+                        var big = cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementService
+                                .preview(helper.getLevel(), absoluteHost,
+                                        helper.getLevel().getBlockState(absoluteHost), def,
+                                        def.getExpandMax(), host.isMirrorBuild());
                         helper.fail("the room did not grow (" + standingBefore + " -> " + standingAfter
-                                + " blocks), so the balanced ledger below proves nothing");
+                                + " blocks): interact=" + couldInteract
+                                + " building=" + building + " formed=" + formed
+                                + " length=" + chosenLength + " of "
+                                + host.getMinBuildLength() + "-" + host.getMaxBuildLength()
+                                + " | at max length: missing=" + big.getMissingBlocks().size()
+                                + " conflicts=" + big.getConflictPositions().size()
+                                + " bill=" + big.getRequiredItems().size()
+                                + " payable=" + cn.dancingsnow.neoecoae.multiblock.placement
+                                .MultiBlockPlacementService.hasRequiredItems(player,
+                                        big.getRequiredItems())
+                                + " [" + describeBill(player, big) + "]"
+                                + " host@" + CARD_HOST + " (a balanced ledger below proves nothing)");
                         return;
                     }
                     if (!before.equals(after)) {
                         helper.fail("the card lost or invented blocks while growing the room; before "
-                                + before + " after " + after);
+                                + before + " after " + after
+                                + " | world " + worldAfter + " was " + worldBefore
+                                + " | carried " + carriedAfter + " was " + carriedBefore
+                                + " | " + missingBill);
                         return;
                     }
                     if (!formed) {
                         helper.fail("the grown room never re-formed, so the card left a broken machine");
                         return;
                     }
+                    // buildL1Room ends the test once this callback returns without failing.
+                });
+    }
+
+    /**
+     * What a player has to carry to grow a room is the difference between the bigger shape and the blocks
+     * the card hands back out of its own wall - not the whole bigger shape. The card prints that
+     * difference itself when it refuses, so this test reads the number off its own print, hands over
+     * exactly that and demands the room build. Charge the gross bill up front and this goes red, which is
+     * the reading he caught in game ("现在好像没办法搭建了").
+     */
+    @GameTest(template = "l1_room", batch = "structure_card_grow", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void expansionCardBuildsForAPlayerWhoCarriesOnlyTheDifference(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    giveExpansionCard(player);
+                    player.getInventory().add(new ItemStack(Items.PAPER));
+                    player.getInventory().add(new ItemStack(AEItems.BLANK_PATTERN));
+                    // Carrying nothing the machine wants: the card must refuse and print the difference.
+                    useExpansionCard(helper, player);
+                    ItemStack printed = ItemStack.EMPTY;
+                    for (var held : player.getInventory().items) {
+                        if (held.is(AEItems.PROCESSING_PATTERN.asItem())) {
+                            printed = held;
+                        }
+                    }
+                    var details = PatternDetailsHelper.decodePattern(printed, helper.getLevel());
+                    if (printed.isEmpty() || details == null) {
+                        helper.fail("the refused grow printed no pattern, so the difference this test is"
+                                + " supposed to carry could not be read off it");
+                        return;
+                    }
+                    var difference = new KeyCounter();
+                    for (var input : details.getInputs()) {
+                        for (var option : input.getPossibleInputs()) {
+                            // The same idiom the assembler tests use: AE2 keeps a repeated ingredient as
+                            // one slot with a multiplier, so amount alone is not what has to be carried.
+                            difference.add(option.what(), option.amount() * input.getMultiplier());
+                        }
+                    }
+                    long carriedParts = 0;
+                    for (var entry : difference) {
+                        carriedParts += entry.getLongValue();
+                    }
+                    if (carriedParts <= 0) {
+                        helper.fail("the printed difference came to " + carriedParts + " parts, so there"
+                                + " was nothing to carry and this test would prove nothing");
+                        return;
+                    }
+                    int standingUntouched = machineSnapshot(helper).size();
+                    // Half one: one part short of what the card printed must still be a refusal. Without
+                    // it the half below would also pass for a card that charges nothing at all.
+                    if (!handOutPrintedDifference(player, difference, 1)) {
+                        clearMachineBox(helper);
+                        helper.fail("the fixture inventory had no room for " + carriedParts
+                                + " parts minus one");
+                        return;
+                    }
+                    useExpansionCard(helper, player);
+                    if (machineSnapshot(helper).size() != standingUntouched) {
+                        clearMachineBox(helper);
+                        helper.fail("the room grew one part short of the " + carriedParts
+                                + " parts the card printed, so this card does not charge that bill");
+                        return;
+                    }
+                    // Half two: exactly the printed difference, and it has to build. Carrying the whole
+                    // shape used to be the price, which is the reading he caught in game.
+                    if (!handOutPrintedDifference(player, difference, 0)) {
+                        clearMachineBox(helper);
+                        helper.fail("the fixture inventory had no room for the " + carriedParts
+                                + " parts the card printed as the difference");
+                        return;
+                    }
+                    useExpansionCard(helper, player);
+                    int standingAfter = machineSnapshot(helper).size();
+                    var formed = host.isFormed();
+
+                    clearMachineBox(helper);
+                    if (standingAfter <= standingUntouched) {
+                        helper.fail("carrying exactly the " + carriedParts + " parts the card itself printed"
+                                + " did not build the bigger room - the gate is still charging the whole"
+                                + " shape before it hands the moved blocks back");
+                        return;
+                    }
+                    if (!formed) {
+                        helper.fail("the room built from the difference but never re-formed");
+                        return;
+                    }
+                });
+    }
+
+    /**
+     * The whole promise of a rung card, on the machine it exists for: an eco L4 storage room built out to
+     * its maximum length, in survival, with an <b>empty inventory</b>. The wrong-rung card has to refuse
+     * and stay in hand; the right one has to land on L6, be consumed, and leave the inventory exactly as
+     * empty as it found it - nothing billed and nothing handed back. That last half is the design: if the
+     * card ever goes back through eco's builder it cannot build for an unbilled survival player at all,
+     * so this goes red rather than quietly starting to demand parts.
+     */
+    @GameTest(template = "l1_room", batch = "structure_card_rung", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void rungCardSwapsTierWithAnEmptyHand(GameTestHelper helper) {
+        buildRoomToMaxLength(helper, CARD_HOST,
+                cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L4.get(),
+                cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_INTERFACE.get(),
+                host -> {
+                    var level = helper.getLevel();
+                    var anchor = helper.absolutePos(CARD_HOST);
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    player.getInventory().clearContent();
+                    var wrong = ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L6_L9.get();
+                    var right = ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L4_L6.get();
+
+                    player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(wrong, 1));
+                    useCard(helper, player, wrong);
+                    if (player.getInventory().countItem(wrong) != 1) {
+                        helper.fail("the L6 card was eaten on an L4 machine");
+                        return;
+                    }
+                    if (level.getBlockState(anchor).getBlock()
+                            != cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L4.get()) {
+                        helper.fail("a refused click still changed the host block");
+                        return;
+                    }
+
+                    player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(right, 1));
+                    useCard(helper, player, right);
+                    var afterHost = level.getBlockState(anchor).getBlock();
+                    if (afterHost != cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L6.get()) {
+                        helper.fail("the L4 card left the host on " + name(afterHost)
+                                + " instead of storage_system_l6");
+                        return;
+                    }
+                    if (player.getInventory().countItem(right) != 0) {
+                        helper.fail("the swap landed but the card was not consumed: still "
+                                + player.getInventory().countItem(right) + " in hand");
+                        return;
+                    }
+                    if (!carried(player).isEmpty()) {
+                        helper.fail("a free swap moved items through the inventory anyway: "
+                                + carried(player));
+                        return;
+                    }
+                    if (!(level.getBlockEntity(anchor) instanceof MultiBlockBuildController.Host fresh)
+                            || !fresh.isFormed()) {
+                        helper.fail("the room is on L6 but no longer formed, so the new parts were put"
+                                + " in without telling the host to look at its own shape again");
+                        return;
+                    }
+                    int l6Cells = 0;
+                    for (var state : machineSnapshot(helper).values()) {
+                        if (name(state.getBlock()).equals("energy_cell_l6")) {
+                            l6Cells++;
+                        }
+                    }
+                    if (l6Cells == 0) {
+                        helper.fail("the host says L6 but not one energy_cell_l6 is standing, so the"
+                                + " tier-bearing blocks never changed");
+                        return;
+                    }
+                    NeoECOPrototype.LOGGER.info("free swap verified: host on L6, formed, inventory empty"
+                            + ", energy_cell_l6 standing=" + l6Cells);
+                });
+    }
+
+    /**
+     * Both rung cards clicked on a machine that is not on their rung: the card has to come back out of
+     * the click whole and the machine has to be exactly as it was stood. This is the promise that makes
+     * the card a consumable rather than a toll - refuse and eat it, and the player has paid for nothing.
+     */
+    @GameTest(template = "l1_room", batch = "structure_card_rung", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void rungCardsRefuseTheWrongMachineAndAreNotConsumed(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var before = machineSnapshot(helper);
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    // Two of each: one would also survive being eaten, because shrink(1) would leave an
+                    // empty hand and the count check would read 0 either way.
+                    for (var card : new net.minecraft.world.item.Item[]{
+                            ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L4_L6.get(),
+                            ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L6_L9.get()}) {
+                        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(card, 2));
+                        useCard(helper, player, card);
+                        int held = player.getItemInHand(InteractionHand.MAIN_HAND).getCount();
+                        if (held != 2) {
+                            helper.fail(card.getDescriptionId() + " was consumed on a machine that is"
+                                    + " not on its rung - it came back as " + held);
+                            return;
+                        }
+                        if (player.getInventory().countItem(card) != 2) {
+                            helper.fail(card.getDescriptionId() + " left the inventory at "
+                                    + player.getInventory().countItem(card) + " after a refused click");
+                            return;
+                        }
+                    }
+                    var after = machineSnapshot(helper);
+                    if (before.isEmpty()) {
+                        helper.fail("the snapshot box held no machine, so this test proved nothing");
+                        return;
+                    }
+                    if (!before.equals(after)) {
+                        helper.fail("a refused rung card still moved blocks: " + changed(before, after));
+                        return;
+                    }
+                });
+    }
+
+    /**
+     * The two cards between them cover exactly one rung per family and nothing else. The rows are read
+     * off eco's own definition list by host-block id ({@code storage_system_l4} and friends) instead of
+     * being typed out here, because a hand-written table once paired the crafting rung with the
+     * computation definition and the test then failed on the test.
+     */
+    @GameTest(template = "empty", batch = "structure_card_rung", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void rungCardsCoverOneRungPerFamilyAndNothingElse(GameTestHelper helper) {
+        var fourToSix = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem.Rung.FOUR_TO_SIX;
+        var sixToNine = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem.Rung.SIX_TO_NINE;
+        var byId = new java.util.HashMap<String, cn.dancingsnow.neoecoae.multiblock.definition
+                .MultiBlockDefinition>();
+        var tierOf = new java.util.HashMap<String, String>();
+        var familyOf = new java.util.HashMap<String, String>();
+        var pattern = java.util.regex.Pattern.compile("^(.*)_l([469])$");
+        for (var def : NEMultiBlocks.DEFINITIONS) {
+            String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                    .getKey(def.getOwner().value()).getPath();
+            var found = pattern.matcher(path);
+            if (!found.matches()) {
+                continue;
+            }
+            byId.put(path, def);
+            familyOf.put(path, found.group(1));
+            tierOf.put(path, found.group(2));
+        }
+        int rows = 0;
+        for (var entry : byId.entrySet()) {
+            String path = entry.getKey();
+            var def = entry.getValue();
+            String family = familyOf.get(path);
+            String tier = tierOf.get(path);
+            var up = byId.get(family + "_l" + ("4".equals(tier) ? "6" : "9"));
+            var next46 = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem
+                    .rungTarget(fourToSix, def);
+            var next69 = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem
+                    .rungTarget(sixToNine, def);
+            // Only the rung each card owns may answer; everything else has to be refused, because a
+            // card that accepts the wrong machine eats itself on a shape it cannot build.
+            var expected = "4".equals(tier) ? up : null;
+            if (next46 != expected) {
+                helper.fail("the L4 card on " + path + " answered " + name46(next46)
+                        + ", expected " + name46(expected));
+                return;
+            }
+            var expected69 = "6".equals(tier) ? up : null;
+            if (next69 != expected69) {
+                helper.fail("the L6 card on " + path + " answered " + name46(next69)
+                        + ", expected " + name46(expected69));
+                return;
+            }
+            rows++;
+        }
+        // Control: nine hosts is what eco ships. An empty loop would pass every check above.
+        if (rows < 9) {
+            helper.fail("only " + rows + " tiered hosts were found in eco's definition list, so this"
+                    + " table check proves nothing about the three families");
+            return;
+        }
+        NeoECOPrototype.LOGGER.info("rung-table check covered " + rows + " hosts");
+        helper.succeed();
+    }
+
+    private static String name46(cn.dancingsnow.neoecoae.multiblock.definition.MultiBlockDefinition def) {
+        return def == null ? "nothing (refused)"
+                : net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                        .getKey(def.getOwner().value()).getPath();
+    }
+
+    /**
+     * Empty the fake player's inventory, put the card back, then hand over the parts the card printed as
+     * its bill - {@code shortBy} of them withheld, so the caller can stand exactly at the price and one
+     * part below it. Stacks are split to what the item allows; a 36-slot inventory cannot hold a shape
+     * whose parts stack to one otherwise.
+     */
+    private static boolean handOutPrintedDifference(net.minecraft.server.level.ServerPlayer player,
+                                                    KeyCounter parts, long shortBy) {
+        player.getInventory().clearContent();
+        giveExpansionCard(player);
+        long withheld = shortBy;
+        for (var entry : parts) {
+            if (!(entry.getKey() instanceof appeng.api.stacks.AEItemKey key)) {
+                return false;
+            }
+            long left = entry.getLongValue() - Math.min(withheld, entry.getLongValue());
+            withheld -= Math.min(withheld, entry.getLongValue());
+            while (left > 0) {
+                var stack = new ItemStack(key.getItem());
+                int handed = (int) Math.min(left, stack.getMaxStackSize());
+                stack.setCount(handed);
+                if (!player.getInventory().add(stack)) {
+                    return false;
+                }
+                left -= handed;
+            }
+        }
+        return withheld == 0;
+    }
+
+    /**
+     * What a formed machine actually culls, asked with the renderer's own question:
+     * {@code Block.shouldRenderFace} is the call a face that declares {@code cullface} goes through, and
+     * it needs the blocks that really stand next to each other - so the room is built for real instead
+     * of being reasoned about from a model file. Each printed line is one (our block, direction,
+     * neighbour) triple with the two properties that decide holes and black faces side by side:
+     * {@code draws} (would this face be rendered at all) and {@code invisible} (does the neighbour skip
+     * its own drawing, which is what eco's shell does once the machine forms).
+     */
+    @GameTest(template = "l1_room", batch = "face_exposure_probe", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void formedMachineFaceCullingReadings(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var level = helper.getLevel();
+                    var tally = new java.util.TreeMap<String, Integer>();
+                    var invisible = new int[1];
+                    measureFaces(level, machineSnapshot(helper), "l1room", tally, invisible);
+                    // eco's three families at their ceiling. The plan's own target states are laid down
+                    // without forming, which is enough: occlusion, light blocking and the shell's
+                    // invisible flag all live in the block state, not in the block entity. Each machine
+                    // gets its own patch of world so they cannot be each other's neighbours.
+                    var eco = java.util.List.of(
+                            NEMultiBlocks.STORAGE_SYSTEM_L4, NEMultiBlocks.STORAGE_SYSTEM_L6,
+                            NEMultiBlocks.STORAGE_SYSTEM_L9,
+                            NEMultiBlocks.COMPUTATION_SYSTEM_L4, NEMultiBlocks.COMPUTATION_SYSTEM_L6,
+                            NEMultiBlocks.COMPUTATION_SYSTEM_L9,
+                            NEMultiBlocks.CRAFTING_SYSTEM_L4, NEMultiBlocks.CRAFTING_SYSTEM_L6,
+                            NEMultiBlocks.CRAFTING_SYSTEM_L9);
+                    var shape = new java.util.HashMap<BlockPos, BlockState>();
+                    for (var definition : eco) {
+                        var anchor = helper.absolutePos(CARD_HOST)
+                                .offset(48 * (eco.indexOf(definition) + 1), 0, 0);
+                        level.setBlock(anchor, definition.getOwner().value().defaultBlockState(),
+                                Block.UPDATE_ALL);
+                        var plan = MultiBlockPlacementService.preview(level, anchor,
+                                level.getBlockState(anchor), definition, definition.getExpandMax(), false);
+                        if (plan.getAllBlocks().isEmpty()) {
+                            clearMachineBox(helper);
+                            helper.fail(name(definition.getOwner().value()) + " at length "
+                                    + definition.getExpandMax() + " laid down nothing, so its faces"
+                                    + " could not be measured");
+                            return;
+                        }
+                        shape.clear();
+                        shape.put(anchor.immutable(), level.getBlockState(anchor));
+                        for (var block : plan.getAllBlocks()) {
+                            level.setBlock(block.worldPos(), block.targetState(), 0);
+                            shape.put(block.worldPos().immutable(), block.targetState());
+                        }
+                        measureFaces(level, shape, "eco:" + name(definition.getOwner().value()),
+                                tally, invisible);
+                        for (var pos : shape.keySet()) {
+                            level.setBlock(pos,
+                                    net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
+                                    Block.UPDATE_ALL);
+                        }
+                    }
+                    clearMachineBox(helper);
+                    // Without one of these the table below says nothing about a formed shell, so the
+                    // probe has to be able to fail rather than print an empty report and look clean.
+                    if (invisible[0] == 0) {
+                        helper.fail("no neighbour in any of these machines reports itself invisible, so"
+                                + " the probe measured nothing about a formed shell");
+                        return;
+                    }
+                    tally.forEach((line, count) -> NeoECOPrototype.LOGGER.info(
+                            "face-probe x" + count + " " + line));
+                    NeoECOPrototype.LOGGER.info("face-probe triples whose neighbour draws nothing: "
+                            + invisible[0]);
                     helper.succeed();
                 });
     }
 
-    /** Right-click the host with the card, sneaking, the way a player does it. */
+    /**
+     * Ask the renderer's own question for every face of every block in {@code shape}: would this face
+     * still be drawn where it stands, and what does the neighbour do about light and occlusion. One
+     * merged line per (tag, block, direction, neighbour) so a whole machine fits in a screenful.
+     */
+    private static void measureFaces(net.minecraft.server.level.ServerLevel level,
+                                     Map<BlockPos, BlockState> shape, String tag,
+                                     java.util.TreeMap<String, Integer> tally, int[] invisible) {
+        for (var entry : shape.entrySet()) {
+            var pos = entry.getKey();
+            var state = entry.getValue();
+            for (var dir : Direction.values()) {
+                var next = pos.relative(dir);
+                var neighbour = level.getBlockState(next);
+                if (neighbour.isAir()) {
+                    continue;
+                }
+                boolean draws = Block.shouldRenderFace(state, level, pos, dir, next);
+                boolean hidden = invisibleShell(neighbour);
+                tally.merge("%s %-22s %-5s <- %-24s draws=%-5s invisible=%-5s occludes=%-5s lightBlock=%s"
+                                .formatted(tag, name(state.getBlock()), dir.getName(),
+                                        name(neighbour.getBlock()), draws, hidden,
+                                        neighbour.canOcclude(), neighbour.getLightBlock(level, next)),
+                        1, Integer::sum);
+                if (hidden) {
+                    invisible[0]++;
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether a block skips drawing itself. eco writes an {@code invisible} property into its shell
+     * once the machine forms; read off the state rather than by class, because the property is what the
+     * renderer's own {@code skipRendering} looks at.
+     */
+    private static boolean invisibleShell(BlockState state) {
+        var values = state.getValues();
+        for (var property : state.getProperties()) {
+            if (property.getName().equals("invisible")) {
+                return String.valueOf(values.get(property)).equals("true");
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A player the card's server half will actually accept. {@code GameTestHelper.makeMockPlayer} hands
+     * back a bare {@code Player} (an anonymous subclass), while eco's builder needs a {@code ServerPlayer}
+     * to place blocks and to charge for them - so the only stand-in that reaches that code is NeoForge's
+     * fake player, which is a {@code ServerPlayer} and starts in survival mode.
+     *
+     * <p>It has to be stood next to the host as well: eco's {@code canPlayerInteract} is
+     * {@code ECOStorageSystemBlock.isPlayerCloseEnough}, a distance check against the block position, and
+     * a fake player spawns at world origin where every machine looks out of reach.
+     */
+    private static net.minecraft.server.level.ServerPlayer cardPlayer(GameTestHelper helper) {
+        var player = net.neoforged.neoforge.common.util.FakePlayerFactory.get(helper.getLevel(),
+                new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "card-test"));
+        BlockPos absolute = helper.absolutePos(CARD_HOST);
+        player.setPos(absolute.getX() + 0.5D, absolute.getY() + 1.0D, absolute.getZ() + 0.5D);
+        return player;
+    }
+
+    /** What the planner charges for the bigger shape, next to what the player actually holds. */
+    private static String describeBill(net.minecraft.server.level.ServerPlayer player,
+                                       cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementPlan plan) {
+        StringBuilder text = new StringBuilder();
+        for (var required : plan.getRequiredItems()) {
+            if (text.length() > 0) {
+                text.append(", ");
+            }
+            text.append(net.minecraft.core.registries.BuiltInRegistries.ITEM
+                            .getKey(required.stack().getItem()).getPath())
+                    .append(" need ").append(required.count())
+                    .append(" have ").append(cn.dancingsnow.neoecoae.multiblock.placement
+                            .MultiBlockPlacementService.countMatchingItems(player, required.stack()));
+        }
+        return text.toString();
+    }
+
+    /**
+     * The bill behind a ledger complaint: what the planner asks for at the bigger length, grouped by how
+     * many items a single position costs, so a stack-sized loss can be told apart from a one-for-one bill.
+     */
+    private static String describeMissingBill(GameTestHelper helper, MultiBlockBuildController.Host host) {
+        var def = host.getBuildDefinition();
+        if (def == null) {
+            return "no definition";
+        }
+        BlockPos absoluteHost = helper.absolutePos(CARD_HOST);
+        var plan = cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementService.preview(
+                helper.getLevel(), absoluteHost, helper.getLevel().getBlockState(absoluteHost), def,
+                def.getExpandMax(), host.isMirrorBuild());
+        java.util.Map<Item, java.util.Map<Integer, Integer>> perKind = new java.util.LinkedHashMap<>();
+        for (var planned : plan.getMissingBlocks()) {
+            var stack = planned.requiredItem();
+            perKind.computeIfAbsent(stack.getItem(), kind -> new java.util.TreeMap<>())
+                    .merge(stack.getCount(), 1, Integer::sum);
+        }
+        StringBuilder text = new StringBuilder();
+        perKind.forEach((kind, counts) -> text
+                .append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(kind).getPath())
+                .append("->").append(counts).append(' '));
+        return "missing positions by requiredItem count: " + text;
+    }
+
+    /**
+     * Puts the card in the player's hand. Hand it out before any materials: the test player starts with
+     * hotbar slot 0 selected and materials land in the first free slots, so a card given later replaces
+     * whatever stack was sitting there - one round lost 64 structure blocks that then stood in none of
+     * the three places the ledger reads.
+     */
+    private static void giveExpansionCard(net.minecraft.server.level.ServerPlayer player) {
+        player.setItemInHand(InteractionHand.MAIN_HAND,
+                new ItemStack(ModRegistration.SIMPLIFY_STRUCTURE_EXPANSION_CARD.get()));
+    }
+
+    /** Right-click the host with the card in hand, sneaking, the way a player does it. */
     private static void useExpansionCard(GameTestHelper helper,
                                          net.minecraft.server.level.ServerPlayer player) {
-        var stack = new ItemStack(ModRegistration.SIMPLIFY_STRUCTURE_EXPANSION_CARD.get());
+        useCard(helper, player, ModRegistration.SIMPLIFY_STRUCTURE_EXPANSION_CARD.get());
+    }
+
+    /** Right-click the host with {@code expected} in hand, the way a player does it. */
+    private static void useCard(GameTestHelper helper, net.minecraft.server.level.ServerPlayer player,
+                                net.minecraft.world.item.Item expected) {
+        var stack = player.getItemInHand(InteractionHand.MAIN_HAND);
+        if (!stack.is(expected)) {
+            helper.fail("the fixture player holds " + stack.getHoverName().getString()
+                    + " rather than the card, so this clicked with nothing in hand");
+            return;
+        }
         BlockPos absolute = helper.absolutePos(CARD_HOST);
         var hit = new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(absolute), Direction.EAST,
                 absolute, false);
-        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         stack.getItem().useOn(new UseOnContext(helper.getLevel(), player, InteractionHand.MAIN_HAND,
                 stack, hit));
+    }
+
+    /**
+     * A drive's collision shape is a full cube, so every up-facing quad of its model - the cavity floor
+     * included - is drawn with the light of the cell standing on top of it. Two columns built the same
+     * instant, differing only in that one cell, say whether that cell can hold light at all: the control
+     * cell above both columns has to read open sky, or the comparison means nothing.
+     */
+    @GameTest(template = "l1_room", batch = "interior_light_path", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void driveAboveCellLightDemo(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var base = helper.absolutePos(new BlockPos(1, 1, 1));
+        var blocked = base;
+        var through = base.offset(6, 0, 0);
+        var written = new ArrayList<BlockPos>();
+        java.util.function.BiConsumer<BlockPos, Block> buildColumn = (at, above) -> {
+            for (BlockPos pos : List.of(at, at.above(), at.above(2))) {
+                written.add(pos.immutable());
+            }
+            level.setBlockAndUpdate(at,
+                    ModRegistration.SIMPLIFY_STORAGE_CASING_BLOCK.get().defaultBlockState());
+            level.setBlockAndUpdate(at.above(),
+                    ModRegistration.SIMPLIFY_DRIVE_BLOCK.get().defaultBlockState());
+            level.setBlockAndUpdate(at.above(2), above.defaultBlockState());
+        };
+        buildColumn.accept(blocked, ModRegistration.SIMPLIFY_ENERGY_CELL_BLOCK.get());
+        buildColumn.accept(through, ModRegistration.SIMPLIFY_DRIVE_BLOCK.get());
+        helper.runAfterDelay(20, () -> {
+            try {
+                var engine = level.getLightEngine();
+                int open = engine.getLayerListener(net.minecraft.world.level.LightLayer.SKY)
+                        .getLightValue(blocked.above(4));
+                NeoECOPrototype.LOGGER.info("light-probe control open-air cell two rows up: sky=" + open);
+                if (open == 0) {
+                    helper.fail("the test world gives this spot no skylight at all, so the two columns"
+                            + " cannot be compared here");
+                    return;
+                }
+                for (var pair : List.of(
+                        Map.entry("blocker above", blocked.above(2)),
+                        Map.entry("see-through above", through.above(2)))) {
+                    var cell = pair.getValue();
+                    var state = level.getBlockState(cell);
+                    NeoECOPrototype.LOGGER.info("light-probe " + pair.getKey() + " -> the cell the drive's"
+                            + " cavity floor samples: " + name(state.getBlock())
+                            + " lightBlock=" + state.getLightBlock(level, cell)
+                            + " occludes=" + state.canOcclude()
+                            + " sky=" + engine.getLayerListener(net.minecraft.world.level.LightLayer.SKY)
+                                    .getLightValue(cell)
+                            + " block=" + engine.getLayerListener(net.minecraft.world.level.LightLayer.BLOCK)
+                                    .getLightValue(cell));
+                }
+                int behindBlocker = engine.getLayerListener(net.minecraft.world.level.LightLayer.SKY)
+                        .getLightValue(blocked.above(2));
+                int behindThrough = engine.getLayerListener(net.minecraft.world.level.LightLayer.SKY)
+                        .getLightValue(through.above(2));
+                if (behindThrough <= behindBlocker) {
+                    helper.fail("the see-through column did not hold more skylight than the blocking one ("
+                            + behindThrough + " vs " + behindBlocker + "), so what the model does with"
+                            + " those cells is not what this test claims");
+                    return;
+                }
+                NeoECOPrototype.LOGGER.info("light-probe same drive, same tick: skylight at the sampled"
+                        + " cell " + behindBlocker + " under a blocker vs " + behindThrough
+                        + " under a see-through block");
+                helper.succeed();
+            } finally {
+                for (var pos : written) {
+                    level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+                }
+            }
+        });
+    }
+
+    private static void printLight(net.minecraft.server.level.ServerLevel level, String tag,
+                                   BlockPos pos) {
+        var state = level.getBlockState(pos);
+        var engine = level.getLightEngine();
+        NeoECOPrototype.LOGGER.info("light-probe " + tag + " " + pos.toShortString() + " "
+                + name(state.getBlock())
+                + " sky=" + engine.getLayerListener(net.minecraft.world.level.LightLayer.SKY)
+                        .getLightValue(pos)
+                + " block=" + engine.getLayerListener(net.minecraft.world.level.LightLayer.BLOCK)
+                        .getLightValue(pos)
+                + " lightBlock=" + state.getLightBlock(level, pos)
+                + " occludes=" + state.canOcclude()
+                + " emission=" + state.getLightEmission());
     }
 
     /** Every non-air block in the box the card can reach, keyed by world position. */
@@ -5735,6 +6501,30 @@ public final class NeoECOPrototypeGameTests {
             }
         }
         return blocks;
+    }
+
+    /** The two halves of the ledger apart, so a loss says whether it fell out of the world or the bag. */
+    private static Map<Item, Integer> blockCounts(GameTestHelper helper) {
+        Map<Item, Integer> totals = new HashMap<>();
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        for (BlockPos pos : BlockPos.betweenClosed(origin,
+                origin.offset(L1_ROOM_SIZE - 1, 8, L1_ROOM_SIZE - 1))) {
+            Item asItem = helper.getLevel().getBlockState(pos).getBlock().asItem();
+            if (asItem != Items.AIR) {
+                totals.merge(asItem, 1, Integer::sum);
+            }
+        }
+        return totals;
+    }
+
+    private static Map<Item, Integer> carried(net.minecraft.server.level.ServerPlayer player) {
+        Map<Item, Integer> totals = new HashMap<>();
+        for (var stack : player.getInventory().items) {
+            if (!stack.isEmpty()) {
+                totals.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+        return totals;
     }
 
     /** What one machine block is worth, counted in all three places it can be. */

@@ -13,6 +13,11 @@ import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementPlan;
 import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementService;
 import cn.dancingsnow.neoecoae.multiblock.placement.RequiredItem;
 import cn.dancingsnow.neoecoae.multiblock.placement.WorldPlannedBlock;
+import cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig;
+import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyCraftingDefinition;
+import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyStorageDefinition;
+import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyTrinityDefinition;
+import cn.dancingsnow.neoecoprototype.registration.ModRegistration;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -103,6 +108,49 @@ public class SimplifyStructureExpansionCardItem extends Item {
         return null;
     }
 
+    /**
+     * The tier this click should land on. The expansion card climbs straight to the ceiling; a
+     * {@link SimplifyTierUpgradeCardItem} overrides this to cover one rung and nothing else.
+     */
+    protected @Nullable MultiBlockDefinition targetOf(MultiBlockDefinition current) {
+        return nextTier(current);
+    }
+
+    /** What to tell the player when {@link #targetOf} came back with nothing. */
+    protected Component refusal(MultiBlockDefinition current, int length) {
+        return Component.translatable("card.neoecoprototype.expansion.at_max", length);
+    }
+
+    /** Whether this card may still stretch a machine that is not at its ceiling yet. */
+    protected boolean canGrow() {
+        return true;
+    }
+
+    /** Whether the card itself is the price, so a successful click has to eat it. */
+    protected boolean consumedOnSuccess() {
+        return false;
+    }
+
+    /**
+     * Whether a tier swap charges the player's inventory for the parts it changes. The expansion card
+     * does - it is a builder, and its one-for-one ledger is what makes it safe to run on a loaded
+     * machine. A rung card does not: the card itself is the price, so the click touches no inventory at
+     * all and the swap has to be placed by hand instead of through eco's builder, which refuses to build
+     * for a survival player it cannot bill.
+     */
+    protected boolean chargesParts() {
+        return true;
+    }
+
+    /**
+     * The line a finished swap prints. The billing card returns every block it takes out, so its line
+     * says so; the free one returns nothing, and a message that promises a refund the player will never
+     * see is worse than no message.
+     */
+    protected String upgradedKey() {
+        return "card.neoecoprototype.expansion.upgraded";
+    }
+
     public SimplifyStructureExpansionCardItem(Properties properties) {
         super(properties);
     }
@@ -119,10 +167,6 @@ public class SimplifyStructureExpansionCardItem extends Item {
                               List<RequiredItem> bill, @Nullable BlockPos foreign) {
     }
 
-    /** The parts one upgrade step trades away, and the parts it wants in their place. */
-    private record Exchange(List<GenericStack> inputs, List<GenericStack> outputs) {
-    }
-
     @Override
     public InteractionResult useOn(UseOnContext context) {
         Level level = context.getLevel();
@@ -133,12 +177,7 @@ public class SimplifyStructureExpansionCardItem extends Item {
             return InteractionResult.PASS;
         }
         Player player = context.getPlayer();
-        if (player == null) {
-            return InteractionResult.PASS;
-        }
-        boolean grow = player.isShiftKeyDown();
-        Exchange exchange = grow ? null : exchangeFor(host, level, pos, player);
-        if (!grow && exchange == null) {
+        if (player == null || !player.isShiftKeyDown()) {
             return InteractionResult.PASS;
         }
         if (level.isClientSide) {
@@ -147,16 +186,12 @@ public class SimplifyStructureExpansionCardItem extends Item {
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.FAIL;
         }
-        if (grow) {
-            grow(host, (ServerLevel) level, pos, serverPlayer);
-        } else {
-            handOverPattern(exchange, (ServerLevel) level, serverPlayer);
-        }
+        grow(host, (ServerLevel) level, pos, serverPlayer, context.getHand());
         return InteractionResult.CONSUME;
     }
 
     private void grow(MultiBlockBuildController.Host host, ServerLevel level, BlockPos pos,
-                      ServerPlayer player) {
+                      ServerPlayer player, net.minecraft.world.InteractionHand hand) {
         if (!host.canPlayerInteract(player) || host.isBuildInProgress()) {
             say(player, "card.neoecoprototype.expansion.busy");
             return;
@@ -176,7 +211,13 @@ public class SimplifyStructureExpansionCardItem extends Item {
             return;
         }
         if (current >= target) {
-            upgradeTier(host, level, pos, player, definition, current);
+            upgradeTier(host, level, pos, player, definition, current, hand);
+            return;
+        }
+        // A card that only changes tiers must leave a short machine exactly as it found it - and must
+        // not eat itself doing nothing, which is why this is checked before any block is touched.
+        if (!canGrow()) {
+            say(player, Component.translatable("card.neoecoprototype.upgrade.not_full", target));
             return;
         }
 
@@ -187,18 +228,32 @@ public class SimplifyStructureExpansionCardItem extends Item {
             return;
         }
         MultiBlockPlacementPlan plan = grown.plan();
-        if (!player.isCreative() && !MultiBlockPlacementService.hasRequiredItems(player, grown.bill())) {
-            say(player, Component.translatable("card.neoecoprototype.expansion.short_of",
-                    shortfall(grown.bill())));
+        List<RequiredItem> net = netted(grown.bill(), reclaimed(grown.moved(), level));
+        if (!player.isCreative() && !MultiBlockPlacementService.hasRequiredItems(player, net)) {
+            Component missing = shortfall(net);
+            say(player, Component.translatable("card.neoecoprototype.expansion.short_of", missing));
+            handOverTicket(level, player, growWorkOrder(definition), net, missing);
             return;
         }
         // Paid for first, so a player who cannot afford the larger shape keeps the machine they had.
+        // The price is the difference, not the whole shape: the loop below hands every moved block back
+        // into this same inventory, and eco's builder re-checks the full list only after that has landed.
+        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build path (grow): def="
+                + definition + " length=" + current + "->" + target + " creative=" + player.isCreative()
+                + " billKinds=" + grown.bill().size() + " netKinds=" + net.size()
+                + " moved=" + grown.moved().size() + " missing=" + plan.getMissingBlocks().size()
+                + " conflicts=" + plan.getConflictPositions().size());
         for (WorldPlannedBlock moved : grown.moved()) {
             giveBack(level, moved.worldPos(), player);
         }
 
         host.setSelectedBuildLength(target);
         if (!MultiBlockPlacementService.buildInstant(level, plan, player)) {
+            cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build refused (grow): payable="
+                    + MultiBlockPlacementService.hasRequiredItems(player, plan.getRequiredItems())
+                    + " conflicts=" + plan.getConflictPositions().size()
+                    + " missing=" + plan.getMissingBlocks().size()
+                    + " billKinds=" + plan.getRequiredItems().size());
             // buildInstant only refuses here because a placement failed part-way through, so the
             // structure really did change. Re-form anyway: leaving the length bumped without telling
             // the cluster is the worse failure.
@@ -221,10 +276,11 @@ public class SimplifyStructureExpansionCardItem extends Item {
      * block itself - which is the anchor, and so appears in neither plan.</p>
      */
     private void upgradeTier(MultiBlockBuildController.Host host, ServerLevel level, BlockPos pos,
-                             ServerPlayer player, MultiBlockDefinition current, int length) {
-        MultiBlockDefinition target = nextTier(current);
+                             ServerPlayer player, MultiBlockDefinition current, int length,
+                             net.minecraft.world.InteractionHand hand) {
+        MultiBlockDefinition target = targetOf(current);
         if (target == null) {
-            say(player, Component.translatable("card.neoecoprototype.expansion.at_max", length));
+            say(player, refusal(current, length));
             return;
         }
         BlockState anchor = anchorTarget(host, level, pos, target);
@@ -238,19 +294,33 @@ public class SimplifyStructureExpansionCardItem extends Item {
             reportBlocked(player, swap.foreign());
             return;
         }
+        if (!chargesParts()) {
+            swapInPlace(level, pos, anchor, swap, player, hand, current, target);
+            return;
+        }
         List<RequiredItem> bill = new ArrayList<>(swap.bill());
         mergeItem(bill, new ItemStack(anchor.getBlock().asItem()));
-        if (!player.isCreative() && !MultiBlockPlacementService.hasRequiredItems(player, bill)) {
-            say(player, Component.translatable("card.neoecoprototype.expansion.short_of",
-                    shortfall(bill)));
+        List<RequiredItem> net = netted(bill, upgradeReclaimed(swap.moved(), level, pos));
+        if (!player.isCreative() && !MultiBlockPlacementService.hasRequiredItems(player, net)) {
+            Component missing = shortfall(net);
+            say(player, Component.translatable("card.neoecoprototype.expansion.short_of", missing));
+            handOverTicket(level, player, upgradeWorkOrder(target), net, missing);
             return;
         }
 
+        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build path (upgrade): def="
+                + current + "->" + target + " length=" + length + " creative=" + player.isCreative()
+                + " billKinds=" + bill.size() + " netKinds=" + net.size()
+                + " moved=" + swap.moved().size());
         for (WorldPlannedBlock moved : swap.moved()) {
             giveBack(level, moved.worldPos(), player);
         }
         giveBack(level, pos, player);
         if (!MultiBlockPlacementService.buildInstant(level, swap.plan(), player)) {
+            cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card build refused (upgrade): payable="
+                    + MultiBlockPlacementService.hasRequiredItems(player, swap.plan().getRequiredItems())
+                    + " conflicts=" + swap.plan().getConflictPositions().size()
+                    + " missing=" + swap.plan().getMissingBlocks().size());
             finishAnchor(level, pos, anchor, player);
             say(player, "card.neoecoprototype.expansion.partly_built");
             return;
@@ -264,8 +334,61 @@ public class SimplifyStructureExpansionCardItem extends Item {
         }
         level.setBlock(pos, anchor, Block.UPDATE_ALL);
         rebuildHost(level, pos);
-        say(player, Component.translatable("card.neoecoprototype.expansion.upgraded",
-                swap.moved().size() + 1));
+        if (consumedOnSuccess() && !player.hasInfiniteMaterials()) {
+            // Every earlier return path leaves both the machine and the card untouched, so this is the
+            // only place the card can be eaten - and it is eaten after the new tier is standing.
+            var held = player.getItemInHand(hand);
+            if (held.is(this)) {
+                held.shrink(1);
+            }
+        }
+        say(player, Component.translatable(upgradedKey(),
+                tierLabel(target), swap.moved().size() + 1));
+    }
+
+    /**
+     * Puts a tier swap in without touching anyone's inventory, because the rung card is the whole price:
+     * there is nothing to bill and nothing to hand back, so writing the positions from the plan is both
+     * simpler and the only option - eco's builder refuses to build for a survival player it cannot
+     * charge, which is exactly the gate the expansion card needs and this one does not.
+     *
+     * <p>What this does spend is the block that stood in each moved position, and whatever it held.
+     * Today that set is tier-bearing parts only - energy cells, the cores, the cooling controller and
+     * the host - and none of those carry items, so the loss is stored charge, not inventory. Cells and
+     * interfaces never appear in it, because neither changes with the tier.</p>
+     */
+    private void swapInPlace(ServerLevel level, BlockPos pos, BlockState anchor, Classified swap,
+                             ServerPlayer player, net.minecraft.world.InteractionHand hand,
+                             MultiBlockDefinition current, MultiBlockDefinition target) {
+        for (WorldPlannedBlock moved : swap.moved()) {
+            level.setBlock(moved.worldPos(), moved.targetState(), Block.UPDATE_ALL);
+        }
+        level.setBlock(pos, anchor, Block.UPDATE_ALL);
+        rebuildHost(level, pos);
+        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card free swap (upgrade): def=" + current + "->" + target
+                + " positions=" + (swap.moved().size() + 1));
+        if (consumedOnSuccess() && !player.hasInfiniteMaterials()) {
+            var held = player.getItemInHand(hand);
+            if (held.is(this)) {
+                held.shrink(1);
+            }
+        }
+        say(player, Component.translatable(upgradedKey(),
+                tierLabel(target), swap.moved().size() + 1));
+    }
+
+    /**
+     * The tier a definition climbs to, read off its own host block id
+     * ({@code neoecoae:storage_system_l6} to {@code L6}). The success line cannot name a tier because
+     * two of the three cards stop short of L9, and a message that lies about what the player just got
+     * is worse than no message.
+     */
+    private static String tierLabel(MultiBlockDefinition definition) {
+        String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                .getKey(definition.getOwner().value()).getPath();
+        java.util.regex.Matcher found = java.util.regex.Pattern.compile("l(\\d+)\\w*$")
+                .matcher(path);
+        return found.find() ? "L" + found.group(1) : path;
     }
 
     /**
@@ -289,90 +412,153 @@ public class SimplifyStructureExpansionCardItem extends Item {
         return carryOver(level.getBlockState(pos), anchorBlock.defaultBlockState());
     }
 
-    /** The swap this click would make, or null when there is nothing to trade and no reason to act. */
-    private @Nullable Exchange exchangeFor(MultiBlockBuildController.Host host, Level level, BlockPos pos,
-                                           Player player) {
-        if (!host.canPlayerInteract(player) || host.isBuildInProgress()) {
-            return null;
+    /**
+     * The blocks the card hands back before it builds the bigger shape: every position it moves, plus -
+     * when the click swaps tiers - the host block itself. They are not a cost, so they come back out of
+     * the work order's input list; the loop above only ever runs while those blocks still stand.
+     */
+    private List<ItemStack> reclaimed(List<WorldPlannedBlock> moved, Level level) {
+        List<ItemStack> back = new ArrayList<>(moved.size());
+        for (WorldPlannedBlock position : moved) {
+            back.add(new ItemStack(level.getBlockState(position.worldPos()).getBlock().asItem()));
         }
-        MultiBlockDefinition current = host.getBuildDefinition();
-        if (current == null) {
-            return null;
+        return back;
+    }
+
+    private List<ItemStack> upgradeReclaimed(List<WorldPlannedBlock> moved, Level level, BlockPos host) {
+        List<ItemStack> back = reclaimed(moved, level);
+        back.add(new ItemStack(level.getBlockState(host).getBlock().asItem()));
+        return back;
+    }
+
+    /** {@code bill} with each reclaimed stack subtracted from the entry for the same item. */
+    private static List<RequiredItem> netted(List<RequiredItem> bill, List<ItemStack> back) {
+        List<RequiredItem> net = new ArrayList<>(bill);
+        for (ItemStack given : back) {
+            for (int i = 0; i < net.size(); i++) {
+                RequiredItem entry = net.get(i);
+                if (!ItemStack.isSameItemSameComponents(entry.stack(), given)) {
+                    continue;
+                }
+                long left = entry.count() - given.getCount();
+                if (left <= 0) {
+                    net.remove(i);
+                } else {
+                    net.set(i, new RequiredItem(entry.stack(), (int) left));
+                }
+                break;
+            }
         }
-        MultiBlockDefinition target = nextTier(current);
-        if (target == null || !hasBlankPattern(player)) {
-            return null;
-        }
-        // anchorTarget already answers both questions a plain click cares about: whether the next tier
-        // wants this machine at exactly this size, and whether it is filled out to the ceiling.
-        if (anchorTarget(host, level, pos, target) == null) {
-            return null;
-        }
-        return exchangeOf(host, level, pos, current, target, current.getExpandMax());
+        return net;
     }
 
     /**
-     * The bill as a pattern instead of a checkout: everything standing here that the next tier wants
-     * differently, in one column, the same parts of the next tier in the other.
-     *
-     * <p>A straight trade - no difference is computed, which is why the parts that come back out of
-     * the machine are exactly the parts the exchange pattern spends.</p>
+     * The work order for this machine: one registered item per definition the card can be pointed at.
+     * They have to be registered items and not renamed paper because all an AE2 pattern can hold is
+     * {@code GenericStack(AEKey, long)} - an id and an amount - so a name written on a stack would not
+     * survive being produced by the very recipe it names.
      */
-    private @Nullable Exchange exchangeOf(MultiBlockBuildController.Host host, Level level, BlockPos pos,
-                                          MultiBlockDefinition current, MultiBlockDefinition target,
-                                          int length) {
-        Map<BlockPos, WorldPlannedBlock> owned = plannedByPosition(preview(host, level, pos, current, length));
-        Classified swap = classify(preview(host, level, pos, target, length), owned, level, true);
-        if (swap.foreign() != null || swap.moved().isEmpty()) {
-            return null;
+    private static @Nullable Item growWorkOrder(MultiBlockDefinition definition) {
+        if (definition == SimplifyStorageDefinition.L1) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_L1_STORAGE.get();
         }
-        Map<Item, Integer> inputs = new LinkedHashMap<>();
-        Map<Item, Integer> outputs = new LinkedHashMap<>();
-        for (WorldPlannedBlock moved : swap.moved()) {
-            addPart(inputs, owned.get(moved.worldPos()).targetState().getBlock());
-            addPart(outputs, moved.targetState().getBlock());
+        if (definition == SimplifyCraftingDefinition.L1) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_F1_CRAFTING.get();
         }
-        addPart(inputs, level.getBlockState(pos).getBlock());
-        addPart(outputs, target.getOwner().value());
-        return new Exchange(stacks(inputs), stacks(outputs));
+        if (definition == SimplifyTrinityDefinition.L1) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_TRINITY.get();
+        }
+        if (definition == NEMultiBlocks.STORAGE_SYSTEM_L4) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_STORAGE_L4.get();
+        }
+        if (definition == NEMultiBlocks.STORAGE_SYSTEM_L6) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_STORAGE_L6.get();
+        }
+        if (definition == NEMultiBlocks.STORAGE_SYSTEM_L9) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_STORAGE_L9.get();
+        }
+        if (definition == NEMultiBlocks.COMPUTATION_SYSTEM_L4) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_COMPUTATION_L4.get();
+        }
+        if (definition == NEMultiBlocks.COMPUTATION_SYSTEM_L6) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_COMPUTATION_L6.get();
+        }
+        if (definition == NEMultiBlocks.COMPUTATION_SYSTEM_L9) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_COMPUTATION_L9.get();
+        }
+        if (definition == NEMultiBlocks.CRAFTING_SYSTEM_L4) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_CRAFTING_L4.get();
+        }
+        if (definition == NEMultiBlocks.CRAFTING_SYSTEM_L6) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_CRAFTING_L6.get();
+        }
+        if (definition == NEMultiBlocks.CRAFTING_SYSTEM_L9) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_GROW_CRAFTING_L9.get();
+        }
+        return null;
     }
 
-    private void handOverPattern(Exchange exchange, ServerLevel level, ServerPlayer player) {
-        if (!consumeOne(player, new ItemStack(AEItems.BLANK_PATTERN.asItem()))) {
+    /** The work order for the tier this click was heading to; every tier the card climbs to has one. */
+    private static @Nullable Item upgradeWorkOrder(MultiBlockDefinition target) {
+        if (target == NEMultiBlocks.STORAGE_SYSTEM_L9) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_UPGRADE_STORAGE_L9.get();
+        }
+        if (target == NEMultiBlocks.COMPUTATION_SYSTEM_L9) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_UPGRADE_COMPUTATION_L9.get();
+        }
+        if (target == NEMultiBlocks.CRAFTING_SYSTEM_L9) {
+            return ModRegistration.SIMPLIFY_WORK_ORDER_UPGRADE_CRAFTING_L9.get();
+        }
+        return null;
+    }
+
+    /**
+     * What a refused click leaves behind is a pair: the machine's work order, and a processing pattern
+     * that turns the parts this step still needs into one more of those work orders. The direction is not a style choice - a pattern that ate
+     * the ticket instead would turn one blank pattern into 48 drives and cells, which is what he caught
+     * in game. The work order is therefore always the output, and the pattern is what tells the network
+     * what "paid for" costs.
+     *
+     * <p>Both costs - the sheet the ticket is written on and the blank pattern the recipe is stored on -
+     * are checked before either is taken, and each refusal says so out loud: a silent return here reads
+     * to the player as a broken card.</p>
+     */
+    private void handOverTicket(ServerLevel level, ServerPlayer player, @Nullable Item workOrder,
+                                List<RequiredItem> bill, Component missing) {
+        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card ticket: order="
+                + (workOrder == null ? "none"
+                        : net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(workOrder))
+                + " billKinds=" + bill.size());
+        if (workOrder == null) {
             return;
         }
-        ItemStack pattern = PatternDetailsHelper.encodeProcessingPattern(exchange.inputs(),
-                exchange.outputs());
-        handTo(level, player.blockPosition(), pattern, player);
-        say(player, Component.translatable("card.neoecoprototype.expansion.upgrade.pattern",
-                total(exchange.inputs()), total(exchange.outputs())));
-    }
-
-    private static long total(List<GenericStack> parts) {
-        long sum = 0;
-        for (GenericStack part : parts) {
-            sum += part.amount();
+        if (NeoECOPrototypeServerConfig.STRUCTURE_CARD_CONSUMES_ITEMS.get()) {
+            ItemStack paper = new ItemStack(Items.PAPER);
+            ItemStack blank = new ItemStack(AEItems.BLANK_PATTERN.asItem());
+            if (MultiBlockPlacementService.countMatchingItems(player, paper) <= 0) {
+                say(player, Component.translatable("card.neoecoprototype.expansion.no_paper", missing));
+                return;
+            }
+            if (MultiBlockPlacementService.countMatchingItems(player, blank) <= 0) {
+                say(player, Component.translatable("card.neoecoprototype.expansion.no_blank", missing));
+                return;
+            }
+            if (!consumeOne(player, paper) || !consumeOne(player, blank)) {
+                return;
+            }
         }
-        return sum;
-    }
-
-    private static void addPart(Map<Item, Integer> parts, Block block) {
-        Item item = block.asItem();
-        if (item == Items.AIR) {
-            return;
+        handTo(level, player.blockPosition(), new ItemStack(workOrder), player);
+        List<GenericStack> inputs = new ArrayList<>(bill.size());
+        long parts = 0;
+        for (RequiredItem required : bill) {
+            inputs.add(new GenericStack(AEItemKey.of(required.stack().getItem()), required.count()));
+            parts += required.count();
         }
-        parts.merge(item, 1, Integer::sum);
-    }
-
-    private static List<GenericStack> stacks(Map<Item, Integer> parts) {
-        List<GenericStack> stacks = new ArrayList<>(parts.size());
-        parts.forEach((item, count) -> stacks.add(new GenericStack(AEItemKey.of(item), count)));
-        return stacks;
-    }
-
-    private static boolean hasBlankPattern(Player player) {
-        return MultiBlockPlacementService.countMatchingItems(player,
-                new ItemStack(AEItems.BLANK_PATTERN.asItem())) > 0;
+        handTo(level, player.blockPosition(), PatternDetailsHelper.encodeProcessingPattern(inputs,
+                List.of(new GenericStack(AEItemKey.of(workOrder), 1))), player);
+        cn.dancingsnow.neoecoprototype.NeoECOPrototype.LOGGER.info("card ticket printed: parts=" + parts
+                + " inputKinds=" + inputs.size());
+        say(player, Component.translatable("card.neoecoprototype.expansion.pattern", parts));
     }
 
     /**
@@ -441,25 +627,33 @@ public class SimplifyStructureExpansionCardItem extends Item {
         int reusedAsIs = 0;
         for (BlockPos conflict : plan.getConflictPositions()) {
             BlockState standing = level.getBlockState(conflict);
-            WorldPlannedBlock want = wanted.get(conflict);
-            WorldPlannedBlock mine = owned.get(conflict);
-            if (want == null || mine == null || mine.targetState().getBlock() != standing.getBlock()) {
+            WorldPlannedBlock wantBlock = wanted.get(conflict);
+            BlockState want = wantBlock == null ? null : wantBlock.targetState();
+            if (want == null) {
                 return refused(plan, conflict);
             }
-            if (standing.getBlock() == want.targetState().getBlock()) {
+            // Checked before anything about ownership: a position holding the very block the target
+            // shape wants differs at most by what formation writes, and that is no reason to refuse.
+            // The caller that measures the machine's current size passes no ownership map at all, so
+            // putting this check after the ownership test would make every formed machine look unbuilt.
+            if (standing.getBlock() == want.getBlock()) {
                 reusedAsIs++;
                 settled.add(conflict);
                 continue;
             }
+            WorldPlannedBlock mine = owned.get(conflict);
+            if (mine == null || mine.targetState().getBlock() != standing.getBlock()) {
+                return refused(plan, conflict);
+            }
             // A shell the bigger shape wants elsewhere, or a block whose tier is written into its id.
             // A block with no item to give back for is not ours to move at all.
             if (standing.getBlock().asItem() == Items.AIR
-                    || (tiered ? want.targetState().getBlock() == mine.targetState().getBlock()
+                    || (tiered ? want.getBlock() == mine.targetState().getBlock()
                     : !isShell(level, conflict))) {
                 return refused(plan, conflict);
             }
-            WorldPlannedBlock replacement = new WorldPlannedBlock(conflict, want.targetState(),
-                    want.requiredItem().copy());
+            WorldPlannedBlock replacement = new WorldPlannedBlock(conflict, want,
+                    wantBlock.requiredItem().copy());
             moved.add(replacement);
             missing.add(replacement);
             mergeItem(bill, replacement.requiredItem());

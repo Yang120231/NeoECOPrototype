@@ -87,6 +87,7 @@ import cn.dancingsnow.neoecoprototype.items.SimplifyComputationCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyConcreteStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStructureExpansionCardItem;
+import cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkFluidStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem;
@@ -231,6 +232,9 @@ public class ModRegistration {
             BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0F);
     private static final BlockBehaviour.Properties COMPUTATION_PROPS =
             BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0F).noOcclusion();
+    // Keep noOcclusion(): measured on the L1 room, dropping it stops 10 faces being drawn (the duplicated
+    // plane between stacked drives among them) but flips the drive to lightBlock=15, so the machine
+    // interior goes black in the Overworld. eco's own drive reads the same false/1 pair we do.
     private static final BlockBehaviour.Properties DRIVE_PROPS =
             BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0F).noOcclusion();
     private static final BlockBehaviour.Properties CASING_PROPS =
@@ -599,6 +603,73 @@ public class ModRegistration {
     public static final Supplier<SimplifyStructureExpansionCardItem> SIMPLIFY_STRUCTURE_EXPANSION_CARD =
             ITEMS.register("simplify_structure_expansion_card",
                     () -> new SimplifyStructureExpansionCardItem(new Item.Properties().stacksTo(1)));
+
+    /**
+     * The two rung cards, one rung each and family-agnostic: which machine they land on comes off the
+     * host block standing there. They stack because they are spent on use, unlike the expansion card.
+     */
+    public static final Supplier<SimplifyTierUpgradeCardItem> SIMPLIFY_TIER_UPGRADE_CARD_L4_L6 =
+            ITEMS.register("simplify_tier_upgrade_card_l4_l6",
+                    () -> new SimplifyTierUpgradeCardItem(new Item.Properties().stacksTo(16),
+                            SimplifyTierUpgradeCardItem.Rung.FOUR_TO_SIX));
+    public static final Supplier<SimplifyTierUpgradeCardItem> SIMPLIFY_TIER_UPGRADE_CARD_L6_L9 =
+            ITEMS.register("simplify_tier_upgrade_card_l6_l9",
+                    () -> new SimplifyTierUpgradeCardItem(new Item.Properties().stacksTo(16),
+                            SimplifyTierUpgradeCardItem.Rung.SIX_TO_NINE));
+
+    /** The card hands this out instead of a note when an L1 storage room cannot be paid for. */
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_L1_STORAGE =
+            ITEMS.register("simplify_work_order_grow_l1_storage",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    /** The exchange pattern for an L6 storage room that cannot be paid for prints this. */
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_UPGRADE_STORAGE_L9 =
+            ITEMS.register("simplify_work_order_upgrade_storage_l9",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+
+    /**
+     * One work order per machine the expansion card can be pointed at: a ticket is the only thing an AE2
+     * pattern can hold as an output, since GenericStack stores an id and an amount and nothing else. The names
+     * are those machines' own display names with 扩容/升级 in front, copied from upstream wording.
+     */
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_STORAGE_L4 =
+            ITEMS.register("simplify_work_order_grow_storage_l4",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_STORAGE_L6 =
+            ITEMS.register("simplify_work_order_grow_storage_l6",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_STORAGE_L9 =
+            ITEMS.register("simplify_work_order_grow_storage_l9",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_COMPUTATION_L4 =
+            ITEMS.register("simplify_work_order_grow_computation_l4",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_COMPUTATION_L6 =
+            ITEMS.register("simplify_work_order_grow_computation_l6",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_COMPUTATION_L9 =
+            ITEMS.register("simplify_work_order_grow_computation_l9",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_CRAFTING_L4 =
+            ITEMS.register("simplify_work_order_grow_crafting_l4",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_CRAFTING_L6 =
+            ITEMS.register("simplify_work_order_grow_crafting_l6",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_CRAFTING_L9 =
+            ITEMS.register("simplify_work_order_grow_crafting_l9",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_F1_CRAFTING =
+            ITEMS.register("simplify_work_order_grow_f1_crafting",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_TRINITY =
+            ITEMS.register("simplify_work_order_grow_trinity",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_UPGRADE_COMPUTATION_L9 =
+            ITEMS.register("simplify_work_order_upgrade_computation_l9",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<Item> SIMPLIFY_WORK_ORDER_UPGRADE_CRAFTING_L9 =
+            ITEMS.register("simplify_work_order_upgrade_crafting_l9",
+                    () -> new Item(new Item.Properties().stacksTo(16)));
 
     public static final Supplier<Item> SIMPLIFY_ITEM_STORAGE_MATRIX_HOUSING =
              ITEMS.register("simplify_item_storage_matrix_housing", () -> new Item(new Item.Properties()));
@@ -1265,6 +1336,8 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                           output.accept(SIMPLIFY_CONCRETE_STORAGE_CELL.get());
                           output.accept(SIMPLIFY_SINGULARITY_CELL.get());
                         output.accept(SIMPLIFY_STRUCTURE_EXPANSION_CARD.get());
+                        output.accept(SIMPLIFY_TIER_UPGRADE_CARD_L4_L6.get());
+                        output.accept(SIMPLIFY_TIER_UPGRADE_CARD_L6_L9.get());
                          output.accept(SIMPLIFY_GREEN_CRYSTAL_MATRIX.get());
                          output.accept(SIMPLIFY_ITEM_STORAGE_MATRIX_HOUSING.get());
                          output.accept(PIGMEE_STORAGE_MATRIX_HOUSING.get());
