@@ -210,7 +210,7 @@ public final class StorageMatrixBuilder extends ItemBuilder {
      */
     @Override
     protected void generateItemModels(dev.latvian.mods.kubejs.generator.KubeAssetGenerator generator) {
-        boolean userCustomized = (this.textures != null && !this.textures.isEmpty())
+        boolean userCustomized = !this.textures.isEmpty()
                 || this.baseTexture != null
                 || (this.modelGenerator != null && this.modelGenerator != this.defaultModelGenerator);
         if (userCustomized) {
