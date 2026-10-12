@@ -86,10 +86,11 @@ public final class StorageMatrixBuilder extends ItemBuilder {
      *
      * <p>Storage kinds ({@code item}/{@code fluid}/{@code chemical}) decide both the backend and the
      * material, so the housing and the in-drive model follow automatically. Family names
-     * ({@code pigmee}/{@code universal}/{@code quantum}/{@code small_bulk}/{@code other}) only pick a
-     * material, which is the same as calling {@link #material(String)}.
+     * ({@code pigmee}/{@code universal}/{@code quantum}/{@code small_bulk}/{@code infinite}/{@code other})
+     * only pick a material, which is the same as calling {@link #material(String)} - capacity is
+     * {@code size(...)}, never {@code type(...)}.
      */
-    @Info("设置矩阵类型：item/fluid/chemical，或家族名 pigmee/universal/quantum/small_bulk/other")
+    @Info("设置矩阵类型：item/fluid/chemical，或家族名 pigmee/universal/quantum/small_bulk/infinite/other（后者只换材质，容量请用 size(...)）")
     public StorageMatrixBuilder type(String value) {
         try {
             this.type = StorageMatrixDefinition.MatrixType.valueOf(value.toUpperCase(java.util.Locale.ROOT));
@@ -101,17 +102,33 @@ public final class StorageMatrixBuilder extends ItemBuilder {
         return this;
     }
 
-    @Info("绑定一个物品")
+    @Info("绑定一个物品（只有 infinite 档真的绑；有限矩阵按媒介通用，见本文下方说明）")
     public StorageMatrixBuilder itemType(ResourceLocation id) {
         this.type = StorageMatrixDefinition.MatrixType.ITEM;
-        this.key = () -> AEItemKey.of(BuiltInRegistries.ITEM.get(id));
+        this.key = () -> {
+            var item = BuiltInRegistries.ITEM.get(id);
+            var key = item == null ? null : AEItemKey.of(item);
+            if (key == null) {
+                // AEItemKey.of answers null for an empty stack, which is what an unknown id resolves to,
+                // so this is the one check that says which id the script got wrong.
+                throw new IllegalStateException("Unknown item '" + id + "' for matrix " + this.id);
+            }
+            return key;
+        };
         return this;
     }
 
-    @Info("绑定一个流体")
+    @Info("绑定一个流体（只有 infinite 档真的绑；有限矩阵按媒介通用，见本文下方说明）")
     public StorageMatrixBuilder fluidType(ResourceLocation id) {
         this.type = StorageMatrixDefinition.MatrixType.FLUID;
-        this.key = () -> AEFluidKey.of(BuiltInRegistries.FLUID.get(id));
+        this.key = () -> {
+            var fluid = BuiltInRegistries.FLUID.get(id);
+            var key = fluid == null ? null : AEFluidKey.of(fluid);
+            if (key == null) {
+                throw new IllegalStateException("Unknown fluid '" + id + "' for matrix " + this.id);
+            }
+            return key;
+        };
         return this;
     }
 
@@ -150,8 +167,11 @@ public final class StorageMatrixBuilder extends ItemBuilder {
         return this;
     }
 
-    /** Set an explicit byte capacity instead of a preset {@code size(...)} tier. */
-    @Info("设置自定义存储字节数，例如 bytes(256)")
+    /**
+     * Set an explicit byte capacity instead of a preset {@code size(...)} tier. It wins over a
+     * {@code size(...)} already given, in either order: the tier you named is replaced by CUSTOM.
+     */
+    @Info("设置自定义存储字节数，例如 bytes(256)。它会顶掉先前或之后的 size(...) 档位")
     public StorageMatrixBuilder bytes(long value) {
         if (value < 1L) {
             throw new IllegalArgumentException("Matrix bytes must be positive: " + value);
@@ -211,10 +231,6 @@ public final class StorageMatrixBuilder extends ItemBuilder {
         if (customBytes != null && size == StorageMatrixDefinition.MatrixSize.INFINITE) {
             throw new IllegalStateException(
                     "Matrix '%s' cannot combine size('infinite') with bytes(...)".formatted(id));
-        }
-        if (customTotalTypes != null && customBytes == null && size == StorageMatrixDefinition.MatrixSize.CUSTOM) {
-            throw new IllegalStateException(
-                    "Matrix '%s' needs bytes(...) or a finite size(...) when totalTypes(...) is used".formatted(id));
         }
         // An explicit bytes(...) or totalTypes(...) wins; otherwise the size tier decides.
         boolean customCapacity = customBytes != null || customTotalTypes != null;

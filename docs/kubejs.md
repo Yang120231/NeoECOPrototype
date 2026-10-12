@@ -210,6 +210,8 @@ StartupEvents.registry('item', event => {
   event.create('oak_matrix_16k', 'neoecoprototype:storage_matrix')
        .itemType('minecraft:oak_log')
        .size('16k')
+       // 注意：这一档是通用物品矩阵，上面绑的 oak_log 不会生效；
+       // 要一台只装 oak_log 的矩阵就别写 size，用默认的 infinite。
 
   event.create('water_matrix_1m', 'neoecoprototype:storage_matrix')
        .fluidType('minecraft:water')
@@ -219,17 +221,21 @@ StartupEvents.registry('item', event => {
 
 可用方法：
 
-- `.itemType('namespace:item')`：注册绑定单个物品的矩阵。
-- `.fluidType('namespace:fluid')`：注册绑定单个流体的矩阵。
-- `.chemicalType('namespace:chemical')`：注册绑定单个 Mekanism 化学品的矩阵，需要 Mekanism 和 Applied Mekanistics。
-- `.type('item'/'fluid'/'chemical')`：设置矩阵声明类型；绑定方法会自动设置对应类型。
+- `.itemType('namespace:item')`：绑定一种物品。**只有 `size('infinite')` 那一档真的绑**；有限档是通用物品矩阵（默认 256 种），绑定的那一种被忽略。
+- `.fluidType('namespace:fluid')`：同上，只有无限档真的绑。
+- `.chemicalType('namespace:chemical')`：绑定一种 Mekanism 化学品，有限档也真的绑；需要 Mekanism 和 Applied Mekanistics，缺了脚本会收到这一句而不是找不到类。
+- `.type('item'/'fluid'/'chemical')`：设置矩阵声明类型；绑定方法会自动设置对应类型。传家族名（`pigmee`/`universal`/`quantum`/`small_bulk`/`infinite`/`other`）只换材质，不换容量 —— 容量一律用 `.size(...)`。
 - `.size('infinite'/'1k'/'4k'/'16k'/'64k'/'1m'/'4m')`：设置容量。
+- `.bytes(n)`：改用自定义字节数，**它会顶掉先前的或之后的 `size(...)` 档位**（两种顺序都一样）；`size('infinite')` 与 `.bytes(...)` 同时出现会明确报错。
+- `.totalTypes(n)`：改类型数，默认 256（物品/流体）或 25（化学品）。
 - `.inventoryModel('namespace:item/model')`：覆盖物品栏模型。
 - `.cellModel('namespace:block/model')`：覆盖驱动器内格子模型。
 - `.parentModel(...)` / `.textures(...)`：完全接管物品栏模型；设置后不再套用默认模型。
 
 `infinite` 使用现有无限矩阵 handler；有限 item/fluid 使用 eco 存储后端；有限 chemical
-使用 AppMek 化学品后端。所有脚本在 `startup_scripts` 中运行，修改后需要重启游戏。
+使用 AppMek 化学品后端。这个 builder **不需要装 AE2 Omni Cells**：只有 `universal` 与
+`quantum` 两个家族要它，缺了会在脚本注册那一项上报"需要 AE2 Omni Cells"。所有脚本在
+`startup_scripts` 中运行，修改后需要重启游戏。
 
 默认模型不需要脚本配置，按矩阵**类型**自动选择材质，不会所有矩阵都长一样。
 材质定义集中在 `MatrixMaterials`，脚本不应自行乱放贴图：

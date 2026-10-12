@@ -32,9 +32,11 @@ public class KJSPlugin implements KubeJSPlugin {
                 Registries.ITEM,
                 r -> {
                     r.add("infinite_storage_matrix", InfiniteMatrixBuilder.class, InfiniteMatrixBuilder::new);
-                    if (net.neoforged.fml.ModList.get().isLoaded("ae2omnicells")) {
-                        r.add("storage_matrix", StorageMatrixBuilder.class, StorageMatrixBuilder::new);
-                    }
+                    // No gate here, on purpose. This builder reaches the omni and chemical backends only
+                    // inside createObject, each behind its own isLoaded check that answers with a
+                    // sentence naming the mod to install, and an unexecuted `new` resolves nothing - a
+                    // class-level gate here only denied a pack without OmniCells its item matrices.
+                    r.add("storage_matrix", StorageMatrixBuilder.class, StorageMatrixBuilder::new);
                 }
         );
     }
