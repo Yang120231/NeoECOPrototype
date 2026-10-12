@@ -6,14 +6,9 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import cn.dancingsnow.neoecoprototype.api.MatrixMaterials;
 import cn.dancingsnow.neoecoprototype.api.SimplifyTier;
-import me.ramidzkh.mekae2.ae2.MekanismKey;
-import mekanism.api.MekanismAPI;
-import mekanism.api.chemical.ChemicalStack;
 import cn.dancingsnow.neoecoprototype.api.StorageMatrixDefinition;
 import cn.dancingsnow.neoecoprototype.api.StorageMatrixRegistry;
-import cn.dancingsnow.neoecoprototype.integration.mekanism.SimplifyChemicalStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.CustomInfiniteCellItem;
-import cn.dancingsnow.neoecoae.api.storage.ECOCellType;
 import cn.dancingsnow.neoecoae.all.NERegistries;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem;
 import dev.latvian.mods.kubejs.client.ModelGenerator;
@@ -28,9 +23,6 @@ import java.util.function.Supplier;
 
 /** Generic KubeJS storage-matrix builder for item, fluid, and AppMek chemical cells. */
 public final class StorageMatrixBuilder extends ItemBuilder {
-    /** eco's OmniCells marker for "no type limit". */
-    private static final int UNLIMITED_OMNI_TYPES = -1;
-    private static final double OMNI_IDLE_DRAIN = 8.0D;
 
     private StorageMatrixDefinition.MatrixType type = StorageMatrixDefinition.MatrixType.ITEM;
     private StorageMatrixDefinition.MatrixSize size = StorageMatrixDefinition.MatrixSize.INFINITE;
@@ -136,13 +128,9 @@ public final class StorageMatrixBuilder extends ItemBuilder {
     public StorageMatrixBuilder chemicalType(ResourceLocation id) {
         this.type = StorageMatrixDefinition.MatrixType.CHEMICAL;
         this.boundChemical = id;
-        this.key = () -> {
-            var chemical = MekanismAPI.CHEMICAL_REGISTRY.get(id);
-            if (chemical == null || chemical.isEmptyType()) {
-                throw new IllegalStateException("Unknown Mekanism chemical: " + id);
-            }
-            return MekanismKey.of(new ChemicalStack(chemical, 1));
-        };
+        // The body that names Mekanism lives in ChemicalMatrixSupport: KubeJS resolves this class when the
+        // builder type is registered, and that happens in packs that never installed Mekanism.
+        this.key = () -> ChemicalMatrixSupport.resolve(id, this.id);
         return this;
     }
 
@@ -257,21 +245,16 @@ public final class StorageMatrixBuilder extends ItemBuilder {
         int totalTypes = customTotalTypes != null
                 ? customTotalTypes
                 : type == StorageMatrixDefinition.MatrixType.CHEMICAL
-                ? SimplifyChemicalStorageCellItem.TOTAL_TYPES : 256;
+                ? ChemicalMatrixSupport.totalTypes() : 256;
         int bytesPerType = (int) Math.max(1L, bytes / totalTypes);
 
         Item item;
         if (omniFamily) {
-            // Universal / quantum matrices use eco's OmniCells backend: quantum carries no type limit.
+            // eco's universal cell extends an Omni Cells class, so the construction lives behind its own
+            // class and is reached only from here, past the guard above.
             boolean quantum = material == MatrixMaterials.Kind.QUANTUM;
-            Supplier<ECOCellType> omniType = quantum
-                    ? cn.dancingsnow.neoecoae.integration.ae2omnicells.NEOmniCellTypes.QUANTUM_OMNI::get
-                    : cn.dancingsnow.neoecoprototype.integration.omni.UniversalCellTypes.UNIVERSAL;
-            int omniTypes = quantum ? UNLIMITED_OMNI_TYPES : totalTypes;
-            item = new cn.dancingsnow.neoecoae.integration.ae2omnicells.item.ECOUniversalStorageCellItem(
-                    createItemProperties().stacksTo(1), SimplifyTier.L1, omniType,
-                    OMNI_IDLE_DRAIN, omniTypes, bytes);
-            totalTypes = quantum ? Integer.MAX_VALUE : totalTypes;
+            item = OmniMatrixSupport.create(createItemProperties().stacksTo(1), quantum, totalTypes, bytes);
+            totalTypes = OmniMatrixSupport.typesForDefinition(quantum, totalTypes);
             bytesPerType = (int) Math.max(1L, bytes / Math.max(1, totalTypes));
         } else if (size == StorageMatrixDefinition.MatrixSize.INFINITE) {
             Supplier<AEKey> selectedKey = key;
@@ -280,7 +263,7 @@ public final class StorageMatrixBuilder extends ItemBuilder {
             item = new CustomInfiniteCellItem(createItemProperties().stacksTo(1), selectedKey,
                     () -> CustomInfiniteCellItem.INFINITE_CELL_TYPE, driveModelOrDefault());
         } else if (type == StorageMatrixDefinition.MatrixType.CHEMICAL) {
-            item = new SimplifyChemicalStorageCellItem(createItemProperties().stacksTo(1),
+            item = ChemicalMatrixSupport.create(createItemProperties().stacksTo(1),
                     bytes, bytesPerType, boundChemical);
         } else {
             AEKeyType keyType = type == StorageMatrixDefinition.MatrixType.FLUID
