@@ -5281,6 +5281,32 @@ public final class NeoECOPrototypeGameTests {
 
 
     /**
+     * Where the one block a player hunts comets for actually lands. The piece only ever runs in the End, so
+     * the suite drives the placement through the same sink the piece hands its writer: the assertion is about
+     * which cell gets it, and about the table that has to give the block back when it is mined.
+     */
+    @GameTest(template = "empty", batch = "meteorite_core_at_center", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void meteoriteCoreLandsAtTheCometCentre(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var centre = helper.absolutePos(new BlockPos(2, 3, 2));
+        cn.dancingsnow.neoecoprototype.worldgen.CryotheumMeteoriteStructure.MeteoritePiece
+                .placeCore(centre, (pos, state) -> level.setBlock(pos, state, Block.UPDATE_ALL));
+        if (!level.getBlockState(centre).is(ModRegistration.METEORITE_CORE.get())) {
+            helper.fail("the centre cell holds " + level.getBlockState(centre).getBlock()
+                    + " instead of the meteorite core");
+            return;
+        }
+        var table = readResource("/data/neoecoprototype/loot_table/blocks/meteorite_core.json", helper);
+        if (!table.contains("\"neoecoprototype:meteorite_core\"")) {
+            helper.fail("the core's loot table does not give the core back, so mining it destroys it: "
+                    + table);
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
      * The dissociation machine's materials, registered before any of the machine exists. The wiring between
      * a fluid, its flowing half, its type and its bucket is the part worth asserting: get it crossed and
      * nothing complains at runtime, the bucket just comes out empty in the hand.

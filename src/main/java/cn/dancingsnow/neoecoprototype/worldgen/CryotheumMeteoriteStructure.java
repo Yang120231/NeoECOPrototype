@@ -282,6 +282,18 @@ public class CryotheumMeteoriteStructure extends Structure {
             placeHead(level, restriction);
             placeTail(level, restriction);
             placeComa(level, restriction);
+            // Last, so nothing that runs after it can bury the one block a player came for.
+            placeCore(center, (pos, state) -> put(level, restriction, pos, state));
+        }
+
+        /**
+         * The cell at the heart of every comet: the meteorite core, and the only thing a dissociation table
+         * takes as input. Reached through a sink rather than a level so the suite can ask where it lands
+         * without generating an End island - the piece itself only ever runs in the End.
+         */
+        public static void placeCore(BlockPos center,
+                              java.util.function.BiConsumer<BlockPos, BlockState> put) {
+            put.accept(center, ModRegistration.METEORITE_CORE.get().defaultBlockState());
         }
 
         /**
