@@ -26,9 +26,9 @@
 			"to": [6, 4, 2],
 			"shade": false,
 			"faces": {
-				"north": {"uv": [0, 0, 6, 2], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}},
-				"east": {"uv": [4, 0, 6, 2], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}},
-				"west": {"uv": [0, 0, 2, 2], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}}
+				"north": {"uv": [0, 0, 6, 2], "texture": "#level", "shade": false},
+				"east": {"uv": [4, 0, 6, 2], "texture": "#level", "shade": false},
+				"west": {"uv": [0, 0, 2, 2], "texture": "#level", "shade": false}
 			}
 		},
 		{

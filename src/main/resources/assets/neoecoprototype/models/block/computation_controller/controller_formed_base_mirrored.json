@@ -18,9 +18,9 @@
 			"shade": false,
 			"rotation": {"angle": 0, "axis": "y", "origin": [16, 0, 0]},
 			"faces": {
-				"north": {"uv": [0, 0, 6, 6], "texture": "#light", "neoforge_data": {"block_light": 15, "sky_light": 15}},
-				"south": {"uv": [10, 0, 16, 6], "texture": "#light", "neoforge_data": {"block_light": 15, "sky_light": 15}},
-				"west": {"uv": [6, 0, 10, 6], "texture": "#light", "neoforge_data": {"block_light": 15, "sky_light": 15}}
+				"north": {"uv": [0, 0, 6, 6], "texture": "#light", "shade": false},
+				"south": {"uv": [10, 0, 16, 6], "texture": "#light", "shade": false},
+				"west": {"uv": [6, 0, 10, 6], "texture": "#light", "shade": false}
 			}
 		},
 		{
@@ -30,7 +30,7 @@
 			"shade": false,
 			"rotation": {"angle": 0, "axis": "y", "origin": [14, 2, -0.01]},
 			"faces": {
-				"north": {"uv": [2, 2, 14, 14], "texture": "#screen_light", "neoforge_data": {"block_light": 15, "sky_light": 15}}
+				"north": {"uv": [2, 2, 14, 14], "texture": "#screen_light", "shade": false}
 			}
 		},
 		{
@@ -39,7 +39,7 @@
 			"to": [31, 16, 2],
 			"rotation": {"angle": 0, "axis": "y", "origin": [21, 0, 2]},
 			"faces": {
-				"north": {"uv": [16, 0, 4, 16], "texture": "#coolant", "neoforge_data": {"block_light": 15, "sky_light": 15}}
+				"north": {"uv": [16, 0, 4, 16], "texture": "#coolant", "shade": false}
 			}
 		},
 		{

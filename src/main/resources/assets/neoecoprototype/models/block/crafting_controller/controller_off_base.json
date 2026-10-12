@@ -5,7 +5,7 @@
 	"render_type": "cutout",
 	"textures": {
 		"back": "neoecoprototype:block/crafting_recolor/casing_back",
-		"particle": "neoecoprototype:block/crafting_recolor/controller/controller_north_a",
+		"particle": "neoecoprototype:block/crafting_recolor/casing",
 		"top": "neoecoprototype:block/crafting_recolor/casing",
 		"screen": "neoecoprototype:block/crafting_recolor/controller/screen_off",
 		"side": "neoecoprototype:block/crafting_recolor/casing_side",
@@ -13,16 +13,6 @@
 		"bottom": "neoecoprototype:block/crafting_recolor/casing_bottom"
 	},
 	"elements": [
-		{
-			"name": "screen_light",
-			"from": [3, 2, 0],
-			"to": [13, 3, 0],
-			"shade": false,
-			"rotation": {"angle": 0, "axis": "y", "origin": [3, 2, 0]},
-			"faces": {
-				"north": {"uv": [3, 13, 13, 14], "texture": "#screen_light", "cullface": "north", "neoforge_data": {"block_light": 15, "sky_light": 15}}
-			}
-		},
 		{
 			"name": "body",
 			"from": [0, 0, 1],
@@ -85,6 +75,16 @@
 			"to": [14, 14, 1],
 			"faces": {
 				"north": {"uv": [2, 2, 14, 12], "texture": "#screen"}
+			}
+		},
+		{
+			"name": "screen_light",
+			"from": [3, 2, 0],
+			"to": [13, 3, 0],
+			"shade": false,
+			"rotation": {"angle": 0, "axis": "y", "origin": [3, 2, 0]},
+			"faces": {
+				"north": {"uv": [3, 13, 13, 14], "texture": "#screen_light", "cullface": "north", "shade": false}
 			}
 		}
 	]

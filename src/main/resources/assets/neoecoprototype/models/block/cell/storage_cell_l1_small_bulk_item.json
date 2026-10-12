@@ -23,7 +23,7 @@
 		},
 		{
 			"name": "type",
-			"from": [0, 8, -0.01],
+			"from": [0, 8, 0],
 			"to": [6, 11, 2],
 			"faces": {
 				"north": {"uv": [0, 6, 6, 9], "texture": "#type"},
@@ -33,23 +33,23 @@
 		},
 		{
 			"name": "level",
-			"from": [0, 2, -0.01],
+			"from": [0, 2, 0],
 			"to": [6, 3, 2],
 			"shade": false,
 			"faces": {
-				"north": {"uv": [0, 9, 6, 10], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}},
-				"east": {"uv": [4, 9, 6, 10], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}},
-				"west": {"uv": [0, 9, 2, 10], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}}
+				"north": {"uv": [0, 9, 6, 10], "texture": "#level", "shade": false},
+				"east": {"uv": [4, 9, 6, 10], "texture": "#level", "shade": false},
+				"west": {"uv": [0, 9, 2, 10], "texture": "#level", "shade": false}
 			}
 		},
 		{
 			"name": "level",
-			"from": [2, 4, -0.01],
+			"from": [2, 4, 0],
 			"to": [6, 5, 2],
 			"shade": false,
 			"faces": {
-				"north": {"uv": [0, 6, 4, 7], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}},
-				"east": {"uv": [2, 6, 0, 7], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}}
+				"north": {"uv": [0, 6, 4, 7], "texture": "#level", "shade": false},
+				"east": {"uv": [2, 6, 0, 7], "texture": "#level", "shade": false}
 			}
 		}
 	]

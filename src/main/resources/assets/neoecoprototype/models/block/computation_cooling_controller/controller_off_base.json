@@ -6,7 +6,7 @@
 	"textures": {
 		"north": "neoecoprototype:block/computation_recolor/cooling_controller/controller_north",
 		"back": "neoecoprototype:block/computation_recolor/casing_back",
-		"particle": "neoecoprototype:block/computation_recolor/cooling_controller/controller_north",
+		"particle": "neoecoprototype:block/computation_recolor/casing",
 		"top": "neoecoprototype:block/computation_recolor/casing",
 		"side": "neoecoprototype:block/computation_recolor/cooling_controller/controller_east_a"
 	},
@@ -15,12 +15,12 @@
 			"from": [0, 0, 0],
 			"to": [16, 16, 16],
 			"faces": {
-				"north": {"uv": [0, 0, 16, 16], "texture": "#north"},
-				"east": {"uv": [16, 0, 0, 16], "texture": "#side"},
-				"south": {"uv": [16, 0, 0, 16], "texture": "#back"},
-				"west": {"uv": [0, 0, 16, 16], "texture": "#side"},
-				"up": {"uv": [0, 0, 16, 16], "texture": "#top"},
-				"down": {"uv": [0, 0, 16, 16], "texture": "#top"}
+				"north": {"uv": [0, 0, 16, 16], "texture": "#north", "cullface": "north"},
+				"east": {"uv": [16, 0, 0, 16], "texture": "#side", "cullface": "east"},
+				"south": {"uv": [16, 0, 0, 16], "texture": "#back", "cullface": "south"},
+				"west": {"uv": [0, 0, 16, 16], "texture": "#side", "cullface": "west"},
+				"up": {"uv": [0, 0, 16, 16], "texture": "#top", "cullface": "up"},
+				"down": {"uv": [0, 0, 16, 16], "texture": "#top", "cullface": "down"}
 			}
 		},
 		{
@@ -29,7 +29,7 @@
 			"to": [16, 16, 0],
 			"shade": false,
 			"faces": {
-				"north": {"uv": [0, 0, 16, 16], "texture": "#screen_light"}
+				"north": {"uv": [0, 0, 16, 16], "texture": "#screen_light", "cullface": "north"}
 			}
 		}
 	]
