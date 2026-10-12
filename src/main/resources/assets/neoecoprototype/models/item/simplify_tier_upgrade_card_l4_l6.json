@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "neoecoprototype:item/simplify_structure_expansion_card"
+    "layer0": "neoecoprototype:item/simplify_tier_upgrade_card_l4_l6"
   }
 }
