@@ -32,11 +32,16 @@ public class KJSPlugin implements KubeJSPlugin {
                 Registries.ITEM,
                 r -> {
                     r.add("infinite_storage_matrix", InfiniteMatrixBuilder.class, InfiniteMatrixBuilder::new);
-                    // No gate here, on purpose. This builder reaches the omni and chemical backends only
-                    // inside createObject, each behind its own isLoaded check that answers with a
-                    // sentence naming the mod to install, and an unexecuted `new` resolves nothing - a
-                    // class-level gate here only denied a pack without OmniCells its item matrices.
-                    r.add("storage_matrix", StorageMatrixBuilder.class, StorageMatrixBuilder::new);
+                    // Gate on every mod this builder can reach for, not just the one whose family it serves:
+                    // registering the type resolves the class, and the class names MekanismKey and the
+                    // OmniCells cell item. Measured - with Mekanism off the runtime classpath the registry
+                    // event throws NoClassDefFoundError: me/ramidzkh/mekae2/ae2/MekanismKey and the server
+                    // never starts. Isolating those two constructions is the way to drop this gate for good.
+                    if (net.neoforged.fml.ModList.get().isLoaded("ae2omnicells")
+                            && net.neoforged.fml.ModList.get().isLoaded("mekanism")
+                            && net.neoforged.fml.ModList.get().isLoaded("appmek")) {
+                        r.add("storage_matrix", StorageMatrixBuilder.class, StorageMatrixBuilder::new);
+                    }
                 }
         );
     }
