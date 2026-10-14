@@ -84,7 +84,7 @@
 			"shade": false,
 			"rotation": {"angle": 0, "axis": "y", "origin": [3, 2, 0]},
 			"faces": {
-				"north": {"uv": [3, 13, 13, 14], "texture": "#screen_light", "cullface": "north", "shade": false}
+				"north": {"uv": [3, 13, 13, 14], "texture": "#screen_light", "cullface": "north", "neoforge_data": {"block_light": 15, "sky_light": 15}}
 			}
 		}
 	]

@@ -87,7 +87,7 @@
 			"to": [0, 16, 16],
 			"shade": false,
 			"faces": {
-				"west": {"uv": [0, 0, 16, 16], "texture": "#level", "shade": false}
+				"west": {"uv": [0, 0, 16, 16], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}}
 			}
 		},
 		{
@@ -96,7 +96,7 @@
 			"to": [16, 16, 16],
 			"shade": false,
 			"faces": {
-				"east": {"uv": [0, 0, 16, 16], "texture": "#level", "shade": false}
+				"east": {"uv": [0, 0, 16, 16], "texture": "#level", "neoforge_data": {"block_light": 15, "sky_light": 15}}
 			}
 		}
 	]
