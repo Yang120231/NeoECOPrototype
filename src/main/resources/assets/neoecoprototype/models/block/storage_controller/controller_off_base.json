@@ -81,7 +81,7 @@
 			"to": [16, 16, 0],
 			"shade": false,
 			"faces": {
-				"north": {"uv": [0, 0, 16, 16], "texture": "#screen_light", "shade": false}
+				"north": {"uv": [0, 0, 16, 16], "texture": "#screen_light", "neoforge_data": {"block_light": 15, "sky_light": 15}}
 			}
 		}
 	]
