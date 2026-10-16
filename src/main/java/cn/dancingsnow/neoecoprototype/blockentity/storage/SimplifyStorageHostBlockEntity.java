@@ -216,7 +216,7 @@ public class SimplifyStorageHostBlockEntity
     }
 
     public ModularUI createUI(BlockUIMenuType.BlockUIHolder holder) {
-        UIElement root = StorageHostUI.create(createStoragePanelConfig())
+        UIElement root = StorageHostUI.create(createStoragePanelConfig(holder.player))
                 .addClass("panel_bg");
 
         StorageHostActionUI.Elements actionUI = StorageHostActionUI.create(new StorageHostActionUI.Config(
@@ -236,13 +236,10 @@ public class SimplifyStorageHostBlockEntity
                         setStoragePriority(priority);
                     }
                 },
-                delta -> changeStoragePriority(holder.player, delta),
-                 this::bulkMarkingAvailable,
-                 this::bulkMarkingThreshold,
-                 // eco 21.2.0 turned this from a Runnable into a Consumer<Boolean> carrying the shift
-                 // state of the right-click that triggers it. We mark the same way either way for now,
-                 // but the flag is there if the button ever wants "shift = ignore the threshold".
-                 shift -> autoMarkBulkCells(holder.player)));
+                delta -> changeStoragePriority(holder.player, delta)));
+        // eco 21.2.3 dropped the bulk-marking button from its action bar (the Config lost
+        // bulkMarkingAvailable / bulkMarkingThreshold / autoMarkBulkCells and now calls the service only
+        // from its own mega controller), so autoMarkBulkCells has no caller from this UI any more.
         actionUI.addTo(root);
         return new ModularUI(UI.of(root,
                 java.util.List.of(StylesheetManager.INSTANCE.getStylesheetSafe(NEStyleSheets.ECO))), holder.player);
@@ -405,13 +402,24 @@ public class SimplifyStorageHostBlockEntity
                 .toList();
     }
 
-    private StorageHostUI.Config createStoragePanelConfig() {
+    /** Public for the same reason {@link #createCellEntries()} is: the suite has to drive the panel through
+     * the handles this config hands eco, not through the methods behind it. */
+    public StorageHostUI.Config createStoragePanelConfig(
+            net.minecraft.world.entity.player.Player player) {
         return new StorageHostUI.Config(
                 () -> getBlockState().getBlock().getName(),
+                // eco 21.2.3 reads this int twice: hostMarker(tier, formed) clamps it onto its own atlas,
+                // and StorageCellGrid.tierName is a tableswitch over 1→"L4", 2→"L6", 3→"L9" with
+                // default→"L0". No value prints "L1", so we pass our own tier and let the panel say "L0"
+                // rather than lie about being an L4.
+                () -> getTier().getTier(),
+                this::isFormed,
                 this::getStoredEnergy,
                 this::getMaxEnergy,
-                () -> 0L,
-                () -> Long.toString(getMaxLoadUsedBytes()),
+                this::panelIdlePowerPerTick,
+                // eco renders this string as it is given it, and its own host ends the same slot with
+                // HostText.ae2Amount(BigInteger): the panel shows "683K", not "683032".
+                () -> cn.dancingsnow.neoecoae.gui.common.HostText.ae2Amount(getMaxLoadUsedBytes()),
                 this::createCellEntries,
                 createStorageTypeLines(),
                 () -> false,
@@ -419,7 +427,121 @@ public class SimplifyStorageHostBlockEntity
                 () -> false,
                 () -> "",
                 () -> 0,
-                createReadOnlyEmptyComponentInventory());
+                createReadOnlyEmptyComponentInventory(),
+                player,
+                (drivePos, interactionId, shiftDown) -> extractCellForPanel(drivePos, player, shiftDown),
+                (drivePos, stack) -> insertCellForPanel(drivePos, stack, player),
+                () -> new ItemStack(getBlockState().getBlock()));
+    }
+
+    /**
+     * What the panel's consumption line asks for: the cost of the storage components themselves, in eco's
+     * exact shape. Read off {@code ECOStorageHostStatistics.collectStorageUiSnapshot} at offsets 344..355 -
+     * for every drive holding a cell, {@code Math.max(0, Math.round(cell.getIdleDrain()))}, added up.
+     *
+     * <p>It is deliberately not what the grid charges for the machine. Our cells report
+     * {@code bytes / 1 MiB} AE per tick, so anything under 1M rounds to zero here and a host full of 16K
+     * matrices reads 0 AE/t while the network still takes its ~32 AE/t per drive. That is what the line
+     * means upstream and the label is eco's, so the number is eco's too; the tier-scaled figure each drive
+     * publishes to its own node (see {@code SimplifyDriveBlockEntity#updateIdlePower}) is a different
+     * quantity and stays out of here.</p>
+     */
+    public long panelIdlePowerPerTick() {
+        SimplifyStorageCluster cluster = getCluster();
+        if (cluster == null) {
+            return 0L;
+        }
+        var total = 0L;
+        for (var drive : cluster.getDrives()) {
+            var cell = drive.getCellInventory();
+            if (cell != null) {
+                total += Math.max(0L, Math.round(cell.getIdleDrain()));
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Takes the cell out of the drive at that position and hands it over the way eco does: a plain click
+     * puts it on the cursor, a shift click looks for a free inventory slot.
+     *
+     * <p>Measured off {@code StorageCellUiExtraction.extract}: the shift branch scans
+     * {@code Inventory.items} for the first empty index and gives up when there is none, the plain branch
+     * gives up while the cursor still holds something, and both end in {@code broadcastChanges()}. Giving
+     * up rather than dropping is the point - the cell stays in the drive, so a full inventory costs the
+     * player nothing. The id coming back with the click is ours own (see
+     * {@link SimplifyDriveBlockEntity#panelInteractionId()}) and exists only so eco sends the click at
+     * all; the position is what selects the drive.</p>
+     */
+    public boolean extractCellForPanel(net.minecraft.core.BlockPos drivePos,
+                                   net.minecraft.world.entity.player.Player player, boolean shiftDown) {
+        if (level == null || level.isClientSide || !isFormed()) {
+            return false;
+        }
+        // No distance check here on purpose: eco's own extract() gates on client-side, formed, a live
+        // cluster and a non-null position and nothing else, and a gate it does not have would turn this
+        // path into another "clicked and nothing happened" - which is the bug class this whole panel has
+        // been carrying. The insert path below has never had one either.
+        if (!(level.getBlockEntity(drivePos) instanceof SimplifyDriveBlockEntity drive) || !drive.hasCell()) {
+            return false;
+        }
+        var inventory = player.getInventory();
+        var menu = player.containerMenu;
+        int freeSlot = -1;
+        if (shiftDown) {
+            for (int slot = 0; slot < inventory.items.size(); slot++) {
+                if (inventory.getItem(slot).isEmpty()) {
+                    freeSlot = slot;
+                    break;
+                }
+            }
+            if (freeSlot < 0) {
+                return false;
+            }
+        } else if (!menu.getCarried().isEmpty()) {
+            return false;
+        }
+        var cell = drive.removeCell();
+        if (cell.isEmpty()) {
+            return false;
+        }
+        if (shiftDown) {
+            inventory.setItem(freeSlot, cell);
+            inventory.setChanged();
+        } else {
+            menu.setCarried(cell);
+        }
+        menu.broadcastChanges();
+        return true;
+    }
+
+    /**
+     * The other half of the panel's drag path: put a cell the player is holding into that drive.
+     *
+     * <p>The stack arriving with the RPC is a client's claim, so it is used only to check what the server
+     * says the player is holding, and the held stack is what gets spent. eco does the same in
+     * {@code StorageCellUiInsertion} - read {@code menu.getCarried()}, {@code shrink(1)}, {@code
+     * setCarried(EMPTY)} when it runs out. Skipping that spend turns the panel into a duplicator: the
+     * drive takes a copy while the hand keeps the original.</p>
+     */
+    public boolean insertCellForPanel(net.minecraft.core.BlockPos drivePos, ItemStack claimed,
+            net.minecraft.world.entity.player.Player player) {
+        if (level == null || level.isClientSide || !isFormed()) {
+            return false;
+        }
+        var carried = player.containerMenu.getCarried();
+        if (carried.isEmpty() || !ItemStack.isSameItemSameComponents(carried, claimed)) {
+            return false;
+        }
+        if (!(level.getBlockEntity(drivePos) instanceof SimplifyDriveBlockEntity drive)
+                || !drive.insertCell(carried)) {
+            return false;
+        }
+        carried.shrink(1);
+        if (carried.isEmpty()) {
+            player.containerMenu.setCarried(ItemStack.EMPTY);
+        }
+        return true;
     }
 
     /**
@@ -525,6 +647,40 @@ public class SimplifyStorageHostBlockEntity
                 ? cellItem.getKeyTypes() : null;
     }
 
+    /**
+     * The drives in the order the panel has to hand them over: rows top first, each row read across from the
+     * host's own point of view, flipped when the machine is mirrored. The cluster list is in the order the
+     * shape scanner found them, so without this a slot on screen and the drive it writes into are unrelated
+     * - the cell lands somewhere else than where it was dropped. eco does the same job in
+     * {@code StorageDriveLayout.ordered} (package-private, and typed to its own drive class) with the
+     * extents of its own machine baked in; ours walks its bounds instead of copying those constants.
+     */
+    private java.util.List<SimplifyDriveBlockEntity> orderedDrivesForPanel(
+            java.util.List<SimplifyDriveBlockEntity> drives) {
+        var strategy = appeng.api.orientation.OrientationStrategies.horizontalFacing();
+        var state = getBlockState();
+        var across = strategy.getSide(state, mirrored
+                ? appeng.api.orientation.RelativeSide.RIGHT
+                : appeng.api.orientation.RelativeSide.LEFT);
+        var downwards = strategy.getSide(state, appeng.api.orientation.RelativeSide.BOTTOM);
+        var origin = getBlockPos();
+        return drives.stream()
+                .sorted(java.util.Comparator
+                        .comparingInt((SimplifyDriveBlockEntity drive) ->
+                                projectionAgainst(drive.getBlockPos().subtract(origin), downwards))
+                        .thenComparingInt(drive ->
+                                projectionAgainst(drive.getBlockPos().subtract(origin), across)))
+                .toList();
+    }
+
+    private static int projectionAgainst(net.minecraft.core.BlockPos offset, net.minecraft.core.Direction axis) {
+        // The step signs are the whole point: without them the key is unsigned and the rows come out
+        // bottom-first, which is what this method did the first time it ran.
+        return offset.getX() * axis.getStepX()
+                + offset.getY() * axis.getStepY()
+                + offset.getZ() * axis.getStepZ();
+    }
+
     private ECOCellType getChemicalCellType() {
         return NERegistries.CELL_TYPE.get(ResourceLocation.fromNamespaceAndPath("neoecoae", "mekanism"));
     }
@@ -549,15 +705,21 @@ public class SimplifyStorageHostBlockEntity
                 () -> "0");
     }
 
-    private java.util.List<StorageHostUI.CellEntry> createCellEntries() {
+    public java.util.List<StorageHostUI.CellEntry> createCellEntries() {
         SimplifyStorageCluster cluster = getCluster();
         if (cluster == null) {
             return java.util.List.of();
         }
         java.util.List<StorageHostUI.CellEntry> entries = new java.util.ArrayList<>();
-        for (SimplifyDriveBlockEntity drive : cluster.getDrives()) {
+        for (SimplifyDriveBlockEntity drive : orderedDrivesForPanel(cluster.getDrives())) {
             IECOStorageCell cell = drive.getCellInventory();
             if (cell == null) {
+                // An empty drive still has to be handed over as a row: eco's grid sends the insert RPC only
+                // from a row the player can see, so a host that lists only its occupied drives gives nobody
+                // a slot to drop a matrix into - the panel could take cells out and never put one in.
+                // CellEntry.EMPTY carries typeId -1, which is eco's own "not one of the media rows" mark.
+                entries.add(StorageHostUI.CellEntry.EMPTY.atDrive(drive.getBlockPos(), ItemStack.EMPTY,
+                        null, drive.panelInteractionId()));
                 continue;
             }
             ECOCellType cellType = cell.getCellType();
@@ -574,7 +736,15 @@ public class SimplifyStorageHostBlockEntity
                             .of(drive.getCellStack(), cell)),
                     Math.max(0L, cell.getUsedBytes()),
                     Math.max(0L, cell.getTotalBytes()),
-                    cell.hasInfiniteTypeCapacity()));
+                    cell.hasInfiniteTypeCapacity(),
+                    drive.getCellState(),
+                    isFormed())
+                    // eco 21.2.3's grid draws a slot from the entry's own position and stack - a cell that
+                    // does not say where it stands shows up as an empty slot, which is what the panel did
+                    // before this line existed. The id is the other half of that line: without one, the
+                    // grid's mouse handler returns before it sends the extraction RPC, so a row that looks
+                    // perfectly drawn refuses every click and says nothing about why.
+                    .atDrive(drive.getBlockPos(), drive.getCellStack(), null, drive.panelInteractionId()));
         }
         return entries;
     }

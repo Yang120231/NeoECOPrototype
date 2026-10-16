@@ -3,7 +3,7 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.78'
 }
 
-version = '1.3.6'
+version = '1.3.7'
 group = 'cn.dancingsnow.neoecoprototype'
 
 base {
@@ -46,20 +46,27 @@ dependencies {
     implementation files("libs/ldlib2-neoforge-1.21.1-2.2.40-all.jar")  // LDLib2 (eco 运行依赖, modId: ldlib2) - eco 21.2.1 raised its floor to [2.2.40,) and 21.2.2 keeps it
     implementation "dev.vfyjxf:taffy:1.1.3"
     implementation "org.appliedenergistics.yoga:yoga:1.0.0"
-// ABI target: eco 21.2.2, the release the beta line led up to. It still carries our merged PRs:
-// cn.dancingsnow.neoecoae.gui.GuiTitleProvider (PR #110) and grid.NEMachineLookup (PR #109).
-// GuiTitleProvider is implemented by our four interface and pattern-bus blocks, and the suite asserts
-// it, so the floor cannot go below the build that carries it. The floor is [21.2.2,) now because the
-// fluid hatch GUIs call eco.gui.common.FluidHatchUI, a class 21.2.1 does not have: the loader has to
-// refuse those players, not the GUI.
-// What the release did change under us is its LDLib2 floor: [2.2.8,) in beta2, [2.2.40,) here. With 2.2.8
-// the loader refuses eco outright and this addon is what reports it, as
-// NoClassDefFoundError: cn/dancingsnow/neoecoae/gui/GuiTitleProvider - a downstream symptom, not a missing
-// class: the interface is in this jar, and so are all four members our mixins inject into. Six classes did
-// this addon names none of them.
-// A sync is certified by compiling against that jar and running the suite. tools/audit_eco_abi.py is a
-// companion check, not a verdict -- read its docstring before believing its "MISSING" list.
-    implementation files("neoecobeta/neoecoae-21.2.2.jar")
+// ABI target: eco 21.2.6, chosen for this hotfix because that is what players are now running and the
+// L1 storage host panel cannot be made to work on anything older than 21.2.4 (see the floor note below).
+// Member-level scan over the neoecoae types THIS branch links: 21.2.5 -> 21.2.6 changes none of them, and
+// all of them resolve in both jars (control: the same script over 21.2.3 -> 21.2.4 reports 4 changed types
+// - StorageHostUI$CellEntry gaining interactionId and the 4-arg atDrive, $CellExtractor.extract, $Config's
+// lambda, ECOUniversalStorageCellItem - which is exactly what this branch now depends on).
+// The reference set is our bytecode Class constant-pool entries UNION our source imports: a bare return
+// type, a generic type argument and an @Mixin(X.class) value get no Class entry at all, and those are the
+// must-resolve positions AGENTS.md 4.2 warns about.
+// 21.2.6 vs 21.2.5: 1409 -> 1414 class entries and 34 byte-different ones, all of them the crafting
+// planner family plus data/lang/GuiLangs. Nothing under gui/storage/** or blocks/entity/storage/** moved:
+// StorageCellGrid$CellSlot is byte-identical across the two (md5 3ab6bb24f88d0ddf6c5e3219500dbfe4), so the
+// interactionId requirement this branch satisfies is still what makes eco refuse a click without it.
+// Floor is [21.2.4,) - raised from this release's [21.2.2,) - because the panel rows now call
+// StorageHostUI$CellEntry.atDrive(BlockPos,ItemStack,Component,UUID), and that overload first exists in
+// 21.2.4. Without it every row carries a null interactionId and eco's client returns silently, so a
+// 21.2.2 or 21.2.3 player would get a panel that opens and then does nothing - worse than being refused
+// at load. StorageHostUI$Config's 13-arg constructor (what 1.3.6 links) is gone from 21.2.3 onwards: only
+// 15/17/18/19 remain, which is why 1.3.6 throws NoSuchMethodError on a 21.2.6 player's first panel open.
+// A sync is certified by compiling against that jar and running the suite.
+    implementation files("neoecobeta/neoecoae-21.2.6.jar")
     // MegaCells 4.11.0 is the supported optional integration version.
     implementation files("libs/megacells-4.11.0.jar")
     // Dev-runtime only: keep them off the compile classpath but on the runtime classpath.

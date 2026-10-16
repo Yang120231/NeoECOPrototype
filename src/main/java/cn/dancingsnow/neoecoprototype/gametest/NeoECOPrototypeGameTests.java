@@ -6678,4 +6678,483 @@ public final class NeoECOPrototypeGameTests {
         }
         return text.length() == 0 ? "nothing" : text.toString();
     }
+
+    /**
+     * A row that draws correctly is not necessarily clickable: eco's grid reads two handles back out of
+     * every entry, and {@code StorageCellGrid$CellSlot.onMouseDown} returns without a word when the
+     * interaction id is null - which is exactly how "our storage matrices cannot be interacted with"
+     * reached us. The position is the other one; without it the row is not even drawn as occupied.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelRowsCarryTheHandlesEcoClicksThrough(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
+                        helper.fail("the L1 storage controller is not our host block entity: " + host);
+                        return;
+                    }
+                    var drives = storageHost.getCluster() == null
+                            ? java.util.List.<cn.dancingsnow.neoecoprototype.blockentity.storage
+                                    .SimplifyDriveBlockEntity>of()
+                            : storageHost.getCluster().getDrives();
+                    if (drives.isEmpty()) {
+                        helper.fail("the built room has no drives, so this scan proves nothing");
+                        return;
+                    }
+                    var filled = false;
+                    for (var drive : drives) {
+                        if (drive.insertCell(new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1K.get()))) {
+                            filled = true;
+                            break;
+                        }
+                    }
+                    if (!filled) {
+                        helper.fail("none of the " + drives.size() + " drives would take an L1 item matrix,"
+                                + " so there is no row to check");
+                        return;
+                    }
+                    var entries = storageHost.createCellEntries();
+                    if (entries.isEmpty()) {
+                        helper.fail("a drive holding an L1 item matrix produced no panel row at all");
+                        return;
+                    }
+                    for (var entry : entries) {
+                        if (entry.position() == null || entry.interactionId() == null) {
+                            helper.fail("a panel row reached eco with position=" + entry.position()
+                                    + " and interactionId=" + entry.interactionId()
+                                    + ", so its grid refuses every click on that row");
+                            return;
+                        }
+                    }
+                    // The other half of "cannot interact": the drives that hold nothing have to be listed
+                    // too, or there is no slot to drop a matrix onto and eco's insert RPC is never sent.
+                    var showsFilled = entries.stream().anyMatch(e -> !e.stack().isEmpty());
+                    var showsEmpty = entries.stream().anyMatch(e -> e.stack().isEmpty());
+                    if (!showsFilled || !showsEmpty) {
+                        helper.fail("the panel rows are filled=" + showsFilled + " empty=" + showsEmpty
+                                + " out of " + entries.size() + " rows for " + drives.size()
+                                + " drives - both kinds have to be listed or one direction of the drag dies");
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * The panel's drop path has to spend the held cell. It used to copy the stack the client claimed into
+     * the drive and leave the hand alone, which made every drop a duplication - and it trusted that claim,
+     * so a client could hand over a stack it was not actually holding. eco reads the server-side carried
+     * stack, shrinks it, and clears the cursor when it runs out; this asserts the same arithmetic: two in
+     * hand, one in hand plus one in the drive afterwards, never three.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelDropSpendsTheHeldCell(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
+                        helper.fail("the L1 storage controller is not our host block entity: " + host);
+                        return;
+                    }
+                    if (storageHost.getCluster() == null) {
+                        helper.fail("the room never formed a cluster, so there is no drive to drop into");
+                        return;
+                    }
+                    var target = storageHost.getCluster().getDrives().stream()
+                            .filter(d -> !d.hasCell())
+                            .findFirst().orElse(null);
+                    if (target == null) {
+                        helper.fail("every drive already holds a cell, so the drop path cannot be measured");
+                        return;
+                    }
+                    var player = helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+                    player.containerMenu.setCarried(
+                            new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1K.get(), 2));
+                    var claimed = player.containerMenu.getCarried();
+                    if (!storageHost.insertCellForPanel(target.getBlockPos(), claimed, player)) {
+                        helper.fail("the panel refused a drop of a cell the player really was holding");
+                        return;
+                    }
+                    if (!target.hasCell()) {
+                        helper.fail("the insert reported success but the drive is still empty");
+                        return;
+                    }
+                    var left = player.containerMenu.getCarried().getCount();
+                    if (left != 1) {
+                        helper.fail("holding two cells and dropping one left " + left
+                                + " in hand - the drive took a copy nobody paid for (total "
+                                + (left + 1) + " of 2)");
+                        return;
+                    }
+                    // And the claim must not be the authority: a stack that is not what the hand holds
+                    // cannot be inserted, no matter what the client says it is carrying.
+                    var other = new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_16K.get());
+                    var second = storageHost.getCluster().getDrives().stream()
+                            .filter(d -> !d.hasCell())
+                            .findFirst().orElse(null);
+                    if (second != null && storageHost.insertCellForPanel(second.getBlockPos(), other, player)) {
+                        helper.fail("the panel accepted a claimed stack the player was not holding");
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * Which hand the cell comes out into. eco splits this on the shift key; we used to drop the flag on the
+     * floor, so a plain click - which for every upstream player means "put it on my cursor" - sent the cell
+     * to the backpack instead. Both branches are asserted, and so are the two refusals that keep the cell
+     * inside the machine rather than on the ground: a loaded cursor without shift, no free slot with it.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelTakeFollowsTheShiftSplit(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)
+                            || storageHost.getCluster() == null) {
+                        helper.fail("no formed L1 storage host to take a cell out of");
+                        return;
+                    }
+                    var cellItem = ModRegistration.SIMPLIFY_ITEM_CELL_1K.get();
+                    var drive = storageHost.getCluster().getDrives().stream()
+                            .filter(d -> !d.hasCell())
+                            .findFirst().orElse(null);
+                    if (drive == null || !drive.insertCell(new ItemStack(cellItem))) {
+                        helper.fail("no empty drive would take the fixture cell, so the take path cannot be"
+                                + " measured");
+                        return;
+                    }
+                    var player = helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+                    var menu = player.containerMenu;
+                    var inventory = player.getInventory();
+                    var at = drive.getBlockPos();
+                    // Driven through the config eco's own client receives, not through the method behind
+                    // it: the bug this guards was in the lambda that forwards the shift flag, and a test
+                    // that calls the method directly passes no matter what that lambda does.
+                    var extractor = storageHost.createStoragePanelConfig(player).cellExtractor();
+                    var row = storageHost.createCellEntries().stream()
+                            .filter(entry -> at.equals(entry.position()) && !entry.stack().isEmpty())
+                            .findFirst().orElse(null);
+                    if (row == null) {
+                        helper.fail("no panel row names the drive holding the fixture cell, so eco's grid has"
+                                + " nothing to click on");
+                        return;
+                    }
+
+                    menu.setCarried(new ItemStack(net.minecraft.world.item.Items.STONE));
+                    if (extractor.extract(row.position(), row.interactionId(), false) || !drive.hasCell()
+                            || !menu.getCarried().is(net.minecraft.world.item.Items.STONE)) {
+                        helper.fail("a plain click with a loaded cursor moved something: took="
+                                + (drive.hasCell() ? "no" : "yes") + " cursor=" + menu.getCarried()
+                                + " - eco gives up at StorageCellUiExtraction 224..236");
+                        return;
+                    }
+
+                    menu.setCarried(ItemStack.EMPTY);
+                    if (!extractor.extract(row.position(), row.interactionId(), false)) {
+                        helper.fail("the panel refused a plain click on a drive that holds a cell");
+                        return;
+                    }
+                    if (drive.hasCell() || !menu.getCarried().is(cellItem)) {
+                        helper.fail("a plain click left the cell with the drive holding=" + drive.hasCell()
+                                + " and the cursor holding " + menu.getCarried().getCount()
+                                + ", expected it on the cursor");
+                        return;
+                    }
+                    menu.setCarried(ItemStack.EMPTY);
+                    if (!drive.insertCell(new ItemStack(cellItem))) {
+                        helper.fail("could not put the fixture cell back for the shift case");
+                        return;
+                    }
+
+                    emptyBackpack(inventory);
+                    if (!extractor.extract(row.position(), row.interactionId(), true)) {
+                        helper.fail("shift-click refused although the backpack had room");
+                        return;
+                    }
+                    if (drive.hasCell() || !menu.getCarried().isEmpty() || !holds(inventory, cellItem)) {
+                        helper.fail("a shift click left the drive holding=" + drive.hasCell()
+                                + ", cursor=" + menu.getCarried().getCount()
+                                + ", backpack holds it=" + holds(inventory, cellItem));
+                        return;
+                    }
+
+                    if (!drive.insertCell(new ItemStack(cellItem))) {
+                        helper.fail("could not put the fixture cell back for the full-backpack case");
+                        return;
+                    }
+                    emptyBackpack(inventory);
+                    for (int slot = 0; slot < inventory.items.size(); slot++) {
+                        inventory.setItem(slot, new ItemStack(net.minecraft.world.item.Items.STONE));
+                    }
+                    if (extractor.extract(row.position(), row.interactionId(), true) || !drive.hasCell()
+                            || holds(inventory, cellItem)) {
+                        helper.fail("shift took the cell out with every slot full: drive still holds it="
+                                + drive.hasCell() + " - eco gives up at 217..223 rather than dropping it");
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * What the panel's consumption line counts: the storage components, and nothing else. eco's own formula
+     * is {@code Math.max(0, Math.round(cell.getIdleDrain()))} per drive holding a cell, added up
+     * ({@code ECOStorageHostStatistics.collectStorageUiSnapshot}, offsets 344..355), and our cells report
+     * {@code bytes / 1 MiB} AE per tick - so a 16K matrix rounds to zero and a host full of them reads 0 AE/t
+     * while the network still takes its ~32 AE/t per drive. That is the trade this asserts we are making:
+     * the first case is the one that catches a regression back to summing grid nodes, because the machine's
+     * own nodes are non-zero here and must NOT appear in the number.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelCountsTheCellsAndNothingElse(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
+                        helper.fail("the L1 storage controller is not our host block entity: " + host);
+                        return;
+                    }
+                    var ownNode = storageHost.getMainNode().getNode();
+                    if (ownNode == null || ownNode.getIdlePowerUsage() <= 0.0D) {
+                        helper.fail("the host node itself draws "
+                                + (ownNode == null ? "nothing (no node)" : ownNode.getIdlePowerUsage())
+                                + " AE/t, so the exclusion below proves nothing");
+                        return;
+                    }
+                    var drives = storageHost.getCluster() == null
+                            ? java.util.List.<cn.dancingsnow.neoecoprototype.blockentity.storage
+                                    .SimplifyDriveBlockEntity>of()
+                            : storageHost.getCluster().getDrives();
+                    var free = new java.util.ArrayList<>(drives.stream()
+                            .filter(d -> !d.hasCell()).toList());
+                    if (free.size() < 3) {
+                        helper.fail("the room has " + free.size() + " empty drives and this needs three");
+                        return;
+                    }
+                    if (storageHost.panelIdlePowerPerTick() != 0L) {
+                        helper.fail("a host holding no matrix reports "
+                                + storageHost.panelIdlePowerPerTick() + " AE/t - that is the machine's own"
+                                + " nodes leaking into a line that is only supposed to count components");
+                        return;
+                    }
+                    if (!free.get(0).insertCell(
+                            new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_16K.get()))
+                            || storageHost.panelIdlePowerPerTick() != 0L) {
+                        helper.fail("a 16K matrix (0.015625 AE/t) did not round away to 0, the line read "
+                                + storageHost.panelIdlePowerPerTick());
+                        return;
+                    }
+                    if (!free.get(1).insertCell(
+                            new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1M.get()))
+                            || storageHost.panelIdlePowerPerTick() != 1L) {
+                        helper.fail("a 1M matrix should add exactly 1 AE/t, the line read "
+                                + storageHost.panelIdlePowerPerTick());
+                        return;
+                    }
+                    if (!free.get(2).insertCell(
+                            new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_4M.get()))
+                            || storageHost.panelIdlePowerPerTick() != 5L) {
+                        helper.fail("1M plus 4M should add 5 AE/t, the line read "
+                                + storageHost.panelIdlePowerPerTick());
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * A slot on screen and the drive it writes into have to be the same place. The cluster hands its drives
+     * over in scanner order, and the panel used to list them in exactly that order, so a dropped matrix
+     * landed in some other drive. The assertion is deliberately written against world height instead of
+     * reusing our own axis maths: the machine's rows are horizontal planes, so a correct listing can never
+     * put a lower row before a higher one - and a number that only re-derives the sort would pass no matter
+     * how the axes were chosen.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelRowsFollowTheMachineShape(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)
+                            || storageHost.getCluster() == null) {
+                        helper.fail("no formed L1 storage host to read the panel rows from");
+                        return;
+                    }
+                    var drives = storageHost.getCluster().getDrives();
+                    var filled = 0;
+                    for (var drive : drives) {
+                        if (drive.insertCell(
+                                new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1K.get()))) {
+                            filled++;
+                        }
+                    }
+                    if (filled < 2) {
+                        helper.fail("only " + filled + " of " + drives.size()
+                                + " drives took a cell, so row order cannot be measured");
+                        return;
+                    }
+                    var entries = storageHost.createCellEntries();
+                    var previousY = new int[]{Integer.MAX_VALUE};
+                    var rows = new int[1];
+                    for (var entry : entries) {
+                        var pos = entry.position();
+                        if (pos == null) {
+                            continue;
+                        }
+                        rows[0]++;
+                        if (pos.getY() > previousY[0]) {
+                            helper.fail("the panel lists a drive at y=" + pos.getY() + " after one at y="
+                                    + previousY[0] + " - a slot on screen and the drive it writes into are"
+                                    + " different places");
+                            return;
+                        }
+                        previousY[0] = pos.getY();
+                    }
+                    if (rows[0] < 2) {
+                        helper.fail("the panel produced " + rows[0] + " positioned rows for " + filled
+                                + " filled drives, so this scan proves nothing");
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * Which panel row a C1 crystal-array drive sits in, and whether the cell inside it reaches the row.
+     *
+     * <p>eco picks the row in {@code NEComputationCluster.addBlockEntity} by asking whether the block under
+     * the drive {@code is(NEBlocks.COMPUTATION_TRANSMITTER)} - its own transmitter. Ours is a different
+     * block and that test compares identity, so every L1 drive went to the lower list, the upper list stayed
+     * empty, and the top row of the panel became eleven slots that swallow their own click because
+     * {@code ComputationDriveEntry.EMPTY} carries no position. The assertion that matters is the split: this
+     * shape has one drive column standing on the transmitter row and one on the casing row, so a correct
+     * machine has to show drives in both rows.</p>
+     */
+    @GameTest(template = "l1_room", batch = "computation_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void computationDrivesSplitIntoBothPanelRows(GameTestHelper helper) {
+        var hostPos = new BlockPos(13, 3, 4);
+        buildComputationStructureKept(helper, hostPos,
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get(), 0, false, 1,
+                (controller, finish) -> helper.runAfterDelay(3, () -> {
+                    var drives = new java.util.ArrayList<
+                            cn.dancingsnow.neoecoprototype.blockentity.computation
+                                    .SimplifyComputationDriveBlockEntity>();
+                    if (controller.getCluster() != null) {
+                        controller.getCluster().getBlockEntities().forEachRemaining(member -> {
+                            if (member instanceof cn.dancingsnow.neoecoprototype.blockentity.computation
+                                    .SimplifyComputationDriveBlockEntity drive) {
+                                drives.add(drive);
+                            }
+                        });
+                    }
+                    if (drives.size() < 2) {
+                        helper.fail("the built C1 machine has " + drives.size()
+                                + " crystal-array drives, and this needs the pair the shape defines");
+                        finish.run();
+                        return;
+                    }
+                    var top = controller.getComputationUiDrives(true);
+                    var bottom = controller.getComputationUiDrives(false);
+                    var problems = new java.util.ArrayList<String>();
+                    var inTop = 0;
+                    var inBottom = 0;
+                    for (var drive : drives) {
+                        var belowTransmitter = helper.getLevel()
+                                .getBlockState(drive.getBlockPos().below())
+                                .getBlock() instanceof cn.dancingsnow.neoecoprototype
+                                        .block.computation.SimplifyComputationTransmitterBlock;
+                        var listedTop = listed(top, drive.getBlockPos());
+                        var listedBottom = listed(bottom, drive.getBlockPos());
+                        if (belowTransmitter) {
+                            inTop++;
+                            if (!listedTop || listedBottom) {
+                                problems.add(drive.getBlockPos() + " stands on a transmitter but is listed"
+                                        + " top=" + listedTop + " bottom=" + listedBottom);
+                            }
+                        } else {
+                            inBottom++;
+                            if (listedTop || !listedBottom) {
+                                problems.add(drive.getBlockPos() + " does not stand on a transmitter but is"
+                                        + " listed top=" + listedTop + " bottom=" + listedBottom);
+                            }
+                        }
+                    }
+                    if (inTop == 0 || inBottom == 0) {
+                        problems.add("the shape put all " + drives.size() + " drives in one row (top="
+                                + inTop + " bottom=" + inBottom + "), so the other row is dead slots");
+                    }
+                    // The other half of the report: a cell that is really in the drive has to come through
+                    // to the row, or the panel shows a machine that lies about what it holds.
+                    var withCell = drives.get(0);
+                    var cellItem = ModRegistration.SIMPLIFY_COMPUTATION_CELL_1M.get();
+                    if (!withCell.isItemValid(new ItemStack(cellItem))) {
+                        problems.add("the drive at " + withCell.getBlockPos()
+                                + " rejects our own CE1 cell, so the display path cannot be measured");
+                    } else {
+                        withCell.setCellStack(new ItemStack(cellItem));
+                        var rows = listed(controller.getComputationUiDrives(true), withCell.getBlockPos())
+                                ? controller.getComputationUiDrives(true)
+                                : controller.getComputationUiDrives(false);
+                        var shown = rows.stream()
+                                .filter(entry -> withCell.getBlockPos().equals(entry.position()))
+                                .findFirst().orElse(null);
+                        if (shown == null || shown.stack().isEmpty()) {
+                            problems.add("the drive at " + withCell.getBlockPos() + " holds a CE1 cell but"
+                                    + " its panel row shows stack="
+                                    + (shown == null ? "no row at all" : shown.stack()));
+                        }
+                        withCell.setCellStack(ItemStack.EMPTY);
+                    }
+                    if (!problems.isEmpty()) {
+                        helper.fail(String.join(" | ", problems));
+                        return;
+                    }
+                    finish.run();
+                    helper.succeed();
+                }));
+    }
+
+    /** @return true when the player's main row list carries one of that item. */
+    private static boolean holds(net.minecraft.world.entity.player.Inventory inventory,
+            net.minecraft.world.item.Item item) {
+        for (int slot = 0; slot < inventory.items.size(); slot++) {
+            if (inventory.getItem(slot).is(item)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Empties the player's main row list; {@code Inventory} has no clear() of its own. */
+    private static void emptyBackpack(net.minecraft.world.entity.player.Inventory inventory) {
+        for (int slot = 0; slot < inventory.items.size(); slot++) {
+            inventory.setItem(slot, ItemStack.EMPTY);
+        }
+    }
+
+    /** @return true when one of the panel's rows names that position. */
+    private static boolean listed(
+            java.util.List<cn.dancingsnow.neoecoae.gui.computation.ComputationDriveEntry> rows,
+            net.minecraft.core.BlockPos pos) {
+        return rows.stream().anyMatch(entry -> pos.equals(entry.position()));
+    }
 }
