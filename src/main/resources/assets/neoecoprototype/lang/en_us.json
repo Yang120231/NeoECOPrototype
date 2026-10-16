@@ -150,6 +150,7 @@
   "config.jade.plugin_neoecoprototype.simplify_drive": "ECO - L1 Storage Matrix Drive",
   "config.jade.plugin_neoecoprototype.simplify_computation_drive": "ECO - C1 Crystal Array Drive",
   "config.jade.plugin_neoecoprototype.simplify_storage_controller": "ECO - L1 Storage Host",
+  "config.jade.plugin_neoecoprototype.simplify_crafting_system": "ECO - F1 Crafting Host",
   "config.jade.plugin_neoecoae.eco_storage_system": "Neo ECO Storage System",
   "gui.neoecoprototype.multiblock.too_far": "Move closer to the controller.",
   "gui.neoecoprototype.multiblock.server_only": "This action is server-side only.",

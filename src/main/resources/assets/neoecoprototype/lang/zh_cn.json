@@ -140,6 +140,7 @@
   "config.jade.plugin_neoecoprototype.simplify_drive": "ECO - L1 存储矩阵驱动器",
   "config.jade.plugin_neoecoprototype.simplify_computation_drive": "ECO - C1 晶阵驱动器",
   "config.jade.plugin_neoecoprototype.simplify_storage_controller": "ECO - L1 存储子系统主机",
+  "config.jade.plugin_neoecoprototype.simplify_crafting_system": "ECO - F1 合成子系统主机",
   "config.jade.plugin_neoecoae.eco_storage_system": "Neo ECO 存储子系统",
   "gui.neoecoprototype.multiblock.too_far": "请靠近控制器。",
   "gui.neoecoprototype.multiblock.server_only": "该操作只能在服务端执行。",
