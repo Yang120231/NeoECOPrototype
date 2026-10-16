@@ -8397,6 +8397,66 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * A slot on screen and the drive it writes into have to be the same place. The cluster hands its drives
+     * over in scanner order, and the panel used to list them in exactly that order, so a dropped matrix
+     * landed in some other drive. The assertion is deliberately written against world height instead of
+     * reusing our own axis maths: the machine's rows are horizontal planes, so a correct listing can never
+     * put a lower row before a higher one - and a number that only re-derives the sort would pass no matter
+     * how the axes were chosen.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelRowsFollowTheMachineShape(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)
+                            || storageHost.getCluster() == null) {
+                        helper.fail("no formed L1 storage host to read the panel rows from");
+                        return;
+                    }
+                    var drives = storageHost.getCluster().getDrives();
+                    var filled = 0;
+                    for (var drive : drives) {
+                        if (drive.insertCell(
+                                new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1K.get()))) {
+                            filled++;
+                        }
+                    }
+                    if (filled < 2) {
+                        helper.fail("only " + filled + " of " + drives.size()
+                                + " drives took a cell, so row order cannot be measured");
+                        return;
+                    }
+                    var entries = storageHost.createCellEntries();
+                    var previousY = new int[]{Integer.MAX_VALUE};
+                    var rows = new int[1];
+                    for (var entry : entries) {
+                        var pos = entry.position();
+                        if (pos == null) {
+                            continue;
+                        }
+                        rows[0]++;
+                        if (pos.getY() > previousY[0]) {
+                            helper.fail("the panel lists a drive at y=" + pos.getY() + " after one at y="
+                                    + previousY[0] + " - a slot on screen and the drive it writes into are"
+                                    + " different places");
+                            return;
+                        }
+                        previousY[0] = pos.getY();
+                    }
+                    if (rows[0] < 2) {
+                        helper.fail("the panel produced " + rows[0] + " positioned rows for " + filled
+                                + " filled drives, so this scan proves nothing");
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
      * Every block of ours that carries a grid node must also answer AE2's block-capability query, or nothing
      * can find it from outside: AE2 discovers in-world nodes through {@code GridHelper.getNodeHost} ->
      * {@code level.getCapability(IN_WORLD_GRID_NODE_HOST)}, and it registers that capability for the block

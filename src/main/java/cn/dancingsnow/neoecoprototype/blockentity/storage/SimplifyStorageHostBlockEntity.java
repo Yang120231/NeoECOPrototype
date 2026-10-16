@@ -613,6 +613,40 @@ public class SimplifyStorageHostBlockEntity
                 ? cellItem.getKeyTypes() : null;
     }
 
+    /**
+     * The drives in the order the panel has to hand them over: rows top first, each row read across from the
+     * host's own point of view, flipped when the machine is mirrored. The cluster list is in the order the
+     * shape scanner found them, so without this a slot on screen and the drive it writes into are unrelated
+     * - the cell lands somewhere else than where it was dropped. eco does the same job in
+     * {@code StorageDriveLayout.ordered} (package-private, and typed to its own drive class) with the
+     * extents of its own machine baked in; ours walks its bounds instead of copying those constants.
+     */
+    private java.util.List<SimplifyDriveBlockEntity> orderedDrivesForPanel(
+            java.util.List<SimplifyDriveBlockEntity> drives) {
+        var strategy = appeng.api.orientation.OrientationStrategies.horizontalFacing();
+        var state = getBlockState();
+        var across = strategy.getSide(state, mirrored
+                ? appeng.api.orientation.RelativeSide.RIGHT
+                : appeng.api.orientation.RelativeSide.LEFT);
+        var downwards = strategy.getSide(state, appeng.api.orientation.RelativeSide.BOTTOM);
+        var origin = getBlockPos();
+        return drives.stream()
+                .sorted(java.util.Comparator
+                        .comparingInt((SimplifyDriveBlockEntity drive) ->
+                                projectionAgainst(drive.getBlockPos().subtract(origin), downwards))
+                        .thenComparingInt(drive ->
+                                projectionAgainst(drive.getBlockPos().subtract(origin), across)))
+                .toList();
+    }
+
+    private static int projectionAgainst(net.minecraft.core.BlockPos offset, net.minecraft.core.Direction axis) {
+        // The step signs are the whole point: without them the key is unsigned and the rows come out
+        // bottom-first, which is what this method did the first time it ran.
+        return offset.getX() * axis.getStepX()
+                + offset.getY() * axis.getStepY()
+                + offset.getZ() * axis.getStepZ();
+    }
+
     private ECOCellType getChemicalCellType() {
         return NERegistries.CELL_TYPE.get(ResourceLocation.fromNamespaceAndPath("neoecoae", "mekanism"));
     }
@@ -643,7 +677,7 @@ public class SimplifyStorageHostBlockEntity
             return java.util.List.of();
         }
         java.util.List<StorageHostUI.CellEntry> entries = new java.util.ArrayList<>();
-        for (SimplifyDriveBlockEntity drive : cluster.getDrives()) {
+        for (SimplifyDriveBlockEntity drive : orderedDrivesForPanel(cluster.getDrives())) {
             IECOStorageCell cell = drive.getCellInventory();
             if (cell == null) {
                 // An empty drive still has to be handed over as a row: eco's grid sends the insert RPC only
