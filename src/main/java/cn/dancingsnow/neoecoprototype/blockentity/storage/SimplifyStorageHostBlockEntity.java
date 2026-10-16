@@ -424,8 +424,8 @@ public class SimplifyStorageHostBlockEntity
                 () -> 0,
                 createReadOnlyEmptyComponentInventory(),
                 player,
-                (drivePos, interactionId, flag) -> extractCellForPanel(drivePos, player),
-                this::insertCellForPanel,
+                (drivePos, interactionId, shiftDown) -> extractCellForPanel(drivePos, player),
+                (drivePos, stack) -> insertCellForPanel(drivePos, stack, player),
                 () -> new ItemStack(getBlockState().getBlock()));
     }
 
@@ -454,13 +454,33 @@ public class SimplifyStorageHostBlockEntity
         return true;
     }
 
-    /** The other half of the panel's drag path: put a cell the player is holding into that drive. */
-    private boolean insertCellForPanel(net.minecraft.core.BlockPos drivePos, ItemStack stack) {
-        if (level == null || level.isClientSide || !isFormed() || stack.isEmpty()) {
+    /**
+     * The other half of the panel's drag path: put a cell the player is holding into that drive.
+     *
+     * <p>The stack arriving with the RPC is a client's claim, so it is used only to check what the server
+     * says the player is holding, and the held stack is what gets spent. eco does the same in
+     * {@code StorageCellUiInsertion} - read {@code menu.getCarried()}, {@code shrink(1)}, {@code
+     * setCarried(EMPTY)} when it runs out. Skipping that spend turns the panel into a duplicator: the
+     * drive takes a copy while the hand keeps the original.</p>
+     */
+    public boolean insertCellForPanel(net.minecraft.core.BlockPos drivePos, ItemStack claimed,
+            net.minecraft.world.entity.player.Player player) {
+        if (level == null || level.isClientSide || !isFormed()) {
             return false;
         }
-        return level.getBlockEntity(drivePos) instanceof SimplifyDriveBlockEntity drive
-                && drive.insertCell(stack);
+        var carried = player.containerMenu.getCarried();
+        if (carried.isEmpty() || !ItemStack.isSameItemSameComponents(carried, claimed)) {
+            return false;
+        }
+        if (!(level.getBlockEntity(drivePos) instanceof SimplifyDriveBlockEntity drive)
+                || !drive.insertCell(carried)) {
+            return false;
+        }
+        carried.shrink(1);
+        if (carried.isEmpty()) {
+            player.containerMenu.setCarried(ItemStack.EMPTY);
+        }
+        return true;
     }
 
     /**
@@ -599,6 +619,12 @@ public class SimplifyStorageHostBlockEntity
         for (SimplifyDriveBlockEntity drive : cluster.getDrives()) {
             IECOStorageCell cell = drive.getCellInventory();
             if (cell == null) {
+                // An empty drive still has to be handed over as a row: eco's grid sends the insert RPC only
+                // from a row the player can see, so a host that lists only its occupied drives gives nobody
+                // a slot to drop a matrix into - the panel could take cells out and never put one in.
+                // CellEntry.EMPTY carries typeId -1, which is eco's own "not one of the media rows" mark.
+                entries.add(StorageHostUI.CellEntry.EMPTY.atDrive(drive.getBlockPos(), ItemStack.EMPTY,
+                        null, drive.panelInteractionId()));
                 continue;
             }
             ECOCellType cellType = cell.getCellType();

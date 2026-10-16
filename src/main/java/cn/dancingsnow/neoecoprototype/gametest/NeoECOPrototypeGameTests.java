@@ -6083,6 +6083,16 @@ public final class NeoECOPrototypeGameTests {
                             return;
                         }
                     }
+                    // The other half of "cannot interact": the drives that hold nothing have to be listed
+                    // too, or there is no slot to drop a matrix onto and eco's insert RPC is never sent.
+                    var showsFilled = entries.stream().anyMatch(e -> !e.stack().isEmpty());
+                    var showsEmpty = entries.stream().anyMatch(e -> e.stack().isEmpty());
+                    if (!showsFilled || !showsEmpty) {
+                        helper.fail("the panel rows are filled=" + showsFilled + " empty=" + showsEmpty
+                                + " out of " + entries.size() + " rows for " + drives.size()
+                                + " drives - both kinds have to be listed or one direction of the drag dies");
+                        return;
+                    }
                     helper.succeed();
                 });
     }
@@ -8283,6 +8293,68 @@ public final class NeoECOPrototypeGameTests {
             }
             helper.succeed();
         });
+    }
+
+    /**
+     * The panel's drop path has to spend the held cell. It used to copy the stack the client claimed into
+     * the drive and leave the hand alone, which made every drop a duplication - and it trusted that claim,
+     * so a client could hand over a stack it was not actually holding. eco reads the server-side carried
+     * stack, shrinks it, and clears the cursor when it runs out; this asserts the same arithmetic: two in
+     * hand, one in hand plus one in the drive afterwards, never three.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelDropSpendsTheHeldCell(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
+                        helper.fail("the L1 storage controller is not our host block entity: " + host);
+                        return;
+                    }
+                    if (storageHost.getCluster() == null) {
+                        helper.fail("the room never formed a cluster, so there is no drive to drop into");
+                        return;
+                    }
+                    var target = storageHost.getCluster().getDrives().stream()
+                            .filter(d -> !d.hasCell())
+                            .findFirst().orElse(null);
+                    if (target == null) {
+                        helper.fail("every drive already holds a cell, so the drop path cannot be measured");
+                        return;
+                    }
+                    var player = helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+                    player.containerMenu.setCarried(
+                            new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1K.get(), 2));
+                    var claimed = player.containerMenu.getCarried();
+                    if (!storageHost.insertCellForPanel(target.getBlockPos(), claimed, player)) {
+                        helper.fail("the panel refused a drop of a cell the player really was holding");
+                        return;
+                    }
+                    if (!target.hasCell()) {
+                        helper.fail("the insert reported success but the drive is still empty");
+                        return;
+                    }
+                    var left = player.containerMenu.getCarried().getCount();
+                    if (left != 1) {
+                        helper.fail("holding two cells and dropping one left " + left
+                                + " in hand - the drive took a copy nobody paid for (total "
+                                + (left + 1) + " of 2)");
+                        return;
+                    }
+                    // And the claim must not be the authority: a stack that is not what the hand holds
+                    // cannot be inserted, no matter what the client says it is carrying.
+                    var other = new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_16K.get());
+                    var second = storageHost.getCluster().getDrives().stream()
+                            .filter(d -> !d.hasCell())
+                            .findFirst().orElse(null);
+                    if (second != null && storageHost.insertCellForPanel(second.getBlockPos(), other, player)) {
+                        helper.fail("the panel accepted a claimed stack the player was not holding");
+                    }
+                    helper.succeed();
+                });
     }
 
     /**
