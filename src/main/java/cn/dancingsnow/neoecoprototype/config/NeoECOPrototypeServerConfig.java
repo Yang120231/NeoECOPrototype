@@ -64,6 +64,13 @@ public final class NeoECOPrototypeServerConfig {
     /** The shortest interval the cell accepts, in ticks. */
     public static final long SINGULARITY_CELL_TICKS_PER_BATCH_MIN = 60L;
 
+    /**
+     * How much of a formed host's idle draw a contented mind may take off, as a fraction: 0.10 means the
+     * happiest machine costs 90% of what the same machine without a face would. Capped at one, so a mind
+     * can only ever save power, never cost any.
+     */
+    public static final ModConfigSpec.DoubleValue MIND_IDLE_POWER_SAVING;
+
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         builder.push("l1_storage");
@@ -158,6 +165,16 @@ public final class NeoECOPrototypeServerConfig {
                                 + " ticks (about 3 seconds).",
                         "Default: 120.")
                 .defineInRange("amount_per_batch", 120, 1, SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX);
+        builder.pop();
+        builder.push("machine_mind");
+        MIND_IDLE_POWER_SAVING = builder
+                .comment("How much of a formed crafting host's idle power draw its mind may save, as a",
+                        "fraction of the normal draw. 0.10 means a contented machine costs 90% of the same",
+                        "machine without a face. It only ever saves: a machine short of coolant or with",
+                        "nothing to do draws exactly the normal amount, so the 1-in-16 roll is a reward for",
+                        "building well and never a tax. Zero turns the hidden bonus off entirely.",
+                        "Default: 0.10.")
+                .defineInRange("idle_power_saving", 0.10D, 0.0D, 0.25D);
         builder.pop();
         SPEC = builder.build();
     }

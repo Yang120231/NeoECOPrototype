@@ -5,6 +5,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
 
 /**
  * F1 crafting host. Publishes which of the two interface blocks the finished machine holds so the
@@ -27,16 +28,25 @@ public class SimplifyCraftingSystemBlock extends ECOCraftingSystem {
      */
     public static final BooleanProperty HAS_MIND = BooleanProperty.create("has_mind");
 
+    /**
+     * How contented the mind currently is, 0..2, published by the host once a second and only when it
+     * crosses a band. It rides the same deferred write as {@link #HAS_MIND} - the value is applied on the
+     * next server tick, never from inside AE2's cluster recalculation - and only the {@code *_face} models
+     * read it, so a machine without a face has exactly one appearance whatever this says.
+     */
+    public static final IntegerProperty MIND_TIER = IntegerProperty.create("mind_tier", 0, 2);
+
     public SimplifyCraftingSystemBlock(Properties properties) {
         super(properties);
         registerDefaultState(defaultBlockState()
                 .setValue(COMMUNICATION_INTERFACE, false)
-                .setValue(HAS_MIND, false));
+                .setValue(HAS_MIND, false)
+                .setValue(MIND_TIER, 0));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         super.createBlockStateDefinition(builder);
-        builder.add(COMMUNICATION_INTERFACE, HAS_MIND);
+        builder.add(COMMUNICATION_INTERFACE, HAS_MIND, MIND_TIER);
     }
 }

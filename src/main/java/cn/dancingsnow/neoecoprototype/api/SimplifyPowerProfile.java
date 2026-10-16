@@ -3,8 +3,13 @@ package cn.dancingsnow.neoecoprototype.api;
 /**
  * Power tuning for addon-owned machine hosts.
  *
- * <p>The base values mirror Eco's L4 controller idle usage. L1 keeps the same
- * machine behavior but runs at one eighth of that idle rate.</p>
+ * <p>The base values are our own numbers, scaled down by {@code idlePowerMultiplier} for every L1 host.
+ * They are not a copy of eco's L4 table. Measured against the 21.2.2 jar, eco's crafting controller sets
+ * its node to 64.0 AE/t ({@code ECOCraftingSystemBlockEntity}, a literal); ours is the seventh argument
+ * below, 32 x 1/8 = <b>4.0 AE/t</b> - a sixteenth of eco's L4, not half of it. The 258 in the fifth slot
+ * is the <i>storage</i> controller, and reading the two columns in the wrong order is what once made this
+ * comment claim 32.25. The runtime figure agrees with 4.0: a host with a face, mood 0.5 and the default
+ * 10% saving reports 3.8 AE/t.</p>
  */
 public enum SimplifyPowerProfile {
     L1(1.0D / 8.0D, 16.0D, 32.0D, 256.0D, 258.0D, 16.0D, 32.0D);

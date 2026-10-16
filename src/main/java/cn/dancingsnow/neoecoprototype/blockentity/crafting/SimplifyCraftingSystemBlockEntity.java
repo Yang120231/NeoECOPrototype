@@ -3,8 +3,10 @@ package cn.dancingsnow.neoecoprototype.blockentity.crafting;
 import cn.dancingsnow.neoecoae.api.IECOTier;
 import cn.dancingsnow.neoecoae.blocks.entity.crafting.ECOCraftingSystemBlockEntity;
 import cn.dancingsnow.neoecoae.multiblock.definition.MultiBlockDefinition;
+import cn.dancingsnow.neoecoprototype.api.MachineMood;
 import cn.dancingsnow.neoecoprototype.api.SimplifyPowerProfile;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingSystemBlock;
+import cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig;
 import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyCraftingDefinition;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -39,10 +41,18 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
     private static final String HAS_MIND_TAG = "neoecoprototype:has_mind";
     private static final String MIND_ROLLED_TAG = "neoecoprototype:mind_rolled";
 
+    /** How often a minded host re-reads its own situation. One second is plenty for a mood. */
+    private static final int MOOD_SAMPLE_TICKS = 20;
+
     private boolean communicationInterface;
     private boolean appearancePending;
     private boolean hasMind;
     private boolean mindRolled;
+    private int moodCountdown = MOOD_SAMPLE_TICKS;
+    /** The idle draw the node currently carries, so a sample that changed nothing pushes nothing. */
+    private double idlePowerPushed = -1.0D;
+    /** A band the host has crossed but not yet written, or -1 when there is nothing to publish. */
+    private int mindTierToPublish = -1;
 
     public SimplifyCraftingSystemBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state,
                                              IECOTier tier) {
@@ -59,7 +69,7 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
     public void onReady() {
         super.onReady();
         // Deliberately after eco's own number, which is where the injection this replaces sat too.
-        getMainNode().setIdlePowerUsage(SimplifyPowerProfile.L1.craftingControllerIdlePower());
+        applyIdlePower(SimplifyPowerProfile.L1.craftingControllerIdlePower());
     }
 
     /** Records what the interface cell turned out to hold, for the next {@link #tick}. */
@@ -78,6 +88,58 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
             appearancePending = false;
             publishAppearance(level, pos);
         }
+        if (!level.isClientSide && --moodCountdown <= 0) {
+            moodCountdown = MOOD_SAMPLE_TICKS;
+            applyMindMood();
+        }
+    }
+
+    /**
+     * A host with a face draws slightly less power while idle, by how content its situation is: coolant in
+     * the bath and work to do. Nothing here is stored - the next sample recomputes it - so the value cannot
+     * be farmed, cannot drift across saves, and needs no migration when the numbers change.
+     *
+     * <p>The same mood also picks which face the art shows, but that one <em>is</em> written to the block
+     * state, because models cannot read a live number. It is therefore the only part allowed to trigger a
+     * block change, and it triggers on a band crossing rather than on every sample - see
+     * {@link MachineMood#tierOf}. The write itself rides {@code appearancePending}, the same deferral the
+     * face flag uses, so it never lands inside AE2's cluster recalculation.
+     */
+    private void applyMindMood() {
+        Level reader = this.level;
+        if (reader == null || reader.isClientSide) {
+            return;
+        }
+        double baseline = SimplifyPowerProfile.L1.craftingControllerIdlePower();
+        if (!hasMind) {
+            applyIdlePower(baseline);
+            return;
+        }
+        int capacity = getDisplayedCoolantCapacity();
+        double coolant = capacity > 0 ? (double) getDisplayedCoolantAmount() / capacity : 0.0D;
+        boolean busy = getRunningThreadCount() > 0;
+        boolean formed = isFormed();
+        applyIdlePower(baseline * MachineMood.idlePowerFactor(true, coolant, busy, formed,
+                NeoECOPrototypeServerConfig.MIND_IDLE_POWER_SAVING.get()));
+        if (!formed) {
+            return;
+        }
+        int shown = reader.getBlockState(worldPosition)
+                .getValue(SimplifyCraftingSystemBlock.MIND_TIER);
+        int next = MachineMood.tierOf(MachineMood.mood(coolant, busy), shown);
+        if (next != shown) {
+            mindTierToPublish = next;
+            appearancePending = true;
+        }
+    }
+
+    /** Pushes a new idle draw only when it differs, because this runs on a timer and the node is shared. */
+    private void applyIdlePower(double value) {
+        if (Double.compare(value, idlePowerPushed) == 0) {
+            return;
+        }
+        idlePowerPushed = value;
+        getMainNode().setIdlePowerUsage(value);
     }
 
     @Override
@@ -99,9 +161,14 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
             hasMind = level.random.nextInt(MIND_CHANCE_ONE_IN) == 0;
             setChanged();
         }
+        int publishedTier = mindTierToPublish >= 0 ? mindTierToPublish
+                : state.getValue(SimplifyCraftingSystemBlock.MIND_TIER);
+        mindTierToPublish = -1;
         BlockState next = state.setValue(SimplifyCraftingSystemBlock.COMMUNICATION_INTERFACE,
                         isFormed() && communicationInterface)
-                .setValue(SimplifyCraftingSystemBlock.HAS_MIND, isFormed() && hasMind);
+                .setValue(SimplifyCraftingSystemBlock.HAS_MIND, isFormed() && hasMind)
+                .setValue(SimplifyCraftingSystemBlock.MIND_TIER,
+                        isFormed() && hasMind ? publishedTier : 0);
         if (next != state) {
             level.setBlock(worldPosition, next, Block.UPDATE_CLIENTS);
         }
@@ -110,6 +177,15 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
     /** Whether this host grew a face. Read by the blockstate write above and by the game tests. */
     public boolean hasMind() {
         return hasMind;
+    }
+
+    /**
+     * What the grid actually charges this host while idle. The live node answers it - {@code IManagedGridNode}
+     * only has a setter - and before the node exists the answer is what we last meant to push.
+     */
+    public double idlePowerDraw() {
+        var node = getMainNode().getNode();
+        return node == null ? Math.max(0.0D, idlePowerPushed) : node.getIdlePowerUsage();
     }
 
     /** Whether the once-per-host roll has already happened. */
