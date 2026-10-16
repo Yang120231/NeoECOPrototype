@@ -430,11 +430,11 @@ public class SimplifyStorageHostBlockEntity
     }
 
     /**
-     * Takes the cell out of the drive at that position and puts it in the player's inventory. eco's own
-     * extractor also matches a per-drive interaction id against the one carried by the row; our drives
-     * never minted such an id, so the position is the only handle - and inside a formed machine it is
-     * unique, which is all the grid offers us anyway. The third argument's meaning I did not read off
-     * eco's call site, so this ignores it and always performs the extraction.
+     * Takes the cell out of the drive at that position and puts it in the player's inventory. The position
+     * is the handle we act on - inside a formed machine it is unique, which is all the grid offers us. The
+     * id the row carries back is ours own (see {@link SimplifyDriveBlockEntity#panelInteractionId()}) and
+     * exists only so eco will send the click at all; the third argument is the grid's shift-down flag, read
+     * off {@code StorageCellGrid$CellSlot.onMouseDown}, and taking a cell out does not depend on it.
      */
     private boolean extractCellForPanel(net.minecraft.core.BlockPos drivePos,
                                    net.minecraft.world.entity.player.Player player) {
@@ -590,7 +590,7 @@ public class SimplifyStorageHostBlockEntity
                 () -> "0");
     }
 
-    private java.util.List<StorageHostUI.CellEntry> createCellEntries() {
+    public java.util.List<StorageHostUI.CellEntry> createCellEntries() {
         SimplifyStorageCluster cluster = getCluster();
         if (cluster == null) {
             return java.util.List.of();
@@ -620,8 +620,10 @@ public class SimplifyStorageHostBlockEntity
                     isFormed())
                     // eco 21.2.3's grid draws a slot from the entry's own position and stack - a cell that
                     // does not say where it stands shows up as an empty slot, which is what the panel did
-                    // before this line existed.
-                    .atDrive(drive.getBlockPos(), drive.getCellStack(), net.minecraft.network.chat.Component.empty()));
+                    // before this line existed. The id is the other half of that line: without one, the
+                    // grid's mouse handler returns before it sends the extraction RPC, so a row that looks
+                    // perfectly drawn refuses every click and says nothing about why.
+                    .atDrive(drive.getBlockPos(), drive.getCellStack(), null, drive.panelInteractionId()));
         }
         return entries;
     }

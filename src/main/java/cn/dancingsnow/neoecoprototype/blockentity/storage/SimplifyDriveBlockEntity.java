@@ -55,6 +55,13 @@ public class SimplifyDriveBlockEntity extends NEBlockEntity<SimplifyStorageClust
     @Persisted
     @RequireRerender
     private ItemStack cellStack = ItemStack.EMPTY;
+    /**
+     * eco's storage panel refuses to react to a click on a row whose entry carries no interaction id -
+     * {@code StorageCellGrid$CellSlot.onMouseDown} returns before it sends the extraction RPC. The id only
+     * has to be the same value the row was built with, which is this object's lifetime, so it is not
+     * persisted.
+     */
+    private final java.util.UUID panelInteractionId = java.util.UUID.randomUUID();
     @Nullable
     private ItemStack cachedCellStack;
     @Nullable
@@ -108,6 +115,11 @@ public class SimplifyDriveBlockEntity extends NEBlockEntity<SimplifyStorageClust
 
     public boolean hasCell() {
         return !cellStack.isEmpty();
+    }
+
+    /** The handle this drive's row in eco's storage panel is clicked through. */
+    public java.util.UUID panelInteractionId() {
+        return panelInteractionId;
     }
 
     /** @return true when the cell was inserted. */

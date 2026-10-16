@@ -6033,6 +6033,61 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * A row that draws correctly is not necessarily clickable: eco's grid reads two handles back out of
+     * every entry, and {@code StorageCellGrid$CellSlot.onMouseDown} returns without a word when the
+     * interaction id is null - which is exactly how "our storage matrices cannot be interacted with"
+     * reached us. The position is the other one; without it the row is not even drawn as occupied.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelRowsCarryTheHandlesEcoClicksThrough(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
+                        helper.fail("the L1 storage controller is not our host block entity: " + host);
+                        return;
+                    }
+                    var drives = storageHost.getCluster() == null
+                            ? java.util.List.<cn.dancingsnow.neoecoprototype.blockentity.storage
+                                    .SimplifyDriveBlockEntity>of()
+                            : storageHost.getCluster().getDrives();
+                    if (drives.isEmpty()) {
+                        helper.fail("the built room has no drives, so this scan proves nothing");
+                        return;
+                    }
+                    var filled = false;
+                    for (var drive : drives) {
+                        if (drive.insertCell(new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1K.get()))) {
+                            filled = true;
+                            break;
+                        }
+                    }
+                    if (!filled) {
+                        helper.fail("none of the " + drives.size() + " drives would take an L1 item matrix,"
+                                + " so there is no row to check");
+                        return;
+                    }
+                    var entries = storageHost.createCellEntries();
+                    if (entries.isEmpty()) {
+                        helper.fail("a drive holding an L1 item matrix produced no panel row at all");
+                        return;
+                    }
+                    for (var entry : entries) {
+                        if (entry.position() == null || entry.interactionId() == null) {
+                            helper.fail("a panel row reached eco with position=" + entry.position()
+                                    + " and interactionId=" + entry.interactionId()
+                                    + ", so its grid refuses every click on that row");
+                            return;
+                        }
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
      * The one-click marking, end to end: a built and formed L1 storage host, one drive holding a source cell
      * with more of a compressible item than the threshold, one drive holding a small-bulk cell.
      *
