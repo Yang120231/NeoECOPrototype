@@ -37,7 +37,7 @@
 					"from": [1, 6, 2],
 					"to": [15, 10, 6],
 					"faces": {
-						"north": {"uv": [1, 6, 15, 10], "texture": "#coolant", "shade": false}
+						"north": {"uv": [1, 6, 15, 10], "texture": "#coolant", "neoforge_data": {"block_light": 15, "sky_light": 15}}
 					}
 				}
 			]
