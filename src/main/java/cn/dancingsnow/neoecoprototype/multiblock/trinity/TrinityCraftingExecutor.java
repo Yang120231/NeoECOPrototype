@@ -211,7 +211,10 @@ public final class TrinityCraftingExecutor {
         try {
             plan = future.get();
         } catch (Exception exception) {
-            fail("The crafting calculation failed: " + exception);
+            // The player-visible line stays short; the stack goes to the log, where a ClassCastException
+            // inside the crafting service is still a stack instead of a toString().
+            NeoECOPrototype.LOGGER.error("Trinity crafting calculation failed", exception);
+            fail("The crafting calculation failed: " + exception.getClass().getSimpleName());
             return;
         }
         planFuture = null;
