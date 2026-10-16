@@ -366,13 +366,9 @@ public class SimplifyTrinityControllerBlockEntity
                 priority -> {
                 },
                 delta -> {
-                },
-                () -> false,
-                () -> 0L,
-                // Consumer<Boolean> since eco 21.2.0 (the shift state of the triggering right-click);
-                // the trinity host has no bulk marking yet, so this stays an empty sink.
-                shift -> {
                 }));
+        // eco 21.2.3's action bar Config no longer carries the bulk-marking trio this call used to end
+        // with; the trinity host never had marking of its own, so nothing here is lost.
         actionUI.addTo(root);
         return new ModularUI(UI.of(root,
                 java.util.List.of(StylesheetManager.INSTANCE.getStylesheetSafe(NEStyleSheets.ECO))), holder.player);

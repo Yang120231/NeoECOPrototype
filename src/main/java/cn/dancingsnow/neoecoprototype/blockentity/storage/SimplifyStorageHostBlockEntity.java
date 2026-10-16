@@ -216,7 +216,7 @@ public class SimplifyStorageHostBlockEntity
     }
 
     public ModularUI createUI(BlockUIMenuType.BlockUIHolder holder) {
-        UIElement root = StorageHostUI.create(createStoragePanelConfig())
+        UIElement root = StorageHostUI.create(createStoragePanelConfig(holder.player))
                 .addClass("panel_bg");
 
         StorageHostActionUI.Elements actionUI = StorageHostActionUI.create(new StorageHostActionUI.Config(
@@ -236,13 +236,10 @@ public class SimplifyStorageHostBlockEntity
                         setStoragePriority(priority);
                     }
                 },
-                delta -> changeStoragePriority(holder.player, delta),
-                 this::bulkMarkingAvailable,
-                 this::bulkMarkingThreshold,
-                 // eco 21.2.0 turned this from a Runnable into a Consumer<Boolean> carrying the shift
-                 // state of the right-click that triggers it. We mark the same way either way for now,
-                 // but the flag is there if the button ever wants "shift = ignore the threshold".
-                 shift -> autoMarkBulkCells(holder.player)));
+                delta -> changeStoragePriority(holder.player, delta)));
+        // eco 21.2.3 dropped the bulk-marking button from its action bar (the Config lost
+        // bulkMarkingAvailable / bulkMarkingThreshold / autoMarkBulkCells and now calls the service only
+        // from its own mega controller), so autoMarkBulkCells has no caller from this UI any more.
         actionUI.addTo(root);
         return new ModularUI(UI.of(root,
                 java.util.List.of(StylesheetManager.INSTANCE.getStylesheetSafe(NEStyleSheets.ECO))), holder.player);
@@ -405,9 +402,15 @@ public class SimplifyStorageHostBlockEntity
                 .toList();
     }
 
-    private StorageHostUI.Config createStoragePanelConfig() {
+    private StorageHostUI.Config createStoragePanelConfig(net.minecraft.world.entity.player.Player player) {
         return new StorageHostUI.Config(
                 () -> getBlockState().getBlock().getName(),
+                // eco 21.2.3 reads this int twice: hostMarker(tier, formed) clamps it onto its own atlas,
+                // and StorageCellGrid.tierName is a tableswitch over 1→"L4", 2→"L6", 3→"L9" with
+                // default→"L0". No value prints "L1", so we pass our own tier and let the panel say "L0"
+                // rather than lie about being an L4.
+                () -> getTier().getTier(),
+                this::isFormed,
                 this::getStoredEnergy,
                 this::getMaxEnergy,
                 () -> 0L,
@@ -419,7 +422,45 @@ public class SimplifyStorageHostBlockEntity
                 () -> false,
                 () -> "",
                 () -> 0,
-                createReadOnlyEmptyComponentInventory());
+                createReadOnlyEmptyComponentInventory(),
+                player,
+                (drivePos, interactionId, flag) -> extractCellForPanel(drivePos, player),
+                this::insertCellForPanel,
+                () -> new ItemStack(getBlockState().getBlock()));
+    }
+
+    /**
+     * Takes the cell out of the drive at that position and puts it in the player's inventory. eco's own
+     * extractor also matches a per-drive interaction id against the one carried by the row; our drives
+     * never minted such an id, so the position is the only handle - and inside a formed machine it is
+     * unique, which is all the grid offers us anyway. The third argument's meaning I did not read off
+     * eco's call site, so this ignores it and always performs the extraction.
+     */
+    private boolean extractCellForPanel(net.minecraft.core.BlockPos drivePos,
+                                   net.minecraft.world.entity.player.Player player) {
+        if (level == null || level.isClientSide || !isFormed() || !canPlayerInteract(player)) {
+            return false;
+        }
+        if (!(level.getBlockEntity(drivePos) instanceof SimplifyDriveBlockEntity drive) || !drive.hasCell()) {
+            return false;
+        }
+        var cell = drive.removeCell();
+        if (cell.isEmpty()) {
+            return false;
+        }
+        if (!player.getInventory().add(cell)) {
+            player.drop(cell, false);
+        }
+        return true;
+    }
+
+    /** The other half of the panel's drag path: put a cell the player is holding into that drive. */
+    private boolean insertCellForPanel(net.minecraft.core.BlockPos drivePos, ItemStack stack) {
+        if (level == null || level.isClientSide || !isFormed() || stack.isEmpty()) {
+            return false;
+        }
+        return level.getBlockEntity(drivePos) instanceof SimplifyDriveBlockEntity drive
+                && drive.insertCell(stack);
     }
 
     /**
@@ -574,7 +615,13 @@ public class SimplifyStorageHostBlockEntity
                             .of(drive.getCellStack(), cell)),
                     Math.max(0L, cell.getUsedBytes()),
                     Math.max(0L, cell.getTotalBytes()),
-                    cell.hasInfiniteTypeCapacity()));
+                    cell.hasInfiniteTypeCapacity(),
+                    drive.getCellState(),
+                    isFormed())
+                    // eco 21.2.3's grid draws a slot from the entry's own position and stack - a cell that
+                    // does not say where it stands shows up as an empty slot, which is what the panel did
+                    // before this line existed.
+                    .atDrive(drive.getBlockPos(), drive.getCellStack(), net.minecraft.network.chat.Component.empty()));
         }
         return entries;
     }
