@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "type": "single",
+      "resource": "neoecoprototype:block/dissolution_solution_still"
+    },
+    {
+      "type": "single",
+      "resource": "neoecoprototype:block/dissolution_solution_flow"
+    }
+  ]
+}
