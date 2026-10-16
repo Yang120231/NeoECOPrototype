@@ -152,6 +152,20 @@ public class NeoECOPrototype {
                 (blockEntity, side) -> blockEntity.tank);
         registerNodeHost(event, ModRegistration.SIMPLIFY_CRAFTING_INTERFACE_BE.get());
         registerNodeHost(event, ModRegistration.SIMPLIFY_CRAFTING_CASING_BE.get());
+        // The dissociator must be in this list too, or a cable placed against a machine that was already
+        // standing finds no node host and the grid never sees it.
+        registerNodeHost(event, ModRegistration.METEORITE_DISSOCIATOR_BE.get());
+        // Same rule for the two batteries, and it is the whole point of them: AE2's neighbour discovery asks
+        // the block entity for this capability (GridHelper.getNodeHost), and AE2 only registers it for the
+        // block entity types in its own registry. Without this line each battery sits alone in its own grid
+        // of one node and no controller ever adds its buffer.
+        registerNodeHost(event, ModRegistration.ENERGIZED_ENERGY_CELL_BE.get());
+        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK,
+                ModRegistration.METEORITE_DISSOCIATOR_BE.get(),
+                (blockEntity, side) -> blockEntity.getEnergyStorage());
+        event.registerBlockEntity(Capabilities.FluidHandler.BLOCK,
+                ModRegistration.METEORITE_DISSOCIATOR_BE.get(),
+                (blockEntity, side) -> blockEntity.getFluidInterface());
     }
 
     private static <T extends net.minecraft.world.level.block.entity.BlockEntity> void registerNodeHost(
@@ -254,6 +268,9 @@ public class NeoECOPrototype {
             // Hand eco's cell registry a handler for the network-bound cell.
             event.enqueueWork(BeyondIntegration::registerCellHandler);
         }
+        // Last work item of startup: after this nothing may join the matrix table. KubeJS' own dynamic
+        // lifecycle has already had its say, which is what the registry's javadoc waits for.
+        event.enqueueWork(cn.dancingsnow.neoecoprototype.api.StorageMatrixRegistry::freeze);
     }
 }
 

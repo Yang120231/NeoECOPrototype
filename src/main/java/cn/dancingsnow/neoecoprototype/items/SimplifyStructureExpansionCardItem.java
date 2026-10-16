@@ -7,6 +7,9 @@ import appeng.core.definitions.AEItems;
 import cn.dancingsnow.neoecoae.all.NEMultiBlocks;
 import cn.dancingsnow.neoecoae.blocks.entity.ECOMachineCasingBlockEntity;
 import cn.dancingsnow.neoecoae.blocks.entity.computation.ECOComputationCoolingControllerBlockEntity;
+import cn.dancingsnow.neoecoae.blocks.entity.crafting.ECOCraftingPatternBusBlockEntity;
+import cn.dancingsnow.neoecoae.util.ICellHost;
+import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
 import cn.dancingsnow.neoecoae.multiblock.definition.MultiBlockDefinition;
 import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockBuildController;
 import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementPlan;
@@ -110,7 +113,7 @@ public class SimplifyStructureExpansionCardItem extends Item {
 
     /**
      * The tier this click should land on. The expansion card climbs straight to the ceiling; a
-     * {@link SimplifyTierUpgradeCardItem} overrides this to cover one rung and nothing else.
+     * {@link SimplifyMigrationDriveItem} overrides this to cover one rung and nothing else.
      */
     protected @Nullable MultiBlockDefinition targetOf(MultiBlockDefinition current) {
         return nextTier(current);
@@ -140,6 +143,25 @@ public class SimplifyStructureExpansionCardItem extends Item {
      */
     protected boolean chargesParts() {
         return true;
+    }
+
+    /**
+     * Whether the blocks a free tier swap takes out come back to the player as items. The rung cards let
+     * them go: their price is the card, and the parts they convert are what that card stands for. The
+     * migration drive prices its voucher at the whole kit instead, so it asks nothing of the inventory and
+     * hands every replaced block back - the player's L1 parts have to end up somewhere they can use.
+     */
+    protected boolean refundsReplacedBlocks() {
+        return false;
+    }
+
+    /**
+     * Runs once a free swap has succeeded, still holding the block entity that stood in the host cell
+     * beforehand. That is the only moment a subclass can tell what the machine used to be - the block
+     * standing there afterwards belongs to another tier and answers none of those questions.
+     */
+    protected void onSwapped(ServerLevel level, BlockPos pos, ServerPlayer player,
+                             @Nullable BlockEntity previous) {
     }
 
     /**
@@ -197,6 +219,13 @@ public class SimplifyStructureExpansionCardItem extends Item {
             return;
         }
         MultiBlockDefinition definition = host.getBuildDefinition();
+        // TEMP PROBE for the "未找到符合要求的已经成型的主机" report: the two refusal keys below now read
+        // differently, but only the log says which authority refused.
+        NeoECOPrototype.LOGGER.info("drive probe: be={} at {} definition={} hand={}",
+                host.getClass().getSimpleName(), pos, definition == null ? "null"
+                        : net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                                .getKey(definition.getOwner().value()),
+                player.getMainHandItem().getItem());
         if (definition == null) {
             say(player, "card.neoecoprototype.expansion.no_definition");
             return;
@@ -206,6 +235,8 @@ public class SimplifyStructureExpansionCardItem extends Item {
         // initialises it to the ceiling, so reading it made every machine that never had its slider
         // moved look already maxed out. The size has to come off the world.
         int current = largestSatisfiedLength(host, level, pos, definition, target);
+        NeoECOPrototype.LOGGER.info("drive probe: length from world={} expandMin={} target={} canGrow={}",
+                current, definition.getExpandMin(), target, canGrow());
         if (current < definition.getExpandMin()) {
             say(player, "card.neoecoprototype.expansion.not_formed");
             return;
@@ -334,25 +365,64 @@ public class SimplifyStructureExpansionCardItem extends Item {
      * simpler and the only option - eco's builder refuses to build for a survival player it cannot
      * charge, which is exactly the gate the expansion card needs and this one does not.
      *
-     * <p>What this does spend is the block that stood in each moved position, and whatever it held.
-     * Today that set is tier-bearing parts only - energy cells, the cores, the cooling controller and
-     * the host - and none of those carry items, so the loss is stored charge, not inventory. Cells and
-     * interfaces never appear in it, because neither changes with the tier.</p>
+     * <p>What this does spend is the block that stood in each moved position, and whatever it held -
+     * unless {@link #refundsReplacedBlocks()} says otherwise, in which case those blocks are handed back
+     * as items before the new ones go in. Today the rung cards let them go: that set is tier-bearing parts
+     * only - energy cells, the cores, the cooling controller and the host - and none of those carry items,
+     * so the loss is stored charge, not inventory. Cells and interfaces never appear in it, because
+     * neither changes with the tier.</p>
      */
     private void swapInPlace(ServerLevel level, BlockPos pos, BlockState anchor, Classified swap,
                              ServerPlayer player, net.minecraft.world.InteractionHand hand,
                              MultiBlockDefinition current, MultiBlockDefinition target) {
+        BlockEntity previous = level.getBlockEntity(pos);
+        // TEMP PROBE: which positions the swap actually moves, and in both directions. The rung price has to
+        // be set against this set, so the counts are measured, not assumed. Remove with the drive probe.
+        Map<String, Integer> replaced = new java.util.TreeMap<>();
+        Map<String, Integer> installed = new java.util.TreeMap<>();
+        for (WorldPlannedBlock moved : swap.moved()) {
+            replaced.merge(blockName(level.getBlockState(moved.worldPos()).getBlock()), 1, Integer::sum);
+            installed.merge(blockName(moved.targetState().getBlock()), 1, Integer::sum);
+        }
+        replaced.merge(blockName(level.getBlockState(pos).getBlock()), 1, Integer::sum);
+        installed.merge(blockName(anchor.getBlock()), 1, Integer::sum);
+        NeoECOPrototype.LOGGER.info("cost probe: drive={} at {} replaced={} installed={}",
+                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(this), pos, replaced, installed);
+        Map<BlockPos, List<ItemStack>> contents = new LinkedHashMap<>();
+        if (refundsReplacedBlocks()) {
+            // Whatever a position holds goes with it: the cell mounted in a drive, the patterns in a bus.
+            // Taken out before the block is destroyed, because giveBack's destroyBlock asks for no drops -
+            // so anything still inside a block when it goes is simply gone, and the mounted contents were
+            // the one thing an in-place swap exists to protect.
+            for (WorldPlannedBlock moved : swap.moved()) {
+                List<ItemStack> taken = carriedContent(level, moved.worldPos());
+                if (!taken.isEmpty()) {
+                    contents.put(moved.worldPos(), taken);
+                }
+                giveBack(level, moved.worldPos(), player);
+            }
+            List<ItemStack> atAnchor = carriedContent(level, pos);
+            if (!atAnchor.isEmpty()) {
+                contents.put(pos, atAnchor);
+            }
+            giveBack(level, pos, player);
+        }
         for (WorldPlannedBlock moved : swap.moved()) {
             level.setBlock(moved.worldPos(), moved.targetState(), Block.UPDATE_ALL);
         }
         level.setBlock(pos, anchor, Block.UPDATE_ALL);
         rebuildHost(level, pos);
+        // Back into the position it came from where the new block will take it, and into the player's
+        // inventory where it will not - never into the void.
+        contents.forEach((where, stacks) -> stacks.forEach(
+                stack -> returnContent(level, where, stack, player)));
         if (consumedOnSuccess() && !player.hasInfiniteMaterials()) {
             var held = player.getItemInHand(hand);
             if (held.is(this)) {
                 held.shrink(1);
             }
         }
+        onSwapped(level, pos, player, previous);
         say(player, Component.translatable(upgradedKey(),
                 tierLabel(target), swap.moved().size() + 1));
     }
@@ -363,6 +433,10 @@ public class SimplifyStructureExpansionCardItem extends Item {
      * two of the three cards stop short of L9, and a message that lies about what the player just got
      * is worse than no message.
      */
+    private static String blockName(Block block) {
+        return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString();
+    }
+
     private static String tierLabel(MultiBlockDefinition definition) {
         String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
                 .getKey(definition.getOwner().value()).getPath();
@@ -679,11 +753,92 @@ public class SimplifyStructureExpansionCardItem extends Item {
     }
 
     /** Into the inventory first, on the floor second - a reclaimed block must never just vanish. */
-    private static void handTo(Level level, BlockPos where, ItemStack stack, ServerPlayer player) {
+    protected static void handTo(Level level, BlockPos where, ItemStack stack, ServerPlayer player) {
         if (!player.getInventory().add(stack.copy())) {
             level.addFreshEntity(new ItemEntity(level, where.getX() + 0.5D, where.getY() + 0.5D,
                     where.getZ() + 0.5D, stack.copy()));
         }
+    }
+
+    /**
+     * The items that belong to a position rather than to its block: one cell mounted in a drive of either
+     * kind (our drives and eco's both implement the same host interface, so one check covers the pair), and
+     * every pattern in a bus - whose handler is public and is the same class on both sides of the ladder, so
+     * the patterns keep their pages instead of dying with the block.
+     *
+     * <p>The machine interface is deliberately not carried, and this is a decision rather than an oversight:
+     * eco opens its slots for reading only ({@code getPatternInterfaceStack(int)}; the setters are private and
+     * the writable one wants an RPC sender), so a swap resets one interface - its stored settings and
+     * anything held in its 63 planning filters and 54 pattern slots. That is the price accepted for keeping
+     * the other 88 cells' contents, and the disk's success line says so to the player in one clause
+     * ({@code card.neoecoprototype.migration.upgraded}). Do not "fix" this by quietly dropping the slots or
+     * by refusing every swap whose interface is loaded - a fixture cannot even test it, because there is no
+     * door to put something in.</p>
+     */
+    private static List<ItemStack> carriedContent(Level level, BlockPos where) {
+        List<ItemStack> taken = new ArrayList<>();
+        if (!(level.getBlockEntity(where) instanceof BlockEntity blockEntity)) {
+            return taken;
+        }
+        if (blockEntity instanceof ICellHost host) {
+            // An empty drive answers null rather than an empty stack, and that used to be enough to
+            // bring a whole tooltip down, so both shapes are treated as "nothing mounted".
+            ItemStack cell = host.getCellStack();
+            if (cell == null || cell.isEmpty()) {
+                return taken;
+            }
+            // Clearing is null-only here: our drive's own setCellStack javadoc says an empty stack is
+            // refused as "invalid input", so passing EMPTY leaves the cell mounted and turns a copy into
+            // a duplicate - which is exactly what this line used to do on a real machine.
+            host.setCellStack(null);
+            ItemStack stillThere = host.getCellStack();
+            if (stillThere == null || stillThere.isEmpty()) {
+                taken.add(cell.copy());
+            }
+            // If it is still mounted (eco gates extraction while a matrix is locked by infinite mode),
+            // leave it alone: the block's own removal path deals with a cell it can hold onto, and taking a
+            // copy anyway is how one matrix becomes two.
+            return taken;
+        }
+        if (blockEntity instanceof ECOCraftingPatternBusBlockEntity bus) {
+            // itemHandler is a paged view (its own class maps through toActualSlot), so reading it sees
+            // one screenful of a 22-bus machine and quietly leaves the other pages to die with the block.
+            var slots = bus.getPatternSlotInventory();
+            for (int slot = 0; slot < slots.size(); slot++) {
+                ItemStack stored = slots.getStackInSlot(slot);
+                if (stored.isEmpty()) {
+                    continue;
+                }
+                taken.add(stored.copy());
+                slots.setItemDirect(slot, ItemStack.EMPTY);
+            }
+            return taken;
+        }
+        return taken;
+    }
+
+    /** Puts one rescued stack back where it lived, or into the player's hands if that block will not take it. */
+    private static void returnContent(Level level, BlockPos where, ItemStack stack, ServerPlayer player) {
+        if (level.getBlockEntity(where) instanceof ICellHost host) {
+            var free = host.getCellStack();
+            if ((free == null || free.isEmpty()) && host.isItemValid(stack)) {
+                host.setCellStack(stack);
+                return;
+            }
+        }
+        if (level.getBlockEntity(where) instanceof ECOCraftingPatternBusBlockEntity bus) {
+            // The slot numbers here are the backing inventory's, because that is what was read out - and
+            // they are put back through the bus's own setter so it re-reads the pattern list instead of
+            // holding a stack the grid never heard of.
+            var slots = bus.getPatternSlotInventory();
+            for (int slot = 0; slot < slots.size(); slot++) {
+                if (slots.getStackInSlot(slot).isEmpty()) {
+                    bus.setPatternDirect(slot, stack);
+                    return;
+                }
+            }
+        }
+        handTo(level, where, stack, player);
     }
 
     private MultiBlockPlacementPlan preview(MultiBlockBuildController.Host host, Level level, BlockPos pos,

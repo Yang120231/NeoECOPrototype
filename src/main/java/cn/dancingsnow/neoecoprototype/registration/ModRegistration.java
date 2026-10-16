@@ -46,6 +46,7 @@ import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingNetworkInte
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingParallelCoreBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingPatternBusBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingSystemBlock;
+import cn.dancingsnow.neoecoprototype.block.energy.EnergizedEnergyCellBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingVentBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingWorkerBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyStonecuttingAssemblerBlock;
@@ -58,6 +59,7 @@ import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyPatternProviderBloc
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyPoweredMEInterfaceBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifySuperconductiveInterfaceBlock;
 import cn.dancingsnow.neoecoprototype.blockentity.crafting.SimplifyCraftingSystemBlockEntity;
+import cn.dancingsnow.neoecoprototype.blockentity.energy.EnergizedEnergyCellBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.crafting.SimplifyCraftingWorkerBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.crafting.SimplifyCraftingParallelCoreBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.crafting.SimplifyCraftingVentBlockEntity;
@@ -86,8 +88,8 @@ import cn.dancingsnow.neoecoprototype.items.PigmeeStorageMatrixHousingItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyComputationCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyConcreteStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem;
+import cn.dancingsnow.neoecoprototype.items.SimplifyMigrationDriveItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStructureExpansionCardItem;
-import cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkFluidStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem;
@@ -232,8 +234,20 @@ public class ModRegistration {
             DISSOCIATION_SERIALIZER = RECIPE_SERIALIZERS.register("dissociation",
             cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe.Serializer::new);
 
-    /** 闁绘せ鏅涢幖褔宕ュ鍕槣濡増顭囩挒銏ゆ晬濮樿翰鍋欓柛婊冭嫰鐎规娊宕ｉ弽顒€鍨遍柛銉ュ⒔閸嬶絿绱撻埀顒勬嚌鐠囇呯#80FFAE 闁稿绻楁竟瀣晬婢跺鐟㈢紒顔碱槸閸嶅灚鎯旈弴鈥愁棌闁?A8DCA8 闁稿绻戠拹浼存晬婢跺顓洪梻鍌涚暘閳?*/
+    /** The green used by the names of this pack's own cells and matrices; measured as the only name
+     *  colour in use before the migration ladder got its own four.
+     */
     private static final int NAME_THEME_GREEN = 0xFF94EDAB;
+
+    /** The migration ladder's colours, sampled off the artist's own bands: each drive wears its start tier. */
+    private static final int NAME_THEME_TIER_L1 = 0xFF61D389;
+    private static final int NAME_THEME_TIER_L4 = 0xFF80AEFF;
+    private static final int NAME_THEME_TIER_L6 = 0xFFE57E39;
+    private static final int NAME_THEME_TIER_L9 = 0xFFB379E0;
+
+    /** AE, not FE. eco's own top cell is 1e9, so these are 16x and 512x above it. */
+    private static final double ENERGIZED_CELL_CAPACITY_16G = 16_000_000_000.0;
+    private static final double ENERGIZED_CELL_CAPACITY_512G = 512_000_000_000.0;
 
     private static final BlockBehaviour.Properties MACHINE_PROPS =
             BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0F);
@@ -263,6 +277,14 @@ public class ModRegistration {
     public static final Supplier<SimplifyEnergyCellBlock> SIMPLIFY_ENERGY_CELL_BLOCK =
             BLOCKS.register("simplify_energy_cell",
                     () -> new SimplifyEnergyCellBlock(MACHINE_PROPS));
+
+    /** Standalone batteries: each one adds its buffer to the grid's total, no multiblock involved. */
+    public static final Supplier<EnergizedEnergyCellBlock> ENERGIZED_ENERGY_CELL_16G_BLOCK =
+            BLOCKS.register("energized_energy_cell_16g",
+                    () -> new EnergizedEnergyCellBlock(ENERGIZED_CELL_CAPACITY_16G));
+    public static final Supplier<EnergizedEnergyCellBlock> ENERGIZED_ENERGY_CELL_512G_BLOCK =
+            BLOCKS.register("energized_energy_cell_512g",
+                    () -> new EnergizedEnergyCellBlock(ENERGIZED_CELL_CAPACITY_512G));
 
     public static final Supplier<SimplifyStorageCasingBlock> SIMPLIFY_STORAGE_CASING_BLOCK =
             BLOCKS.register("simplify_storage_casing",
@@ -401,6 +423,42 @@ public class ModRegistration {
             ITEMS.register("flawless_budding_frigit",
                     () -> new BlockItem(FLAWLESS_BUDDING_FRIGIT.get(), new Item.Properties()));
 
+    // ============================ 升格迁移驱动 ============================
+
+    /**
+     * The ladder, one disk per rung, plus the disk that comes back out and the one that skips to the top.
+     * The four paid disks differ only in which rung they cover - {@link SimplifyMigrationDriveItem.Rung} -
+     * and the creative one is not "creative mode only": it is the disk that jumps any rung straight to
+     * L9 and simply has no recipe yet, so nothing can reach it in survival.
+     *
+     * <p>None of the five is in the creative tab or in any recipe, so there is no survival route to them
+     * while their recipes are still unwritten. The empty disk is what a used one becomes, so it needs no
+     * route of its own. They stack because they are spent on use, unlike the expansion card.</p>
+     */
+    public static final Supplier<SimplifyMigrationDriveItem> MIGRATION_DRIVE_1_4 =
+            ITEMS.register("migration_drive_1_4",
+                    () -> new SimplifyMigrationDriveItem(
+                            coloredItemName("migration_drive_1_4", NAME_THEME_TIER_L1).stacksTo(16),
+                            SimplifyMigrationDriveItem.Rung.ONE_TO_FOUR));
+    public static final Supplier<SimplifyMigrationDriveItem> MIGRATION_DRIVE_4_6 =
+            ITEMS.register("migration_drive_4_6",
+                    () -> new SimplifyMigrationDriveItem(
+                            coloredItemName("migration_drive_4_6", NAME_THEME_TIER_L4).stacksTo(16),
+                            SimplifyMigrationDriveItem.Rung.FOUR_TO_SIX));
+    public static final Supplier<SimplifyMigrationDriveItem> MIGRATION_DRIVE_6_9 =
+            ITEMS.register("migration_drive_6_9",
+                    () -> new SimplifyMigrationDriveItem(
+                            coloredItemName("migration_drive_6_9", NAME_THEME_TIER_L6).stacksTo(16),
+                            SimplifyMigrationDriveItem.Rung.SIX_TO_NINE));
+    /** What the machine returns once it has taken the structure across: the drive with nothing written on it. */
+    public static final Supplier<Item> MIGRATION_DRIVE_EMPTY = ITEMS.register("migration_drive_empty",
+            () -> new Item(new Item.Properties().stacksTo(16)));
+    public static final Supplier<SimplifyMigrationDriveItem> MIGRATION_DRIVE_CREATIVE =
+            ITEMS.register("migration_drive_creative",
+                    () -> new SimplifyMigrationDriveItem(
+                            coloredItemName("migration_drive_creative", NAME_THEME_TIER_L9).stacksTo(16),
+                            SimplifyMigrationDriveItem.Rung.STRAIGHT_TO_NINE));
+
     // ============================ 解离器的材料（陨石系列） ============================
 
     public static final DeferredRegister<net.neoforged.neoforge.fluids.FluidType> FLUID_TYPES =
@@ -419,6 +477,13 @@ public class ModRegistration {
     public static final Supplier<Item> SKY_STONE_DUST = ITEMS.register("sky_stone_dust",
             () -> new Item(new Item.Properties()));
 
+    /** The machine that runs those tables. Standalone: it joins the ME grid, but no structure does. */
+    public static final Supplier<cn.dancingsnow.neoecoprototype.block.dissociation.MeteoriteDissociatorBlock>
+            METEORITE_DISSOCIATOR_BLOCK = BLOCKS.register("meteorite_dissociator",
+            () -> new cn.dancingsnow.neoecoprototype.block.dissociation.MeteoriteDissociatorBlock(AE2_MACHINE_PROPS));
+    public static final Supplier<BlockItem> METEORITE_DISSOCIATOR_ITEM = ITEMS.register("meteorite_dissociator",
+            () -> new BlockItem(METEORITE_DISSOCIATOR_BLOCK.get(), new Item.Properties()));
+
     public static final Supplier<net.neoforged.neoforge.fluids.FluidType> DISSOLUTION_SOLUTION_TYPE =
             FLUID_TYPES.register("dissolution_solution",
                     () -> new net.neoforged.neoforge.fluids.FluidType(
@@ -434,7 +499,11 @@ public class ModRegistration {
     public static final Supplier<net.minecraft.world.level.block.LiquidBlock> DISSOLUTION_SOLUTION_BLOCK =
             BLOCKS.register("dissolution_solution",
                     () -> new net.minecraft.world.level.block.LiquidBlock(DISSOLUTION_SOLUTION.get(),
-                            BlockBehaviour.Properties.of().noCollission().strength(100.0F).noLootTable()));
+                            // .replaceable() is what lets a held block swap the fluid out, the way water
+                            // does: vanilla's Blocks calls it 24 times, while Registrate never does - so
+                            // eco's own cryotheum bath is not placeable-through and ours deliberately is.
+                            BlockBehaviour.Properties.of().noCollission().replaceable()
+                                    .strength(100.0F).noLootTable()));
     public static final Supplier<net.minecraft.world.item.BucketItem> DISSOLUTION_BUCKET =
             ITEMS.register("dissolution_bucket",
                     () -> new net.minecraft.world.item.BucketItem(DISSOLUTION_SOLUTION.get(),
@@ -538,6 +607,15 @@ public class ModRegistration {
     public static final Supplier<BlockItem> SIMPLIFY_ENERGY_CELL_ITEM =
             ITEMS.register("simplify_energy_cell",
                     () -> new BlockItem(SIMPLIFY_ENERGY_CELL_BLOCK.get(), new Item.Properties()));
+
+    public static final Supplier<BlockItem> ENERGIZED_ENERGY_CELL_16G_ITEM =
+            ITEMS.register("energized_energy_cell_16g",
+                    () -> new cn.dancingsnow.neoecoprototype.items.EnergizedEnergyCellBlockItem(
+                            ENERGIZED_ENERGY_CELL_16G_BLOCK.get(), new Item.Properties()));
+    public static final Supplier<BlockItem> ENERGIZED_ENERGY_CELL_512G_ITEM =
+            ITEMS.register("energized_energy_cell_512g",
+                    () -> new cn.dancingsnow.neoecoprototype.items.EnergizedEnergyCellBlockItem(
+                            ENERGIZED_ENERGY_CELL_512G_BLOCK.get(), new Item.Properties()));
 
     public static final Supplier<BlockItem> SIMPLIFY_STORAGE_CASING_ITEM =
             ITEMS.register("simplify_storage_casing",
@@ -660,19 +738,6 @@ public class ModRegistration {
     public static final Supplier<SimplifyStructureExpansionCardItem> SIMPLIFY_STRUCTURE_EXPANSION_CARD =
             ITEMS.register("simplify_structure_expansion_card",
                     () -> new SimplifyStructureExpansionCardItem(new Item.Properties().stacksTo(1)));
-
-    /**
-     * The two rung cards, one rung each and family-agnostic: which machine they land on comes off the
-     * host block standing there. They stack because they are spent on use, unlike the expansion card.
-     */
-    public static final Supplier<SimplifyTierUpgradeCardItem> SIMPLIFY_TIER_UPGRADE_CARD_L4_L6 =
-            ITEMS.register("simplify_tier_upgrade_card_l4_l6",
-                    () -> new SimplifyTierUpgradeCardItem(new Item.Properties().stacksTo(16),
-                            SimplifyTierUpgradeCardItem.Rung.FOUR_TO_SIX));
-    public static final Supplier<SimplifyTierUpgradeCardItem> SIMPLIFY_TIER_UPGRADE_CARD_L6_L9 =
-            ITEMS.register("simplify_tier_upgrade_card_l6_l9",
-                    () -> new SimplifyTierUpgradeCardItem(new Item.Properties().stacksTo(16),
-                            SimplifyTierUpgradeCardItem.Rung.SIX_TO_NINE));
 
     /** The card hands this out instead of a note when an L1 storage room cannot be paid for. */
     public static final Supplier<Item> SIMPLIFY_WORK_ORDER_GROW_L1_STORAGE =
@@ -910,8 +975,10 @@ public class ModRegistration {
                             SimplifyStorageCellItem.BYTES_4M, 1 << 14));
 
     /**
-     * 闁绘せ鏅涢幖褔宕ュ鍛憻闁活偀鍋撻柤鐟扮湴閳ь兛鎷穉rity 闁搞儲绋掗妴鍌炴晬閸垺顏?濮?闁?缂侀硸鍋撶槐姘辨啺閸℃瑦纾板☉鎾崇Т閸╁矂鎯冮崟顖ｆ澒闁肩灏欓弫?ITEM_NAME 缂備礁瀚▎銏㈡暜?
-     * 闁哄秴鍢茬槐锛勨偓鍦仧楠炲洭鏁嶅杈╃煁濞寸姴鐖奸崳椋庘偓娑欘焽閻愭洜鎷犻幋锔芥殯闁挎稑鐗婂﹢浼村捶閺夊灝顕ч悗鐟邦槸閸欏繘鏁嶆径娑氱闂佸彞鑳堕悧鏇㈠绩閻熺増鍊抽柡鍐╂构缁稒瀵煎鎰佹蕉 CUSTOM_NAME 閻熸洖妫涘ú濠囧Υ?
+     * A coloured default name goes on ITEM_NAME, never on CUSTOM_NAME: the first is a display
+     * override every stack of the item carries, the second is an anvil rename, and only that one
+     * makes the tooltip italic and the stack count as renamed. ItemStack#getHoverName reads
+     * CUSTOM_NAME first, then ITEM_NAME, then the item's own description id.
      */
     private static Item.Properties coloredName(Supplier<? extends Block> block, int color) {
         return coloredName(block.get().getDescriptionId(), color);
@@ -923,7 +990,7 @@ public class ModRegistration {
                         Component.translatable(descriptionId).withStyle(Style.EMPTY.withColor(color)));
     }
 
-    /** 闁哄拋鍣ｉ埀顒佹皑婢у潡宕担椋庘敀闁瑰湱鍏橀崳鍛婃姜閺傘倗绐楁繛澶堝妼閸炰粙鎳涢鍥叐闁哄啳鍩栧Λ銈呪枖閺団寬鎺楀几閹邦垰娈伴棅?Supplier闁挎稑鏈€垫粌鈻旈妸銉ユ杸閻犱警鍨扮欢鐐哄几閸曨垪鍋撻悩鐢靛€抽悹鍥ㄥ灴閺侇參濡?*/
+    /** The same, given an item path in this mod's namespace, so callers do not spell out the key. */
     private static Item.Properties coloredItemName(String itemPath, int color) {
         return coloredName(
                 Util.makeDescriptionId("item", ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, itemPath)),
@@ -931,9 +998,12 @@ public class ModRegistration {
     }
 
     /**
-     * 闁绘凹浜滈幐顓熷緞閺嵮嶇处鐟滄壋鏅炲▔鏌ユ晬?.6 闁衡偓鐠囨彃姣婂ù绗哄€曢濠囧Υ娴ｇ鈪抽梺顐ゅ枂閳?2 閻庡湱鍋樼紞瀣閵堝嫮闉嶉悹鐑樼箘椤洭濡存笟鈧顔筋洨閺傚灝甯ㄦ繛澶婎潟閳?
-     * 濞寸鍊曢?闁衡偓婵犳埃鍋撻悢鐑樼暠 modifier ID 濞戞挸楠哥敮顐︽偋閸繂鈪冲☉鎾亾闁奸绻濇禍鎺撶瑹閹稿寒鍔€缁绢収鍠楃憰鍡涘蓟閹炬潙绲圭紒鈧悮瀵稿耿
-     * 闁衡偓鐠囨彃姣婂ù绗哄€曢濠冪┍椤旂瓔鍔€闂?5.6 + 闁绘壕鏅涢宥夊春閾忚鏀?1 = 闂傚牄鍨哄姗€寮伴崜褋浠?6.6闁?
+     * Held in the main hand, this housing reads as a weapon. Measured off the stack by
+     * NeoECOPrototypeGameTests#pigmeeHousingReportsItsModifiersInHand: attack_damage +5.6, attack_speed
+     * -2.4 and entity_interaction_range +2.0, all ADD_VALUE. The first two carry vanilla's own modifier
+     * ids (base_attack_damage / base_attack_speed) and the third is ours (pigmee_reach). What reusing
+     * those ids costs is not measured here - two modifiers with the same id on one holder is MC's own
+     * de-duplication rule, so treat the id choice as "vanilla's lines", not as a proven no-stack result.
      */
     private static Item.Properties pigmeeHousingProperties() {
         return new Item.Properties()
@@ -1030,6 +1100,9 @@ public class ModRegistration {
     public static final Supplier<BlockEntityType<SimplifyEnergyCellBlockEntity>> SIMPLIFY_ENERGY_CELL_BE =
             registerEnergyCellBe();
 
+    public static final Supplier<BlockEntityType<EnergizedEnergyCellBlockEntity>> ENERGIZED_ENERGY_CELL_BE =
+            registerEnergizedEnergyCellBe();
+
     public static final Supplier<BlockEntityType<SimplifyStorageCasingBlockEntity>> SIMPLIFY_STORAGE_CASING_BE =
             registerStorageCasingBe();
 
@@ -1061,6 +1134,16 @@ public class ModRegistration {
                         (pos, state) -> new SimplifyEnergyCellBlockEntity(
                                 SIMPLIFY_ENERGY_CELL_BE.get(), pos, state),
                         SIMPLIFY_ENERGY_CELL_BLOCK.get()).build(null));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Supplier<BlockEntityType<EnergizedEnergyCellBlockEntity>> registerEnergizedEnergyCellBe() {
+        return (Supplier) BLOCK_ENTITIES.register("energized_energy_cell",
+                () -> BlockEntityType.Builder.of(
+                        (pos, state) -> new EnergizedEnergyCellBlockEntity(
+                                ENERGIZED_ENERGY_CELL_BE.get(), pos, state),
+                        ENERGIZED_ENERGY_CELL_16G_BLOCK.get(),
+                        ENERGIZED_ENERGY_CELL_512G_BLOCK.get()).build(null));
     }
 
     private static Supplier<BlockEntityType<SimplifyStorageCasingBlockEntity>> registerStorageCasingBe() {
@@ -1125,6 +1208,8 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
      public static final Supplier<BlockEntityType<SimplifyPatternProviderBlockEntity>> SIMPLIFY_PATTERN_PROVIDER_BE = registerPatternProviderBe();
       public static final Supplier<BlockEntityType<SimplifyPoweredMEInterfaceBlockEntity>> SIMPLIFY_POWERED_ME_INTERFACE_BE = registerPoweredMEInterfaceBe();
        public static final Supplier<BlockEntityType<SimplifySuperconductiveInterfaceBlockEntity>> SUPERCONDUCTIVE_INTERFACE_BE = registerSuperconductiveInterfaceBe();
+    public static final Supplier<BlockEntityType<cn.dancingsnow.neoecoprototype.blockentity.dissociation.MeteoriteDissociatorBlockEntity>>
+            METEORITE_DISSOCIATOR_BE = registerMeteoriteDissociatorBe();
     public static final Supplier<BlockEntityType<ECOComputationParallelCoreBlockEntity>> ENERGIZED_COMPUTATION_CORE_BE =
             registerEnergizedComputationCoreBe();
      public static final Supplier<BlockEntityType<ECOCraftingSystemBlockEntity>> SIMPLIFY_CRAFTING_SYSTEM_BE =
@@ -1148,6 +1233,15 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
 
     private static Supplier<BlockEntityType<SimplifyStonecuttingAssemblerBlockEntity>> registerStonecuttingAssemblerBe() {
         return (Supplier) BLOCK_ENTITIES.register("simplify_stonecutting_assembler", () -> BlockEntityType.Builder.of((pos, state) -> new SimplifyStonecuttingAssemblerBlockEntity(SIMPLIFY_STONECUTTING_ASSEMBLER_BE.get(), pos, state), SIMPLIFY_STONECUTTING_ASSEMBLER_BLOCK.get()).build(null));
+    }
+
+    private static Supplier<BlockEntityType<cn.dancingsnow.neoecoprototype.blockentity.dissociation.MeteoriteDissociatorBlockEntity>>
+    registerMeteoriteDissociatorBe() {
+        return (Supplier) BLOCK_ENTITIES.register("meteorite_dissociator",
+                () -> BlockEntityType.Builder.of(
+                        (pos, state) -> new cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                                .MeteoriteDissociatorBlockEntity(METEORITE_DISSOCIATOR_BE.get(), pos, state),
+                        METEORITE_DISSOCIATOR_BLOCK.get()).build(null));
     }
      private static Supplier<BlockEntityType<SimplifyPoweredMEInterfaceBlockEntity>> registerPoweredMEInterfaceBe() {
          return (Supplier) BLOCK_ENTITIES.register("simplify_powered_me_interface", () -> BlockEntityType.Builder.of((pos, state) -> new SimplifyPoweredMEInterfaceBlockEntity(SIMPLIFY_POWERED_ME_INTERFACE_BE.get(), pos, state), SIMPLIFY_POWERED_ME_INTERFACE_BLOCK.get()).build(null));
@@ -1325,6 +1419,8 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                         output.accept(SIMPLIFY_STORAGE_CONTROLLER_ITEM.get());
                         output.accept(SIMPLIFY_DRIVE_ITEM.get());
                         output.accept(SIMPLIFY_ENERGY_CELL_ITEM.get());
+                        output.accept(ENERGIZED_ENERGY_CELL_16G_ITEM.get());
+                        output.accept(ENERGIZED_ENERGY_CELL_512G_ITEM.get());
                         output.accept(SIMPLIFY_STORAGE_CASING_ITEM.get());
                          output.accept(SIMPLIFY_GREEN_ALUMINUM_CASING_ITEM.get());
                         // The whole cryotheum family is out of the tab: it generates nowhere by default and
@@ -1393,8 +1489,6 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                           output.accept(SIMPLIFY_CONCRETE_STORAGE_CELL.get());
                           output.accept(SIMPLIFY_SINGULARITY_CELL.get());
                         output.accept(SIMPLIFY_STRUCTURE_EXPANSION_CARD.get());
-                        output.accept(SIMPLIFY_TIER_UPGRADE_CARD_L4_L6.get());
-                        output.accept(SIMPLIFY_TIER_UPGRADE_CARD_L6_L9.get());
                          output.accept(SIMPLIFY_GREEN_CRYSTAL_MATRIX.get());
                          output.accept(SIMPLIFY_ITEM_STORAGE_MATRIX_HOUSING.get());
                          output.accept(PIGMEE_STORAGE_MATRIX_HOUSING.get());
@@ -1414,6 +1508,11 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                         output.accept(ENERGIZED_COMPUTATION_CELL_4M.get());
                          output.accept(SIMPLIFY_CRAFTING_SYSTEM_ITEM.get());
                          output.accept(SIMPLIFY_STONECUTTING_ASSEMBLER_ITEM.get());
+                        // The dissociator family is registered but withheld: it has no survival recipe, its
+                        // input comes from the comet, and the comet generates nowhere by default. Keeping the
+                        // four items out of the tab is the whole hiding - registrations, models, the
+                        // dissociation table and the suite all stay, so a world that already has one still
+                        // loads and still runs.
                          output.accept(SIMPLIFY_PATTERN_PROVIDER_ITEM.get());
                           output.accept(SIMPLIFY_POWERED_ME_INTERFACE_ITEM.get());
                           output.accept(POWERED_INTERFACE_PART.get());
@@ -1441,91 +1540,117 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
     }
 
     /**
+     * The one cast in the file. A bare {@code (AEBaseEntityBlock) block} would surface as a
+     * ClassCastException deep inside common setup with no name attached; this names the block and says
+     * what it was expected to extend.
+     */
+    private static AEBaseEntityBlock asEntityBlock(Supplier<? extends Block> block) {
+        var value = block.get();
+        if (!(value instanceof AEBaseEntityBlock)) {
+            throw new IllegalStateException(value + " must extend AEBaseEntityBlock to carry a block entity");
+        }
+        return (AEBaseEntityBlock) value;
+    }
+
+    /**
      * Binds every block to its {@link BlockEntityType} via the AE2 block API.
      * Call once from common setup (all entries are resolvable by then).
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static void linkBlockEntityTypes() {
-        ((AEBaseEntityBlock) SIMPLIFY_TRINITY_CONTROLLER_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_TRINITY_CONTROLLER_BLOCK).setBlockEntity(
                 SimplifyTrinityControllerBlockEntity.class, SIMPLIFY_TRINITY_CONTROLLER_BE.get(), null,
                 (level, pos, state, blockEntity) -> SimplifyTrinityControllerBlockEntity.tick(
                         level, pos, state, (SimplifyTrinityControllerBlockEntity) blockEntity));
         AEBaseBlockEntity.registerBlockEntityItem(SIMPLIFY_TRINITY_CONTROLLER_BE.get(),
                 SIMPLIFY_TRINITY_CONTROLLER_ITEM.get().asItem());
-        ((AEBaseEntityBlock) SIMPLIFY_TRINITY_STORAGE_MODULE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_TRINITY_STORAGE_MODULE_BLOCK).setBlockEntity(
                 SimplifyTrinityStorageModuleBlockEntity.class, SIMPLIFY_TRINITY_STORAGE_MODULE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_TRINITY_COMPUTATION_MODULE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_TRINITY_COMPUTATION_MODULE_BLOCK).setBlockEntity(
                 SimplifyTrinityComputationModuleBlockEntity.class, SIMPLIFY_TRINITY_COMPUTATION_MODULE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_TRINITY_CRAFTING_MODULE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_TRINITY_CRAFTING_MODULE_BLOCK).setBlockEntity(
                 SimplifyTrinityCraftingModuleBlockEntity.class, SIMPLIFY_TRINITY_CRAFTING_MODULE_BE.get(), null, null);
 
-        ((AEBaseEntityBlock) SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_STORAGE_CONTROLLER_BLOCK).setBlockEntity(
                 SimplifyStorageHostBlockEntity.class, SIMPLIFY_STORAGE_CONTROLLER_BE.get(), null,
                 (level, pos, state, blockEntity) -> SimplifyStorageHostBlockEntity.tick(
                         level, pos, state, (SimplifyStorageHostBlockEntity) blockEntity));
-        ((AEBaseEntityBlock) SIMPLIFY_DRIVE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_DRIVE_BLOCK).setBlockEntity(
                 SimplifyDriveBlockEntity.class, SIMPLIFY_DRIVE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_ENERGY_CELL_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_ENERGY_CELL_BLOCK).setBlockEntity(
                 SimplifyEnergyCellBlockEntity.class, SIMPLIFY_ENERGY_CELL_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_STORAGE_CASING_BLOCK.get()).setBlockEntity(
+        asEntityBlock(ENERGIZED_ENERGY_CELL_16G_BLOCK).setBlockEntity(
+                EnergizedEnergyCellBlockEntity.class, ENERGIZED_ENERGY_CELL_BE.get(), null, null);
+        asEntityBlock(ENERGIZED_ENERGY_CELL_512G_BLOCK).setBlockEntity(
+                EnergizedEnergyCellBlockEntity.class, ENERGIZED_ENERGY_CELL_BE.get(), null, null);
+        AEBaseBlockEntity.registerBlockEntityItem(ENERGIZED_ENERGY_CELL_BE.get(),
+                ENERGIZED_ENERGY_CELL_16G_ITEM.get().asItem());
+        AEBaseBlockEntity.registerBlockEntityItem(ENERGIZED_ENERGY_CELL_BE.get(),
+                ENERGIZED_ENERGY_CELL_512G_ITEM.get().asItem());
+        asEntityBlock(SIMPLIFY_STORAGE_CASING_BLOCK).setBlockEntity(
                 SimplifyStorageCasingBlockEntity.class, SIMPLIFY_STORAGE_CASING_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_STORAGE_INTERFACE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_STORAGE_INTERFACE_BLOCK).setBlockEntity(
                 SimplifyStorageInterfaceBlockEntity.class, SIMPLIFY_STORAGE_INTERFACE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_STORAGE_NETWORK_INTERFACE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_STORAGE_NETWORK_INTERFACE_BLOCK).setBlockEntity(
                  SimplifyStorageInterfaceBlockEntity.class, SIMPLIFY_STORAGE_INTERFACE_BE.get(), null, null);
-         ((AEBaseEntityBlock) SIMPLIFY_STORAGE_VENT_BLOCK.get()).setBlockEntity(
+         asEntityBlock(SIMPLIFY_STORAGE_VENT_BLOCK).setBlockEntity(
                 SimplifyStorageVentBlockEntity.class, SIMPLIFY_STORAGE_VENT_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_SYSTEM_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_SYSTEM_BLOCK).setBlockEntity(
                 ECOComputationSystemBlockEntity.class, SIMPLIFY_COMPUTATION_SYSTEM_BE.get(), null,
                 (level, pos, state, blockEntity) -> ((ECOComputationSystemBlockEntity) blockEntity).tick(level, pos, state));
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_DRIVE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_DRIVE_BLOCK).setBlockEntity(
                 SimplifyComputationDriveBlockEntity.class, SIMPLIFY_COMPUTATION_DRIVE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK).setBlockEntity(
                 ECOComputationThreadingCoreBlockEntity.class, SIMPLIFY_COMPUTATION_THREADING_CORE_BE.get(), null, null);
-        ((AEBaseEntityBlock) ENERGIZED_COMPUTATION_THREADING_CORE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(ENERGIZED_COMPUTATION_THREADING_CORE_BLOCK).setBlockEntity(
                 ECOComputationThreadingCoreBlockEntity.class, ENERGIZED_COMPUTATION_THREADING_CORE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_PARALLEL_CORE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_PARALLEL_CORE_BLOCK).setBlockEntity(
                 ECOComputationParallelCoreBlockEntity.class, SIMPLIFY_COMPUTATION_PARALLEL_CORE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_COOLING_CONTROLLER_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_COOLING_CONTROLLER_BLOCK).setBlockEntity(
                 ECOComputationCoolingControllerBlockEntity.class, SIMPLIFY_COMPUTATION_COOLING_CONTROLLER_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_TRANSMITTER_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_TRANSMITTER_BLOCK).setBlockEntity(
                 ECOComputationTransmitterBlockEntity.class, SIMPLIFY_COMPUTATION_TRANSMITTER_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_INTERFACE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_INTERFACE_BLOCK).setBlockEntity(
                 ECOMachineInterfaceBlockEntity.class, SIMPLIFY_COMPUTATION_INTERFACE_BE.get(), null, null);
-         ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_NETWORK_INTERFACE_BLOCK.get()).setBlockEntity(
+         asEntityBlock(SIMPLIFY_COMPUTATION_NETWORK_INTERFACE_BLOCK).setBlockEntity(
                  ECOMachineInterfaceBlockEntity.class, SIMPLIFY_COMPUTATION_INTERFACE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_COMPUTATION_CASING_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_COMPUTATION_CASING_BLOCK).setBlockEntity(
                 ECOMachineCasingBlockEntity.class, SIMPLIFY_COMPUTATION_CASING_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_STONECUTTING_ASSEMBLER_BLOCK.get()).setBlockEntity(SimplifyStonecuttingAssemblerBlockEntity.class, SIMPLIFY_STONECUTTING_ASSEMBLER_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_PATTERN_PROVIDER_BLOCK.get()).setBlockEntity(SimplifyPatternProviderBlockEntity.class, SIMPLIFY_PATTERN_PROVIDER_BE.get(), null, null);
-         ((AEBaseEntityBlock) SIMPLIFY_POWERED_ME_INTERFACE_BLOCK.get()).setBlockEntity(SimplifyPoweredMEInterfaceBlockEntity.class, SIMPLIFY_POWERED_ME_INTERFACE_BE.get(), null, null);
-         ((AEBaseEntityBlock) SUPERCONDUCTIVE_INTERFACE_BLOCK.get()).setBlockEntity(SimplifySuperconductiveInterfaceBlockEntity.class, SUPERCONDUCTIVE_INTERFACE_BE.get(), null, null);
-        ((AEBaseEntityBlock) ENERGIZED_COMPUTATION_CORE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_STONECUTTING_ASSEMBLER_BLOCK).setBlockEntity(SimplifyStonecuttingAssemblerBlockEntity.class, SIMPLIFY_STONECUTTING_ASSEMBLER_BE.get(), null, null);
+        ((AEBaseEntityBlock<cn.dancingsnow.neoecoprototype.blockentity.dissociation.MeteoriteDissociatorBlockEntity>)
+                METEORITE_DISSOCIATOR_BLOCK.get()).setBlockEntity(
+                cn.dancingsnow.neoecoprototype.blockentity.dissociation.MeteoriteDissociatorBlockEntity.class,
+                METEORITE_DISSOCIATOR_BE.get(), null,
+                cn.dancingsnow.neoecoprototype.blockentity.dissociation.MeteoriteDissociatorBlockEntity::serverTick);
+        asEntityBlock(SIMPLIFY_PATTERN_PROVIDER_BLOCK).setBlockEntity(SimplifyPatternProviderBlockEntity.class, SIMPLIFY_PATTERN_PROVIDER_BE.get(), null, null);
+         asEntityBlock(SIMPLIFY_POWERED_ME_INTERFACE_BLOCK).setBlockEntity(SimplifyPoweredMEInterfaceBlockEntity.class, SIMPLIFY_POWERED_ME_INTERFACE_BE.get(), null, null);
+         asEntityBlock(SUPERCONDUCTIVE_INTERFACE_BLOCK).setBlockEntity(SimplifySuperconductiveInterfaceBlockEntity.class, SUPERCONDUCTIVE_INTERFACE_BE.get(), null, null);
+        asEntityBlock(ENERGIZED_COMPUTATION_CORE_BLOCK).setBlockEntity(
                 ECOComputationParallelCoreBlockEntity.class, ENERGIZED_COMPUTATION_CORE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_SYSTEM_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_SYSTEM_BLOCK).setBlockEntity(
                 ECOCraftingSystemBlockEntity.class, SIMPLIFY_CRAFTING_SYSTEM_BE.get(), null,
                 (level, pos, state, blockEntity) -> ((ECOCraftingSystemBlockEntity) blockEntity).tick(level, pos, state));
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_PATTERN_BUS_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_PATTERN_BUS_BLOCK).setBlockEntity(
                 ECOCraftingPatternBusBlockEntity.class, SIMPLIFY_CRAFTING_PATTERN_BUS_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_WORKER_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_WORKER_BLOCK).setBlockEntity(
                 ECOCraftingWorkerBlockEntity.class, SIMPLIFY_CRAFTING_WORKER_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_PARALLEL_CORE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_PARALLEL_CORE_BLOCK).setBlockEntity(
                 ECOCraftingParallelCoreBlockEntity.class, SIMPLIFY_CRAFTING_PARALLEL_CORE_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_VENT_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_VENT_BLOCK).setBlockEntity(
                 ECOCraftingVentBlockEntity.class, SIMPLIFY_CRAFTING_VENT_BE.get(), null, null);
-        ((AEBaseEntityBlock) SIMPLIFY_FLUID_INPUT_HATCH_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_FLUID_INPUT_HATCH_BLOCK).setBlockEntity(
                 ECOFluidInputHatchBlockEntity.class, SIMPLIFY_FLUID_INPUT_HATCH_BE.get(), null,
                 (level, pos, state, blockEntity) -> ((ECOFluidInputHatchBlockEntity) blockEntity).tick(level, pos, state));
-        ((AEBaseEntityBlock) SIMPLIFY_FLUID_OUTPUT_HATCH_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_FLUID_OUTPUT_HATCH_BLOCK).setBlockEntity(
                 ECOFluidOutputHatchBlockEntity.class, SIMPLIFY_FLUID_OUTPUT_HATCH_BE.get(), null,
                 (level, pos, state, blockEntity) -> ((ECOFluidOutputHatchBlockEntity) blockEntity).tick(level, pos, state));
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_INTERFACE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_INTERFACE_BLOCK).setBlockEntity(
                 ECOMachineInterfaceBlockEntity.class, SIMPLIFY_CRAFTING_INTERFACE_BE.get(), null,
                 (level, pos, state, blockEntity) -> ((ECOMachineInterfaceBlockEntity<?>) blockEntity).tick());
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_NETWORK_INTERFACE_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_NETWORK_INTERFACE_BLOCK).setBlockEntity(
                 ECOMachineInterfaceBlockEntity.class, SIMPLIFY_CRAFTING_INTERFACE_BE.get(), null,
                  (level, pos, state, blockEntity) -> ((ECOMachineInterfaceBlockEntity<?>) blockEntity).tick());
-        ((AEBaseEntityBlock) SIMPLIFY_CRAFTING_CASING_BLOCK.get()).setBlockEntity(
+        asEntityBlock(SIMPLIFY_CRAFTING_CASING_BLOCK).setBlockEntity(
                 ECOMachineCasingBlockEntity.class, SIMPLIFY_CRAFTING_CASING_BE.get(), null, null);
 
         AEBaseBlockEntity.registerBlockEntityItem(SIMPLIFY_STORAGE_CONTROLLER_BE.get(),
@@ -1561,6 +1686,8 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
         AEBaseBlockEntity.registerBlockEntityItem(SIMPLIFY_COMPUTATION_CASING_BE.get(),
                 SIMPLIFY_COMPUTATION_CASING_ITEM.get().asItem());
         AEBaseBlockEntity.registerBlockEntityItem(SIMPLIFY_STONECUTTING_ASSEMBLER_BE.get(), SIMPLIFY_STONECUTTING_ASSEMBLER_ITEM.get().asItem());
+        AEBaseBlockEntity.registerBlockEntityItem(METEORITE_DISSOCIATOR_BE.get(),
+                METEORITE_DISSOCIATOR_ITEM.get().asItem());
         AEBaseBlockEntity.registerBlockEntityItem(SIMPLIFY_PATTERN_PROVIDER_BE.get(), SIMPLIFY_PATTERN_PROVIDER_ITEM.get().asItem());
          AEBaseBlockEntity.registerBlockEntityItem(SIMPLIFY_POWERED_ME_INTERFACE_BE.get(), SIMPLIFY_POWERED_ME_INTERFACE_ITEM.get().asItem());
          AEBaseBlockEntity.registerBlockEntityItem(SUPERCONDUCTIVE_INTERFACE_BE.get(), SUPERCONDUCTIVE_INTERFACE_ITEM.get().asItem());

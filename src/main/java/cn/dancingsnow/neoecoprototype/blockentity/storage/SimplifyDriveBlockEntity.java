@@ -2,6 +2,7 @@ package cn.dancingsnow.neoecoprototype.blockentity.storage;
 
 import cn.dancingsnow.neoecoae.api.storage.ECOStorageCells;
 import cn.dancingsnow.neoecoae.api.storage.IECOStorageCell;
+import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
 import cn.dancingsnow.neoecoprototype.api.SimplifyPowerProfile;
 import cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem;
@@ -392,6 +393,12 @@ public class SimplifyDriveBlockEntity extends NEBlockEntity<SimplifyStorageClust
             cellStack = cellTag.isEmpty()
                     ? ItemStack.EMPTY
                     : ItemStack.parseOptional(registries, cellTag);
+            // parseOptional answers EMPTY for a tag it cannot read, so a cell whose item or components
+            // come from a mod that is gone would otherwise vanish from the drive without a word.
+            if (!cellTag.isEmpty() && cellStack.isEmpty()) {
+                NeoECOPrototype.LOGGER.warn("drive at {} dropped its stored cell on load because the tag"
+                        + " no longer parses: {}", worldPosition, cellTag);
+            }
         }
         updateCellState();
     }
