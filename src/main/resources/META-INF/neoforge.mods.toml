@@ -45,20 +45,25 @@ versionRange = "[19.2.17,)"
 ordering = "AFTER"
 side = "BOTH"
 
-# Floor is 21.2.2, the release this addon compiles and tests against. Two of its classes are
-# load-bearing: gui.common.FluidHatchUI.createFluidHatchUI, which our two fluid hatch blocks call
+# Floor is 21.2.3; the addon compiles and tests against 21.2.5. Two of eco's classes are load-bearing
+# anyway: gui.common.FluidHatchUI.createFluidHatchUI, which our two fluid hatch blocks call
 # (21.2.1 keeps that factory on CraftingUIHelper and has no FluidHatchUI at all, so an older eco would
 # throw NoClassDefFoundError the moment a player opened one of those GUIs), and gui.GuiTitleProvider
 # (PR #110), implemented by our four communication-interface and pattern-bus blocks to own the GUI
-# header. grid.NEMachineLookup (PR #109) is still there, and eco's own 14-entry dependency table is
-# unchanged from 21.2.1, so no other floor here moves with it.
+# header. grid.NEMachineLookup (PR #109) is still there, and eco's own 14-entry dependency table parses
+# out identical from 21.2.1 through 21.2.5 (modId + mandatory + versionRange per row), so no other floor
+# here moves with it.
+# The floor itself is 21.2.3 because of two constructors that kept their class names and changed shape:
+# StorageHostUI$Config gained IntSupplier tier + BooleanSupplier formed (13 -> 15 args) and
+# StorageHostActionUI$Config lost the bulk-marking trio (16 -> 13). 21.2.2 still has the old pair, so a
+# 21.2.2 player would get NoSuchMethodError opening the L1 storage host - the same symptom 1.2.7 shipped.
 # Do not treat a range as a safety net: 1.2.7 shipped an upper bound that should have excluded
 # 21.2.0, a player still loaded it with that eco and got NoSuchMethodError when opening the L1
 # storage host GUI. ABI surprises are caught by compiling against the target, not by bounding it.
 [[dependencies.neoecoprototype]]
 modId = "neoecoae"
 mandatory = true
-versionRange = "[21.2.2,)"
+versionRange = "[21.2.3,)"
 # AFTER for the same reason as AE2 above: several of our items extend eco's cell items, so binding our
 # registry entry loads eco's class and runs its statics, which read eco's and AE2's registries.
 ordering = "AFTER"
