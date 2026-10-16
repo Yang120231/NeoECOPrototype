@@ -52,9 +52,13 @@ import cn.dancingsnow.neoecoprototype.blockentity.trinity.SimplifyTrinityStorage
 import cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig;
 import cn.dancingsnow.neoecoprototype.integration.ae2.OversizeInterfaceLogic;
 import cn.dancingsnow.neoecoprototype.integration.ae2.SimplifyGridFacade;
+import cn.dancingsnow.neoecoprototype.items.SimplifyMigrationDriveItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem;
 import cn.dancingsnow.neoecoprototype.multiblock.calculator.SimplifyComputationClusterCalculator;
 import cn.dancingsnow.neoecoprototype.multiblock.calculator.SimplifyTrinityClusterCalculator;
+import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyComputationDefinition;
+import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyCraftingDefinition;
+import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyStorageDefinition;
 import cn.dancingsnow.neoecoprototype.multiblock.trinity.TrinityCraftingExecutor;
 import cn.dancingsnow.neoecoprototype.registration.ModRegistration;
 import net.minecraft.core.BlockPos;
@@ -337,6 +341,56 @@ public final class NeoECOPrototypeGameTests {
                         player, absolute, blockState);
                 helper.assertTrue(controller.createUI(holder) != null,
                         "Trinity controller returned a null UI");
+            }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * The two fluid hatches are the only pair of blocks whose UI we build ourselves - we hand eco's
+     * {@code FluidHatchUI} the tank field instead of letting the block entity do it - and until now
+     * nothing in the suite ever made that call. A player right-clicks these, so a throw here is a
+     * crash report rather than a failed build.
+     */
+    @GameTest(template = "empty", batch = "fluid_hatch_ui", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void fluidHatchesBuildTheirUI(GameTestHelper helper) {
+        var blocks = List.of(ModRegistration.SIMPLIFY_FLUID_INPUT_HATCH_BLOCK.get(),
+                ModRegistration.SIMPLIFY_FLUID_OUTPUT_HATCH_BLOCK.get());
+        for (int i = 0; i < blocks.size(); i++) {
+            helper.setBlock(new BlockPos(i, 1, 0), blocks.get(i));
+        }
+        helper.runAfterDelay(5, () -> {
+            var player = helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+            for (int i = 0; i < blocks.size(); i++) {
+                var absolute = helper.absolutePos(new BlockPos(i, 1, 0));
+                var state = helper.getLevel().getBlockState(absolute);
+                if (!(state.getBlock()
+                        instanceof com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUI blockUI)) {
+                    helper.fail("the placed hatch is no longer a BlockUI, so right-click has nothing to open: "
+                            + state.getBlock());
+                    return;
+                }
+                var blockEntity = helper.getLevel().getBlockEntity(absolute);
+                if (blockEntity == null) {
+                    helper.fail(state.getBlock() + " was placed without a block entity, so createUI's "
+                            + "instanceof falls through to the null return");
+                    return;
+                }
+                var holder = new com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUIHolder(
+                        blockUI, player, absolute, state);
+                try {
+                    if (blockUI.createUI(holder) == null) {
+                        helper.fail("right-clicking " + state.getBlock() + " would hand LDLib a null UI; "
+                                + "the block entity there is " + blockEntity.getClass().getName());
+                        return;
+                    }
+                } catch (RuntimeException failure) {
+                    helper.fail("right-clicking " + state.getBlock() + " throws " + failure + ", first frames: "
+                            + java.util.Arrays.toString(java.util.Arrays.copyOf(
+                                    failure.getStackTrace(), Math.min(5, failure.getStackTrace().length))));
+                    return;
+                }
             }
             helper.succeed();
         });
@@ -2055,7 +2109,10 @@ public final class NeoECOPrototypeGameTests {
                         "screens/neoecoprototype/superconductive_interface.json"),
                 ResourceLocation.fromNamespaceAndPath("ae2",
                         "screens/neoecoprototype/l1_pattern_provider.json"),
-                // SimplifyTier / SimplifyCraftingTier badge, drawn on every drive panel row
+                // SimplifyTier / SimplifyCraftingTier badge. eco reads it in two places only
+                // (ComputationCpuEntry and its CraftingStatus menu mixin), both of them its CPU list -
+                // nothing in our own panel draws it, which is why a wrong-size file is invisible in-game
+                // until someone opens a CPU picker.
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
                         "textures/gui/tier/l1.png"),
                 // FumoRenderer.localSkin: the named dolls carry their owner's skin inside the jar. A
@@ -2083,7 +2140,13 @@ public final class NeoECOPrototypeGameTests {
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
                         "models/item/cable_superconductive_interface.json"),
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
-                        "models/item/cable_pattern_provider.json"))) {
+                        "models/item/cable_pattern_provider.json"),
+                // The two names NeoECOPrototypeClient hands to the fluid extension. The bucket model bakes
+                // one of them at load time, so a missing file is a pink square, not a startup error.
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/block/dissolution_solution_still.png"),
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/block/dissolution_solution_flow.png"))) {
             String archivePath = "/assets/" + location.getNamespace() + "/" + location.getPath();
             try (var resource = NeoECOPrototype.class.getResourceAsStream(archivePath)) {
                 if (resource == null) {
@@ -2096,6 +2159,29 @@ public final class NeoECOPrototypeGameTests {
                 }
             } catch (java.io.IOException failure) {
                 helper.fail("could not read " + location + ": " + failure);
+                return;
+            }
+        }
+        // Having the png is only half of it: the block atlas stitches what somebody lists, and the fluid
+        // renderer looks its sprites up by name in that atlas. A texture that exists but is never listed
+        // renders as the missing sprite while everything starts fine.
+        String stitched;
+        try {
+            stitched = blockAtlasMergeText();
+        } catch (java.io.IOException failure) {
+            helper.fail("could not enumerate the block atlas definitions: " + failure);
+            return;
+        }
+        if (stitched.isEmpty()) {
+            helper.fail("no assets/minecraft/atlases/blocks.json on the classpath, so the atlas guard"
+                    + " checked nothing");
+            return;
+        }
+        for (String sprite : List.of("dissolution_solution_still", "dissolution_solution_flow")) {
+            var texture = ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "block/" + sprite);
+            if (!stitched.contains(texture.toString())) {
+                helper.fail(texture + " is not listed by any blocks.json, so the fluid and its bucket get"
+                        + " no sprite from the block atlas");
                 return;
             }
         }
@@ -2217,6 +2303,572 @@ public final class NeoECOPrototypeGameTests {
             }
         }
         return new AnimationScan(missing, strips);
+    }
+
+    /**
+     * The two keys that decide whether a machine's lamps glow, read off NeoForge 21.1.251's constant pools:
+     * {@code BlockElement$Deserializer} takes {@code shade} <i>and</i> {@code neoforge_data}, while
+     * {@code BlockElementFace$Deserializer} takes {@code uv, texture, cullface, tintindex, neoforge_data}
+     * and never {@code shade}. A face-level {@code shade} is therefore decoration in the file only, and
+     * 1.3.5 shipped 279 of them where the per-face light data used to be, which is how every multiblock
+     * lamp in the pack went dark without one error line. Both halves of that mistake are the tripwire.
+     */
+    @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, batch = "emissive_face_keys")
+    public static void emissiveFacesKeepTheirLightKeys(GameTestHelper helper) {
+        java.util.Map<String, String> models;
+        try {
+            models = shippedModelJsons();
+        } catch (java.io.IOException failure) {
+            helper.fail("could not enumerate our model jsons: " + failure);
+            return;
+        }
+        // A scan that quietly sees nothing reads exactly like a clean pack, and that is the failure mode
+        // this guards, so the checker is pointed at planted copies first: one carrying the dead key, and
+        // one carrying a live light override in the shape that first fooled this scan -- a composite
+        // model whose "children" is a map of names rather than an array.
+        var plantedDead = countEmissiveKeys(java.util.Map.of("control.json",
+                "{\"elements\":[{\"name\":\"light\",\"faces\":{\"north\":"
+                        + "{\"texture\":\"#light\",\"shade\":false}}}]}"));
+        if (plantedDead.faceShade() != 1 || plantedDead.faceLightData() != 0) {
+            helper.fail("the planted dead-key model read back as faceShade=" + plantedDead.faceShade()
+                    + " and faceLightData=" + plantedDead.faceLightData() + ", expected 1 and 0, so this"
+                    + " scan cannot see the thing it is supposed to catch");
+            return;
+        }
+        var plantedLit = countEmissiveKeys(java.util.Map.of("composite.json",
+                "{\"children\":{\"coolant\":{\"elements\":[{\"name\":\"light\",\"faces\":{\"north\":"
+                        + "{\"texture\":\"#light\",\"neoforge_data\":{\"block_light\":15,\"sky_light\":15}}}}]}}}"));
+        if (plantedLit.faceLightData() != 1 || plantedLit.faceShade() != 0) {
+            helper.fail("a lit face nested under a map-shaped children read as faceLightData="
+                    + plantedLit.faceLightData() + ", expected 1, so the floor below is measured blind");
+            return;
+        }
+        var scan = countEmissiveKeys(models);
+        if (scan.models() < 500) {
+            helper.fail("the scan found only " + scan.models() + " model jsons on the classpath, so it"
+                    + " checked nothing");
+            return;
+        }
+        if (!scan.deadShadeFiles().isEmpty()) {
+            helper.fail(scan.faceShade() + " face-level \"shade\" key(s) in " + scan.deadShadeFiles()
+                    + " -- NeoForge's face deserializer has no such key, so those quads carry no light at"
+                    + " all and the lamp is dark");
+            return;
+        }
+        if (scan.faceLightData() < FACE_LIGHT_DATA_FLOOR) {
+            helper.fail("only " + scan.faceLightData() + " face-level neoforge_data keys, floor is "
+                    + FACE_LIGHT_DATA_FLOOR + " -- an emissive face lost its light data again");
+            return;
+        }
+        // Not asserted: a light-named face with no override is a look decision, not a dead key. 1.3.5's
+        // own base and off models have ten of them, and the fallback pack has four.
+        NeoECOPrototype.LOGGER.info("emissive keys: {} models, {} face-level neoforge_data, no dead"
+                        + " face-level shade; {} light-named faces carry no override",
+                scan.models(), scan.faceLightData(), scan.lightFacesWithoutData());
+        helper.succeed();
+    }
+
+    /** What 1.3.5 dropped to, plus the one nested face the first swap missed; a floor only blocks a
+     *  decrease, so adding lit faces stays free. */
+    private static final int FACE_LIGHT_DATA_FLOOR = 488;
+
+    private record EmissiveScan(int models, int faceShade, int faceLightData, int lightFacesWithoutData,
+                                java.util.SortedSet<String> deadShadeFiles) { }
+
+    private static EmissiveScan countEmissiveKeys(java.util.Map<String, String> models) {
+        // [0] face-level shade, [1] face-level neoforge_data, [2] light-named faces with neither.
+        var counts = new int[3];
+        var dead = new java.util.TreeSet<String>();
+        for (var entry : models.entrySet()) {
+            com.google.gson.JsonElement root;
+            try {
+                root = com.google.gson.JsonParser.parseString(entry.getValue());
+            } catch (com.google.gson.JsonParseException failure) {
+                continue;   // an unparsable model is somebody else's guard's problem
+            }
+            // A composite model nests whole child models under "children", which NeoForge accepts as
+            // either an array or a map of names -- the fallback art pack uses the map form, and reading
+            // only the array form is how this scan first went red on a pack that was actually clean.
+            countEmissiveKeys(root, entry.getKey(), "", counts, dead);
+        }
+        return new EmissiveScan(models.size(), counts[0], counts[1], counts[2], dead);
+    }
+
+    private static void countEmissiveKeys(com.google.gson.JsonElement node, String file, String elementName,
+                                          int[] counts, java.util.SortedSet<String> dead) {
+        if (node == null || node.isJsonNull()) return;
+        if (node.isJsonArray()) {
+            node.getAsJsonArray().forEach(child -> countEmissiveKeys(child, file, elementName, counts, dead));
+            return;
+        }
+        if (!node.isJsonObject()) return;
+        var object = node.getAsJsonObject();
+        var name = object.has("name") && object.get("name").isJsonPrimitive()
+                ? object.get("name").getAsString() : elementName;
+        if (object.has("faces") && object.get("faces").isJsonObject()) {
+            for (var faceEntry : object.getAsJsonObject("faces").entrySet()) {
+                var value = faceEntry.getValue();
+                if (!value.isJsonObject()) continue;
+                var face = value.getAsJsonObject();
+                boolean lit = face.has("neoforge_data");
+                if (face.has("shade")) {
+                    counts[0]++;
+                    dead.add(file + " (" + name + "." + faceEntry.getKey() + ")");
+                }
+                if (lit) counts[1]++;
+                var texture = face.has("texture") ? face.get("texture").getAsString() : "";
+                if ((name + " " + texture).toLowerCase(java.util.Locale.ROOT).contains("light") && !lit) {
+                    counts[2]++;
+                }
+            }
+        }
+        for (var member : object.entrySet()) {
+            if (member.getKey().equals("faces")) continue;
+            if (member.getKey().equals("elements")) {
+                // An element's own "shade" is the one NeoForge reads, so it is not a violation and must
+                // not be counted; only its faces are.
+                if (member.getValue().isJsonArray()) {
+                    member.getValue().getAsJsonArray().forEach(
+                            element -> countEmissiveKeys(element, file, name, counts, dead));
+                }
+                continue;
+            }
+            countEmissiveKeys(member.getValue(), file, name, counts, dead);
+        }
+    }
+
+    /**
+     * The stripe each of our in-drive cell models is meant to read off its type texture, as the north face's
+     * uv. Two textures carry stripes: {@code drive/cell_type} is eight media colours two pixels wide
+     * (chemical 0, fluid 2, item 4, air 6, energy and fe sharing 8, lightning 10, bulk 12, omni 14) and
+     * {@code drive/cell_type_lower} is three media bands six pixels wide stacked by row (chemical 0,
+     * fluid 3, item 6). The one that was wrong: both FE matrices were registered on the item cells' models
+     * and so read the item colour, on the recorded belief that our copy of {@code cell_type} carried no
+     * energy stripe. It does -- the file is eco's byte for byte, and eco's own fe models differ from its
+     * item models by nothing but the four numbers in this stripe's offset.
+     *
+     * <p>This guards the model files. The {@code ECOCellModels.register} lines that point a cell item at a
+     * model are client setup, and a game test server is a dedicated server that never runs it, so a wrong
+     * registration stays an eye check.
+     */
+    private static final java.util.Map<String, String> CELL_TYPE_STRIPE = java.util.Map.ofEntries(
+            java.util.Map.entry("storage_cell_l1_chemical", "0,0,2,6"),
+            java.util.Map.entry("storage_cell_l1r_chemical", "0,0,2,6"),
+            java.util.Map.entry("storage_cell_l1_fluid", "2,0,4,6"),
+            java.util.Map.entry("storage_cell_l1r_fluid", "2,0,4,6"),
+            java.util.Map.entry("storage_cell_l1_item", "4,0,6,6"),
+            java.util.Map.entry("storage_cell_l1r_item", "4,0,6,6"),
+            java.util.Map.entry("storage_cell_l1_default", "4,0,6,6"),
+            java.util.Map.entry("storage_cell_l1_custom", "4,0,6,6"),
+            java.util.Map.entry("storage_cell_l1_small_bulk", "4,0,6,6"),
+            java.util.Map.entry("storage_cell_l1_fe", "8,0,10,6"),
+            java.util.Map.entry("storage_cell_l1r_fe", "8,0,10,6"),
+            java.util.Map.entry("storage_cell_l1_universal", "14,0,16,6"),
+            java.util.Map.entry("storage_cell_l1r_universal", "14,0,16,6"),
+            java.util.Map.entry("storage_cell_l1_quantum", "14,0,16,6"),
+            java.util.Map.entry("storage_cell_l1r_quantum", "14,0,16,6"),
+            java.util.Map.entry("storage_cell_l0_chemical_1k", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l0_chemical_4k", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l0_chemical_16k", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l0_chemical_64k", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l0_fluid_1k", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l0_fluid_4k", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l0_fluid_16k", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l0_fluid_64k", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l0_item_1k", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l0_item_4k", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l0_item_16k", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l0_item_64k", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l1_small_bulk_chemical", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l1r_small_bulk_chemical", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l1_small_bulk_fluid", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l1r_small_bulk_fluid", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l1_small_bulk_item", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l1r_small_bulk_item", "0,6,6,9"));
+
+    /** The three cell models that deliberately draw no type lamp at all, only the level band. */
+    private static final List<String> CELL_MODELS_WITHOUT_TYPE =
+            List.of("storage_cell_l1_concrete", "storage_cell_l1_pigmee", "storage_cell_l1_singularity");
+
+    /**
+     * What one cell model's type band actually says: its north uv, the texture it binds, how many faces the
+     * band has and how many of those carry per-face light.
+     */
+    private record CellTypeBand(String northUv, String texture, int faces, int litFaces) { }
+
+    @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, batch = "cell_type_stripe")
+    public static void driveCellModelsReadTheirOwnTypeStripe(GameTestHelper helper) {
+        // The reader is pointed at planted models first, both ways round, because a scan that finds no type
+        // band reads exactly like a model that was built without one -- and three of ours really were. The
+        // planted copy also carries the textures map, because a face binds a key ("#type") and the sheet
+        // lives in that map: reading the key instead of the resolved path is how the light check below
+        // matched no model at all and still reported green.
+        var planted = readCellTypeBand("{\"textures\":{\"type\":\"neoecoprototype:block/x/drive/cell_type\"},"
+                + "\"elements\":[{\"name\":\"type\",\"faces\":{\"north\":{\"uv\":[8,0,10,6],"
+                + "\"texture\":\"#type\",\"neoforge_data\":{\"block_light\":15}}}}]}");
+        if (planted == null || !planted.northUv().equals("8,0,10,6")
+                || !planted.texture().equals("neoecoprototype:block/x/drive/cell_type")
+                || planted.faces() != 1 || planted.litFaces() != 1) {
+            helper.fail("the planted type band read back as " + planted + ", expected northUv=8,0,10,6 on"
+                    + " the resolved cell_type path with one lit face, so the census below is measured blind");
+            return;
+        }
+        if (readCellTypeBand("{\"elements\":[{\"name\":\"level\",\"faces\":{\"north\":{\"uv\":[0,0,6,2],"
+                + "\"texture\":\"#level\"}}}]}") != null) {
+            helper.fail("a model with no type band read as if it had one, so \"no lamp\" and \"scan went"
+                    + " blind\" cannot be told apart");
+            return;
+        }
+        java.util.Map<String, String> models;
+        try {
+            models = shippedModelJsons();
+        } catch (java.io.IOException failure) {
+            helper.fail("could not enumerate our model jsons: " + failure);
+            return;
+        }
+        var cellModels = new java.util.TreeMap<String, String>();
+        for (var entry : models.entrySet()) {
+            var path = entry.getKey();
+            if (path.startsWith("assets/" + NeoECOPrototype.MOD_ID + "/models/block/cell/")) {
+                cellModels.put(path.substring(path.lastIndexOf('/') + 1, path.length() - ".json".length()),
+                        entry.getValue());
+            }
+        }
+        if (cellModels.size() < CELL_TYPE_STRIPE.size()) {
+            helper.fail("the scan found only " + cellModels.size() + " cell models, the census expects at"
+                    + " least " + CELL_TYPE_STRIPE.size() + ", so it checked nothing");
+            return;
+        }
+        var strays = new java.util.ArrayList<String>();
+        var unlit = new java.util.ArrayList<String>();
+        int lowerUnlitFaces = 0;
+        int sharedSheetFaces = 0;
+        for (var entry : cellModels.entrySet()) {
+            var name = entry.getKey();
+            var band = readCellTypeBand(entry.getValue());
+            var expected = CELL_TYPE_STRIPE.get(name);
+            if (expected == null) {
+                if (!CELL_MODELS_WITHOUT_TYPE.contains(name)) {
+                    strays.add(name + " -> " + (band == null ? "no type band" : band.northUv()));
+                } else if (band != null) {
+                    helper.fail(name + " is one of the three models that should carry no type lamp, but it"
+                            + " draws a band at uv " + band.northUv());
+                    return;
+                }
+                continue;
+            }
+            if (band == null) {
+                helper.fail(name + " lost its type band entirely");
+                return;
+            }
+            if (!band.northUv().equals(expected)) {
+                helper.fail(name + " reads type uv " + band.northUv() + ", expected " + expected
+                        + " -- one media's colour is standing in another family's lamp");
+                return;
+            }
+            // Every model that reads a stripe of the shared cell_type sheet has to light its own lamp: our
+            // own non-lower group does, and eco's cell models leave just two of their type faces dark, so a
+            // dark one here reads as a lost key rather than a look. The lower group is left out -- none of
+            // its type faces carry light at all, which is still open and is not this guard's to decide.
+            if (band.texture().endsWith("cell_type")) {
+                sharedSheetFaces += band.faces();
+                if (band.litFaces() != band.faces()) {
+                    unlit.add(name + " (" + band.litFaces() + "/" + band.faces() + ")");
+                }
+            } else if (band.texture().endsWith("cell_type_lower")) {
+                lowerUnlitFaces += band.faces() - band.litFaces();
+            }
+        }
+        if (!strays.isEmpty()) {
+            helper.fail("cell models outside the census, add each one's stripe or say it draws no lamp: "
+                    + strays);
+            return;
+        }
+        if (sharedSheetFaces == 0) {
+            helper.fail("no cell model resolved onto the shared cell_type sheet, so the lit-face check"
+                    + " below it had nothing to look at");
+            return;
+        }
+        if (!unlit.isEmpty()) {
+            helper.fail("type faces on cell_type without per-face light: " + unlit);
+            return;
+        }
+        NeoECOPrototype.LOGGER.info("cell type stripes: {} models censused, {} of them draw no type lamp,"
+                        + " {} type faces on cell_type all carry light, {} unlit type faces on"
+                        + " cell_type_lower are logged but not asserted",
+                cellModels.size(), CELL_MODELS_WITHOUT_TYPE.size(), sharedSheetFaces, lowerUnlitFaces);
+        helper.succeed();
+    }
+
+    /** The first type-named element's faces, or null when the model draws no type band. */
+    private static CellTypeBand readCellTypeBand(String modelJson) {
+        com.google.gson.JsonElement root;
+        try {
+            root = com.google.gson.JsonParser.parseString(modelJson);
+        } catch (com.google.gson.JsonParseException failure) {
+            return null;
+        }
+        var found = new java.util.ArrayList<com.google.gson.JsonObject>();
+        collectTypeFaces(root, found);
+        if (found.isEmpty()) {
+            return null;
+        }
+        var faces = found.get(0).getAsJsonObject("faces");
+        var sheets = new java.util.HashMap<String, String>();
+        if (root.isJsonObject() && root.getAsJsonObject().has("textures")
+                && root.getAsJsonObject().get("textures").isJsonObject()) {
+            root.getAsJsonObject().getAsJsonObject("textures").entrySet().forEach(binding -> {
+                if (binding.getValue().isJsonPrimitive()) {
+                    sheets.put(binding.getKey(), binding.getValue().getAsString());
+                }
+            });
+        }
+        String northUv = null;
+        String texture = "";
+        int count = 0;
+        int lit = 0;
+        for (var entry : faces.entrySet()) {
+            if (!entry.getValue().isJsonObject()) {
+                continue;
+            }
+            var face = entry.getValue().getAsJsonObject();
+            count++;
+            if (face.has("neoforge_data")) {
+                lit++;
+            }
+            if (entry.getKey().equals("north")) {
+                var uv = face.has("uv") ? face.getAsJsonArray("uv") : new com.google.gson.JsonArray();
+                var parts = new java.util.ArrayList<String>();
+                uv.forEach(value -> parts.add(String.valueOf(value.getAsInt())));
+                northUv = String.join(",", parts);
+                var binding = face.has("texture")
+                        ? face.get("texture").getAsString().replaceFirst("^#", "") : "";
+                texture = sheets.getOrDefault(binding, binding);
+            }
+        }
+        return new CellTypeBand(northUv == null ? "" : northUv, texture, count, lit);
+    }
+
+    private static void collectTypeFaces(com.google.gson.JsonElement node,
+                                         java.util.List<com.google.gson.JsonObject> found) {
+        if (node == null || node.isJsonNull()) {
+            return;
+        }
+        if (node.isJsonArray()) {
+            node.getAsJsonArray().forEach(child -> collectTypeFaces(child, found));
+            return;
+        }
+        if (!node.isJsonObject()) {
+            return;
+        }
+        var object = node.getAsJsonObject();
+        if (object.has("name") && object.get("name").isJsonPrimitive()
+                && object.get("name").getAsString().equals("type")
+                && object.has("faces") && object.get("faces").isJsonObject()
+                && !object.getAsJsonObject("faces").isEmpty()) {
+            found.add(object);
+            return;
+        }
+        object.entrySet().forEach(member -> collectTypeFaces(member.getValue(), found));
+    }
+
+    /** The five migration drives: the three paid rungs, the drive that comes back, and the creative one. */
+    private static final List<String> MIGRATION_DRIVES = List.of(
+            "migration_drive_1_4", "migration_drive_4_6", "migration_drive_6_9",
+            "migration_drive_empty", "migration_drive_creative");
+
+    /**
+     * Every drive that is registered has to have its own model, its own texture behind that model's layer0,
+     * and a name in both lang files. The five sit outside the creative tab and have no recipe yet, which is
+     * the point of parking them - but a parked item with no artwork is worse than an absent one, because the
+     * player who gets one by command holds a purple-black cube with the raw key over it.
+     */
+    @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, batch = "migration_drive")
+    public static void migrationDrivesShipArtAndNames(GameTestHelper helper) {
+        // The reader is planted first: a model naming a texture we do not ship must come back as that
+        // texture and then as missing, or the loop below is green only because it cannot see anything.
+        var planted = firstLayerTexture("{\"textures\":{\"layer0\":\"neoecoprototype:item/not_shipped\"}}");
+        if (!"neoecoprototype:item/not_shipped".equals(planted)) {
+            helper.fail("the planted model read its layer0 as " + planted
+                    + ", so this guard cannot see a texture at all");
+            return;
+        }
+        if (readShippedResource(ResourceLocation.fromNamespaceAndPath("neoecoprototype",
+                "textures/item/not_shipped.png")) != null) {
+            helper.fail("the planted texture path resolved to a shipped file, so the lookup is not the one"
+                    + " the loop uses");
+            return;
+        }
+        for (var path : MIGRATION_DRIVES) {
+            var id = ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, path);
+            if (!BuiltInRegistries.ITEM.containsKey(id)) {
+                helper.fail(id + " is listed in the guard but never registered");
+                return;
+            }
+            var model = ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                    "models/item/" + path + ".json");
+            String modelJson = readShippedResource(model);
+            if (modelJson == null) {
+                helper.fail(path + " has no item model at " + model
+                        + ", so it renders as a missing texture");
+                return;
+            }
+            var texture = firstLayerTexture(modelJson);
+            if (texture == null) {
+                helper.fail(model + " declares no layer0, so there is nothing for the model to draw");
+                return;
+            }
+            var parsed = ResourceLocation.tryParse(texture);
+            if (parsed == null || readShippedResource(ResourceLocation.fromNamespaceAndPath(
+                    parsed.getNamespace(), "textures/" + parsed.getPath() + ".png")) == null) {
+                helper.fail(path + " binds layer0 " + texture + ", which is not shipped");
+                return;
+            }
+            for (String lang : new String[]{"en_us", "zh_cn"}) {
+                String json = readResource("/assets/neoecoprototype/lang/" + lang + ".json", helper);
+                if (json == null) {
+                    return;
+                }
+                com.google.gson.JsonObject keys;
+                try {
+                    keys = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+                } catch (com.google.gson.JsonParseException | IllegalStateException failure) {
+                    helper.fail("lang/" + lang + ".json did not parse: " + failure);
+                    return;
+                }
+                var key = "item.neoecoprototype." + path;
+                if (!keys.has(key) || keys.get(key).getAsString().isBlank()) {
+                    helper.fail("lang/" + lang + ".json has no " + key
+                            + ", so the item shows the raw key in the hand");
+                    return;
+                }
+            }
+        }
+        // The name colours are a fact this guard can actually read: four rungs, four distinct colours, and
+        // the spent shell stays plain so it cannot be mistaken for a usable disk.
+        var rungPaths = List.of("migration_drive_1_4", "migration_drive_4_6", "migration_drive_6_9",
+                "migration_drive_creative");
+        var seenColors = new java.util.LinkedHashMap<String, Integer>();
+        for (var path : rungPaths) {
+            var stack = new ItemStack(BuiltInRegistries.ITEM.get(
+                    ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, path)));
+            if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME)) {
+                helper.fail(path + "'s colour sits on CUSTOM_NAME, so every stack reads as renamed and"
+                        + " renders italic");
+                return;
+            }
+            var color = stack.getHoverName().getStyle().getColor();
+            if (color == null) {
+                helper.fail(path + " has no name colour, so the ladder cannot be read in an inventory");
+                return;
+            }
+            int argb = color.getValue();
+            if (seenColors.containsValue(argb)) {
+                helper.fail(path + " shares name colour " + Integer.toHexString(argb)
+                        + " with another rung");
+                return;
+            }
+            seenColors.put(path, argb);
+        }
+        var spentShell = new ItemStack(ModRegistration.MIGRATION_DRIVE_EMPTY.get());
+        if (spentShell.has(net.minecraft.core.component.DataComponents.ITEM_NAME)) {
+            helper.fail("the spent shell carries a coloured name, so it reads as another usable disk");
+            return;
+        }
+        NeoECOPrototype.LOGGER.info("migration drives: {} registered, each with its own model, layer0"
+                + " texture and name in both languages; rung name colours {}", MIGRATION_DRIVES.size(),
+                seenColors.values().stream().map(c -> Integer.toHexString(c)).toList());
+        helper.succeed();
+    }
+
+    /** The layer0 binding of an item model, or null when it declares none. */
+    private static String firstLayerTexture(String modelJson) {
+        try {
+            var root = com.google.gson.JsonParser.parseString(modelJson);
+            if (!root.isJsonObject()) {
+                return null;
+            }
+            var textures = root.getAsJsonObject().get("textures");
+            if (textures == null || !textures.isJsonObject()) {
+                return null;
+            }
+            var layer0 = textures.getAsJsonObject().get("layer0");
+            return layer0 == null || !layer0.isJsonPrimitive() ? null : layer0.getAsString();
+        } catch (com.google.gson.JsonParseException | IllegalStateException failure) {
+            return null;
+        }
+    }
+
+    /**
+     * Every model json of both packs that ship inside our jar. Read off the classpath because a dedicated
+     * server does not have to index {@code assets/}, and the fallback art pack is not under the namespace
+     * the resource manager would look at anyway.
+     */
+    private static java.util.Map<String, String> shippedModelJsons() throws java.io.IOException {
+        var found = new java.util.LinkedHashMap<String, String>();
+        var prefixes = List.of("assets/" + NeoECOPrototype.MOD_ID + "/models/",
+                "legacy_art/assets/" + NeoECOPrototype.MOD_ID + "/models/");
+        for (var entry : System.getProperty("java.class.path")
+                .split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+            java.nio.file.Path root = java.nio.file.Path.of(entry).toAbsolutePath();
+            for (var prefix : prefixes) {
+                java.nio.file.Path dir = root.resolve(prefix);
+                if (java.nio.file.Files.isDirectory(dir)) {
+                    try (var walk = java.nio.file.Files.walk(dir)) {
+                        for (var path : (Iterable<java.nio.file.Path>) walk
+                                .filter(p -> p.toString().endsWith(".json"))::iterator) {
+                            found.put(prefix + dir.relativize(path).toString()
+                                    .replace(java.io.File.separator, "/"),
+                                    java.nio.file.Files.readString(path));
+                        }
+                    }
+                } else if (entry.toLowerCase(java.util.Locale.ROOT).endsWith(".jar")
+                        && java.nio.file.Files.isRegularFile(root)) {
+                    try (var zip = new java.util.zip.ZipFile(root.toFile())) {
+                        for (var file : java.util.Collections.list(zip.entries())) {
+                            if (!file.getName().startsWith(prefix) || file.isDirectory()
+                                    || !file.getName().endsWith(".json") || found.containsKey(file.getName())) {
+                                continue;
+                            }
+                            try (var in = zip.getInputStream(file)) {
+                                found.put(file.getName(), new String(in.readAllBytes(),
+                                        java.nio.charset.StandardCharsets.UTF_8));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return found;
+    }
+
+    /**
+     * Every {@code assets/minecraft/atlases/blocks.json} on the classpath, concatenated. The game reads all
+     * of them and merges their sources, and vanilla's own copy sits at that same path, so a single
+     * classloader stream would return whichever one it happened to see first.
+     */
+    private static String blockAtlasMergeText() throws java.io.IOException {
+        var text = new StringBuilder();
+        String archivePath = "assets/minecraft/atlases/blocks.json";
+        for (var entry : System.getProperty("java.class.path")
+                .split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+            java.nio.file.Path root = java.nio.file.Path.of(entry).toAbsolutePath();
+            java.nio.file.Path plain = root.resolve(archivePath);
+            if (java.nio.file.Files.isRegularFile(plain)) {
+                text.append(java.nio.file.Files.readString(plain));
+            } else if (entry.toLowerCase(java.util.Locale.ROOT).endsWith(".jar")
+                    && java.nio.file.Files.isRegularFile(root)) {
+                try (var zip = new java.util.zip.ZipFile(root.toFile())) {
+                    var found = zip.getEntry(archivePath);
+                    if (found != null) {
+                        try (var in = zip.getInputStream(found)) {
+                            text.append(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                        }
+                    }
+                }
+            }
+        }
+        return text.toString();
     }
 
     /** PNG width and height live in the IHDR chunk, at fixed offsets, in big-endian. */
@@ -3297,6 +3949,310 @@ public final class NeoECOPrototypeGameTests {
             }
         }
         return null;
+    }
+
+    /**
+     * The whole mood is a pure function of the machine's own present, so it can be pinned without a world:
+     * it may only ever save power, a host without a face gets exactly the baseline, and out-of-range inputs
+     * clamp instead of multiplying the reward.
+     */
+    @GameTest(template = "empty", batch = "machine_mood", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void machineMoodOnlyEverSavesPowerAndNeverCosts(GameTestHelper helper) {
+        // The gate: no face, no difference, however comfortable the machine is.
+        if (cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                false, 1.0D, true, true, 0.10D) != 1.0D) {
+            helper.fail("a host without a mind got an idle-power discount");
+            return;
+        }
+        if (cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                true, 1.0D, true, false, 0.10D) != 1.0D) {
+            helper.fail("an unformed structure got an idle-power discount, so the bonus is not tied"
+                    + " to a finished machine");
+            return;
+        }
+        // The ceiling: a perfect situation costs exactly (1 - saving), never less.
+        double best = cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                true, 1.0D, true, true, 0.10D);
+        if (Math.abs(best - 0.90D) > 1.0E-9D) {
+            helper.fail("a contented host scaled idle power to " + best + ", expected 0.90 for a 10% cap");
+            return;
+        }
+        // Garbage in must not become a bigger reward: coolant above full is still full.
+        double overfull = cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                true, 9.0D, true, true, 0.10D);
+        if (Math.abs(overfull - best) > 1.0E-9D) {
+            helper.fail("coolant fraction 9.0 paid out " + overfull + " instead of clamping to " + best);
+            return;
+        }
+        // Direction: fuller coolant is never worse, and having work is never worse.
+        double dry = cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                true, 0.0D, false, true, 0.10D);
+        double halfIdle = cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                true, 0.5D, false, true, 0.10D);
+        double halfBusy = cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                true, 0.5D, true, true, 0.10D);
+        if (!(dry >= halfIdle && halfIdle >= halfBusy && halfBusy >= best)) {
+            helper.fail("mood is not monotonic: dry+idle " + dry + ", half+idle " + halfIdle
+                    + ", half+busy " + halfBusy + ", full+busy " + best);
+            return;
+        }
+        // A machine with nothing going on pays exactly what a mindless one pays.
+        if (Math.abs(dry - 1.0D) > 1.0E-9D) {
+            helper.fail("a minded host with no coolant and no work drew " + dry
+                    + "x idle power; it should cost exactly the same as a host without a mind");
+            return;
+        }
+        if (cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                true, 1.0D, true, true, 0.0D) != 1.0D) {
+            helper.fail("a saving of 0 still changed the draw, so the config cannot turn this off");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The three rungs, and the corner that used to be wrong. Work decides first: a dry machine with a job
+     * running is happy, and coolant only lifts a machine that has nothing to do. The weighted sum this
+     * replaced paid a dry-but-busy host four tenths of the saving and put a full bath with no work on the
+     * middle face, which is how one tooltip line came to carry a word and a figure telling different
+     * stories. This is also the first guard to read {@code mood()} at all - the ladder used to be pinned
+     * only at its two ends, the continuous factor here and the pure threshold below it.
+     *
+     * <p>The word is only ever a lang lookup, so its three keys are read out of both files here: a renamed
+     * key shows itself to the player as the raw key, and no other guard in the suite looks at lang.
+     */
+    @GameTest(template = "empty", batch = "machine_mood", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void machineMoodRungsFollowWorkThenCoolant(GameTestHelper helper) {
+        var ladder = java.util.List.of(
+                new Object[]{"dry and busy", false, true,
+                        cn.dancingsnow.neoecoprototype.api.MachineMood.HAPPY, 2, "happy"},
+                new Object[]{"coolant and busy", true, true,
+                        cn.dancingsnow.neoecoprototype.api.MachineMood.HAPPY, 2, "happy"},
+                new Object[]{"coolant and idle", true, false,
+                        cn.dancingsnow.neoecoprototype.api.MachineMood.SLACKING, 1, "slacking"},
+                new Object[]{"dry and idle", false, false,
+                        cn.dancingsnow.neoecoprototype.api.MachineMood.CALM, 0, "calm"});
+        for (var rung : ladder) {
+            double coolant = Boolean.TRUE.equals(rung[1]) ? 1.0D : 0.0D;
+            boolean busy = (Boolean) rung[2];
+            double mood = cn.dancingsnow.neoecoprototype.api.MachineMood.mood(coolant, busy);
+            if (mood != (Double) rung[3]) {
+                helper.fail(rung[0] + " scored mood " + mood + ", expected " + rung[3]);
+                return;
+            }
+            int tier = cn.dancingsnow.neoecoprototype.api.MachineMood.tierOf(mood, -1);
+            if (tier != (Integer) rung[4]) {
+                helper.fail(rung[0] + " wore face band " + tier + ", expected " + rung[4]);
+                return;
+            }
+            String key = cn.dancingsnow.neoecoprototype.api.MachineMood.wordKey(tier);
+            if (!key.endsWith((String) rung[5])) {
+                helper.fail(rung[0] + " reads its word from " + key + ", expected a " + rung[5] + " key");
+                return;
+            }
+            // The figure printed on the same line has to come off the same ladder, or the line lies.
+            double factor = cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                    true, coolant, busy, true, 0.10D);
+            if (Math.abs(factor - (1.0D - 0.10D * (Double) rung[3])) > 1.0E-9D) {
+                helper.fail(rung[0] + " scales idle power to " + factor + ", which is not mood "
+                        + rung[3] + " at a 10% cap");
+                return;
+            }
+        }
+        for (String lang : new String[]{"en_us", "zh_cn"}) {
+            String json = readResource("/assets/neoecoprototype/lang/" + lang + ".json", helper);
+            if (json == null) {
+                return;
+            }
+            com.google.gson.JsonObject keys;
+            try {
+                keys = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+            } catch (com.google.gson.JsonParseException | IllegalStateException failure) {
+                helper.fail("lang/" + lang + ".json did not parse: " + failure);
+                return;
+            }
+            for (var rung : ladder) {
+                String key = "machine_mood.neoecoprototype." + rung[5];
+                if (!keys.has(key) || keys.get(key).getAsString().isBlank()) {
+                    helper.fail("lang/" + lang + ".json has no " + key + ", so that rung shows the raw key"
+                            + " in the tooltip instead of a word");
+                    return;
+                }
+            }
+            if (!keys.has("jade.neoecoprototype.machine_mind")) {
+                helper.fail("lang/" + lang + ".json has no jade.neoecoprototype.machine_mind line");
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The face band is the one part of the mood that gets written into the block state, so it must not
+     * chatter: coolant drains steadily during a job and comes back when a pipe delivers, which walks the
+     * mood straight across whatever threshold is set. Rising and falling therefore use different numbers,
+     * and this pins the gap.
+     */
+    @GameTest(template = "empty", batch = "machine_mood", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void machineMoodBandsDoNotChatter(GameTestHelper helper) {
+        // Moods here are percent, divided by 100 at the call, so the numbers in this test read like the
+        // bands they are talking about.
+        java.util.function.IntBinaryOperator tier = (percent, previous) ->
+                cn.dancingsnow.neoecoprototype.api.MachineMood.tierOf(percent / 100.0D, previous);
+        // Crossing up needs 0.34; falling back below 0.30 is what gives the band up again.
+        if (tier.applyAsInt(50, 0) != 1) {
+            helper.fail("mood 0.50 from tier 0 gave " + tier.applyAsInt(50, 0) + ", expected 1");
+            return;
+        }
+        if (tier.applyAsInt(32, 1) != 1) {
+            helper.fail("mood 0.32 gave up tier 1, so there is no hysteresis band at all");
+            return;
+        }
+        if (tier.applyAsInt(29, 1) != 0) {
+            helper.fail("mood 0.29 kept tier 1, so the band never closes");
+            return;
+        }
+        if (tier.applyAsInt(60, 2) != 1 || tier.applyAsInt(65, 2) != 2) {
+            helper.fail("the top band is wrong: 0.60 -> " + tier.applyAsInt(60, 2)
+                    + ", 0.65 -> " + tier.applyAsInt(65, 2) + " (expected 1 and 2)");
+            return;
+        }
+        // The whole point: a mood that oscillates inside the gap rewrites nothing.
+        int current = 0;
+        int writes = 0;
+        for (int step = 0; step < 100; step++) {
+            int next = tier.applyAsInt(step % 2 == 0 ? 36 : 32, current);
+            if (next != current) {
+                writes++;
+                current = next;
+            }
+        }
+        if (writes > 1) {
+            helper.fail("a mood wobbling between 0.32 and 0.36 changed band " + writes
+                    + " times; it may settle once and then stay put");
+            return;
+        }
+        // A never-decreasing readout, and out-of-range history cannot escape 0..2.
+        int last = 0;
+        for (int m = 0; m <= 100; m++) {
+            last = tier.applyAsInt(m, last);
+        }
+        if (last != 2 || tier.applyAsInt(90, 7) != 2 || tier.applyAsInt(90, -3) != 2) {
+            helper.fail("bands do not clamp: rising all the way reached " + last + ", from 7 -> "
+                    + tier.applyAsInt(90, 7) + ", from -3 -> " + tier.applyAsInt(90, -3));
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The wiring: whatever the host's own situation turns out to be, the number that reaches the grid node
+     * must be the baseline times what {@code MachineMood} says for those same inputs. This passes for a
+     * host with a face and for one without, and fails if the two ever disagree.
+     */
+    @GameTest(template = "l1_room", batch = "f1_mood_wiring", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void craftedHostIdlePowerMatchesItsOwnMood(GameTestHelper helper) {
+        var controllerPos = new BlockPos(6, 3, 6);
+        buildL1Room(helper, controllerPos, ModRegistration.SIMPLIFY_CRAFTING_SYSTEM_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_INTERFACE_BLOCK.get(), host -> {
+                    if (!(host instanceof cn.dancingsnow.neoecoprototype.blockentity.crafting
+                            .SimplifyCraftingSystemBlockEntity f1)) {
+                        helper.fail("the F1 host is not our block entity: " + host.getClass());
+                        return;
+                    }
+                    // One mood sample, then read what actually reached the node.
+                    helper.runAfterDelay(25, () -> {
+                        int capacity = f1.getDisplayedCoolantCapacity();
+                        double coolant = capacity > 0
+                                ? (double) f1.getDisplayedCoolantAmount() / capacity : 0.0D;
+                        double expected = cn.dancingsnow.neoecoprototype.api.SimplifyPowerProfile.L1
+                                .craftingControllerIdlePower()
+                                * cn.dancingsnow.neoecoprototype.api.MachineMood.idlePowerFactor(
+                                f1.hasMind(), coolant, f1.getRunningThreadCount() > 0, f1.isFormed(),
+                                cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
+                                        .MIND_IDLE_POWER_SAVING.get());
+                        double actual = f1.getMainNode().getNode().getIdlePowerUsage();
+                        if (Math.abs(actual - expected) > 1.0E-6D) {
+                            helper.fail("the grid node carries an idle draw of " + actual
+                                    + " AE but the host's own situation says " + expected + " (mind="
+                                    + f1.hasMind() + " coolant=" + coolant + " busy="
+                                    + (f1.getRunningThreadCount() > 0) + ")");
+                            return;
+                        }
+                        if (actual <= 0.0D) {
+                            helper.fail("the host published an idle draw of " + actual
+                                    + " AE, so it is free to run and the mood is not the interesting"
+                                    + " part here");
+                            return;
+                        }
+                        // The gate on the visible half: no face, no band, whatever the coolant says.
+                        int tier = helper.getLevel().getBlockState(f1.getBlockPos())
+                                .getValue(cn.dancingsnow.neoecoprototype.block.crafting
+                                        .SimplifyCraftingSystemBlock.MIND_TIER);
+                        if (!f1.hasMind() && tier != 0) {
+                            helper.fail("a host without a mind is showing face band " + tier
+                                    + ", so the discount and the face are not gated together");
+                            return;
+                        }
+                        helper.succeed();
+                    });
+                });
+    }
+
+    /**
+     * The dissociator's panel is an LDLib2 block UI, and LDLib2 builds that UI on the server too - so this
+     * runs the same construction a right-click does, in a JVM with no client at all. It is the only cover
+     * the panel has: a widget that touches client state while being built, or a slot whose inventory view
+     * is the wrong shape, fails here rather than only on somebody's desktop.
+     */
+    @GameTest(template = "empty", batch = "dissociator_ui", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void dissociatorPanelBuildsWithoutAClient(GameTestHelper helper) {
+        var plotPos = new BlockPos(0, 1, 0);
+        helper.setBlock(plotPos, ModRegistration.METEORITE_DISSOCIATOR_BLOCK.get());
+        helper.runAfterDelay(5, () -> {
+            var absolute = helper.absolutePos(plotPos);
+            var state = helper.getLevel().getBlockState(absolute);
+            if (!(state.getBlock()
+                    instanceof com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUI blockUI)) {
+                helper.fail("the dissociator block does not implement BlockUI, so right-click has"
+                        + " nothing to open: " + state.getBlock());
+                return;
+            }
+            if (!(helper.getLevel().getBlockEntity(absolute)
+                    instanceof cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                    .MeteoriteDissociatorBlockEntity host)) {
+                helper.fail("the dissociator was placed without its own block entity");
+                return;
+            }
+            var player = helper.makeMockPlayer(net.minecraft.world.level.GameType.SURVIVAL);
+            var holder = new com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType.BlockUIHolder(
+                    blockUI, player, absolute, state);
+            try {
+                if (blockUI.createUI(holder) == null) {
+                    helper.fail("right-clicking the dissociator would hand LDLib a null UI");
+                    return;
+                }
+                // The panel reads three numbers off the machine; if the run state stopped answering, the
+                // groove and the baths would freeze at zero with no error anywhere.
+                if (host.progressFraction() != 0.0F || host.getCoolantTank().getFluidAmount() != 0) {
+                    helper.fail("a freshly placed dissociator reports progress " + host.progressFraction()
+                            + " and " + host.getCoolantTank().getFluidAmount() + " mB of coolant");
+                    return;
+                }
+            } catch (RuntimeException failure) {
+                helper.fail("building the dissociator panel threw " + failure + ", first frames: "
+                        + java.util.Arrays.toString(java.util.Arrays.copyOf(
+                                failure.getStackTrace(), Math.min(6, failure.getStackTrace().length))));
+                return;
+            }
+            helper.succeed();
+        });
     }
 
     /** True when {@code pos} is inside the template and holds nothing. */
@@ -4815,6 +5771,109 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * What our three L1 machines cost at their ceiling, read off eco's own planner instead of off our
+     * definition source - the numbers then move with the definitions rather than with whoever last
+     * transcribed them, which is how a hand-written parts list rots.
+     *
+     * <p>No block is placed: the bill comes from the plan's position list, which is pure definition. And
+     * it is only the structure. Whatever goes in afterwards - storage cells, patterns, coolant, computation
+     * cells - never appears in a placement plan, so this is not "everything a working machine needs".
+     *
+     * <p>The bounding box rides along because the upgrade drives need to know how much clear air a swap
+     * consumes: the shape here is the shape a player has to keep free.
+     */
+    @GameTest(template = "empty", batch = "eco_definition_range", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void fullLengthL1MachinesBillWhatThePlannerSays(GameTestHelper helper) {
+        var report = new StringBuilder();
+        var empties = new java.util.ArrayList<String>();
+        report.append(billLine(helper, "ours storage L1", empties,
+                cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyStorageDefinition.L1, true));
+        report.append(billLine(helper, "ours computation L1", empties,
+                cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyComputationDefinition.L1, true));
+        report.append(billLine(helper, "ours crafting L1", empties,
+                cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyCraftingDefinition.L1, true));
+        for (var tier : List.of(cn.dancingsnow.neoecoae.api.ECOTier.L4,
+                cn.dancingsnow.neoecoae.api.ECOTier.L6,
+                cn.dancingsnow.neoecoae.api.ECOTier.L9)) {
+            report.append(billLine(helper, "eco storage " + tier, empties,
+                    cn.dancingsnow.neoecoae.all.NEMultiBlocks.getStorageSystemDefinition(tier), false));
+            report.append(billLine(helper, "eco storage " + tier, empties,
+                    cn.dancingsnow.neoecoae.all.NEMultiBlocks.getStorageSystemDefinition(tier), true));
+            report.append(billLine(helper, "eco computation " + tier, empties,
+                    cn.dancingsnow.neoecoae.all.NEMultiBlocks.getComputationSystemDefinition(tier), false));
+            report.append(billLine(helper, "eco computation " + tier, empties,
+                    cn.dancingsnow.neoecoae.all.NEMultiBlocks.getComputationSystemDefinition(tier), true));
+            report.append(billLine(helper, "eco crafting " + tier, empties,
+                    cn.dancingsnow.neoecoae.all.NEMultiBlocks.getCraftingSystemDefinition(tier), false));
+            report.append(billLine(helper, "eco crafting " + tier, empties,
+                    cn.dancingsnow.neoecoae.all.NEMultiBlocks.getCraftingSystemDefinition(tier), true));
+        }
+        if (!empties.isEmpty()) {
+            helper.fail("these planned no positions, so their bill is not a reading: " + empties);
+            return;
+        }
+        if (report.toString().lines().count() < 12) {
+            helper.fail("only " + report.toString().lines().count()
+                    + " bill lines, expected ours at the ceiling plus eco's L4/L6/L9 at both ends");
+            return;
+        }
+        NeoECOPrototype.LOGGER.info("placement bills{}", report);
+        helper.succeed();
+    }
+
+    /**
+     * One line of the bill table: what the planner asks for when the given definition is planned at its
+     * shortest or longest build. Positions and pieces are counted apart because a position can bill more
+     * than one item, and the bounding box is the air the player has to keep clear of it.
+     */
+    private static String billLine(GameTestHelper helper, String label, List<String> empties,
+                                   MultiBlockDefinition definition, boolean atMax) {
+        if (definition == null) {
+            empties.add(label + " (no definition)");
+            return "";
+        }
+        int length = atMax ? definition.getExpandMax() : definition.getExpandMin();
+        var plan = MultiBlockPlacementService.preview(helper.getLevel(),
+                helper.absolutePos(new BlockPos(0, 1, 0)),
+                definition.getOwner().value().defaultBlockState(), definition, length, false);
+        if (plan.getAllBlocks().isEmpty()) {
+            empties.add(label + " at expand " + length);
+            return "";
+        }
+        var totals = new java.util.TreeMap<String, Integer>();
+        int pieces = 0;
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (var planned : plan.getAllBlocks()) {
+            var stack = planned.requiredItem();
+            if (stack.isEmpty()) {
+                empties.add(label + " position " + planned.worldPos() + " ("
+                        + planned.targetState().getBlock() + ") has no item behind it");
+                continue;
+            }
+            pieces += stack.getCount();
+            totals.merge(BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath(),
+                    stack.getCount(), Integer::sum);
+            var pos = planned.worldPos();
+            minX = Math.min(minX, pos.getX());
+            maxX = Math.max(maxX, pos.getX());
+            minY = Math.min(minY, pos.getY());
+            maxY = Math.max(maxY, pos.getY());
+            minZ = Math.min(minZ, pos.getZ());
+            maxZ = Math.max(maxZ, pos.getZ());
+        }
+        return "\n  " + label + " expand " + length + " (range " + definition.getExpandMin() + ".."
+                + definition.getExpandMax() + "): " + plan.getAllBlocks().size() + " positions, "
+                + pieces + " pieces, box " + (maxX - minX + 1) + 'x' + (maxY - minY + 1) + 'x'
+                + (maxZ - minZ + 1) + " -> " + totals;
+    }
+
+    /**
      * The flux cell family is registered only when appflux is installed, so this skips without it - and
      * it reads the cell through eco's own interface rather than ours, because our compile-time-only
      * dependency is not on this classpath and loading our item class would resolve appflux's key type.
@@ -5352,6 +6411,15 @@ public final class NeoECOPrototypeGameTests {
         if (bucketItem.content != still) {
             helper.fail("the bucket carries " + bucketItem.content + " instead of the dissolution solution -"
                     + " crossed wiring shows up as an empty bucket in the hand, not as an error");
+            return;
+        }
+        // A player reported that no block could be placed into the spilled bath. Placement asks the
+        // state whether it is replaceable, and that flag is copied straight out of the block's Properties,
+        // so a fluid built without .replaceable() simply refuses every block - silently, with no error.
+        var placed = ModRegistration.DISSOLUTION_SOLUTION_BLOCK.get().defaultBlockState();
+        if (!placed.canBeReplaced()) {
+            helper.fail("the bath's block state is not replaceable, so holding a block against it does"
+                    + " nothing; vanilla water is replaceable");
             return;
         }
         helper.succeed();
@@ -6271,16 +7339,424 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
-     * The whole promise of a rung card, on the machine it exists for: an eco L4 storage room built out to
-     * its maximum length, in survival, with an <b>empty inventory</b>. The wrong-rung card has to refuse
-     * and stay in hand; the right one has to land on L6, be consumed, and leave the inventory exactly as
-     * empty as it found it - nothing billed and nothing handed back. That last half is the design: if the
-     * card ever goes back through eco's builder it cannot build for an unbilled survival player at all,
-     * so this goes red rather than quietly starting to demand parts.
+     * The same promise on the machine that carries work rather than storage: a maxed L1 crafting room with
+     * one encoded pattern sitting in a bus, then one click with the disk. The bus is eco's own class on both
+     * sides of the ladder and its handler is public, so the pattern has to be standing in the same cell
+     * afterwards - or in the player's hands, which is the fallback that costs a minute of reinserting rather
+     * than the whole plan the pattern encodes.
+     *
+     * <p>It is put in through {@code setStackInSlot} on purpose: the fixture must not depend on the same
+     * filtered insert the carry uses, or a rejection would look like a survival.</p>
      */
-    @GameTest(template = "l1_room", batch = "structure_card_rung", timeoutTicks = 600,
+    @GameTest(template = "l1_room", batch = "migration_drive_bus", timeoutTicks = 600,
             templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void rungCardSwapsTierWithAnEmptyHand(GameTestHelper helper) {
+    public static void migrationDriveCarriesThePatternsInABus(GameTestHelper helper) {
+        buildRoomToMaxLength(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_CRAFTING_SYSTEM_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_INTERFACE_BLOCK.get(),
+                host -> {
+                    var level = helper.getLevel();
+                    var anchor = helper.absolutePos(CARD_HOST);
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    player.getInventory().clearContent();
+
+                    var busPositions = new java.util.ArrayList<BlockPos>();
+                    for (var entry : machineSnapshot(helper).entrySet()) {
+                        if (entry.getKey().compareTo(anchor) != 0
+                                && level.getBlockEntity(entry.getKey())
+                                instanceof cn.dancingsnow.neoecoae.blocks.entity.crafting
+                                        .ECOCraftingPatternBusBlockEntity) {
+                            busPositions.add(entry.getKey());
+                        }
+                    }
+                    if (busPositions.size() < 2) {
+                        helper.fail("this crafting room has " + busPositions.size() + " pattern buses; the"
+                                + " carry needs at least two so a bus that is not the first one is covered");
+                        return;
+                    }
+                    var pattern = PatternDetailsHelper.encodeProcessingPattern(
+                            List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1)),
+                            List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1)));
+                    if (pattern.isEmpty()) {
+                        helper.fail("the fixture could not encode a pattern, so there is nothing to carry");
+                        return;
+                    }
+                    // Through the backing inventory, and deliberately not slot 0 of the first bus: the bus
+                    // opens a paged view on its slots, and reading that view is exactly what let a real
+                    // machine lose the patterns that were not on the page the carry was looking at.
+                    var firstBus = (cn.dancingsnow.neoecoae.blocks.entity.crafting
+                            .ECOCraftingPatternBusBlockEntity) level.getBlockEntity(busPositions.get(0));
+                    var lastBus = (cn.dancingsnow.neoecoae.blocks.entity.crafting
+                            .ECOCraftingPatternBusBlockEntity) level.getBlockEntity(
+                            busPositions.get(busPositions.size() - 1));
+                    firstBus.getPatternSlotInventory().setItemDirect(5, pattern.copy());
+                    var lastSlots = lastBus.getPatternSlotInventory();
+                    lastSlots.setItemDirect(lastSlots.size() - 1, pattern.copy());
+                    int patternsBefore = everywhere(helper, player, pattern.getItem());
+                    if (patternsBefore != 2) {
+                        helper.fail("the fixture put in " + patternsBefore + " patterns, expected 2, so the"
+                                + " counting place is not the place the swap looks at");
+                        return;
+                    }
+
+                    var disk = ModRegistration.MIGRATION_DRIVE_1_4.get();
+                    player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(disk, 1));
+                    useCard(helper, player, disk);
+
+                    var afterHost = level.getBlockState(anchor).getBlock();
+                    if (!name(afterHost).equals("crafting_system_l4")) {
+                        helper.fail("the disk left the crafting host on " + name(afterHost)
+                                + " instead of eco's crafting_system_l4");
+                        return;
+                    }
+                    int patternsAfter = everywhere(helper, player, pattern.getItem());
+                    if (patternsAfter != patternsBefore) {
+                        helper.fail("the swap left " + patternsAfter + " patterns in and around this room,"
+                                + " there were " + patternsBefore + " before the click, so a work order was"
+                                + " duplicated or destroyed");
+                        return;
+                    }
+                    int inBuses = 0;
+                    for (var where : busPositions) {
+                        if (level.getBlockEntity(where) instanceof cn.dancingsnow.neoecoae.blocks.entity.crafting
+                                .ECOCraftingPatternBusBlockEntity afterBus) {
+                            for (var stack : afterBus.getPatternSlotInventory()) {
+                                if (ItemStack.isSameItemSameComponents(stack, pattern)) {
+                                    inBuses++;
+                                }
+                            }
+                        }
+                    }
+                    NeoECOPrototype.LOGGER.info("migration carry: {}/{} patterns are back in the buses they"
+                            + " were taken out of", inBuses, patternsBefore);
+                    if (inBuses != patternsBefore) {
+                        helper.fail("the swap left " + inBuses + " of " + patternsBefore
+                                + " patterns standing in a bus; the rest only made it to the player's"
+                                + " hands, which is the degraded path this carry exists to avoid");
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * The migration disk on the machine it exists for: our own L1 storage room grown to its ceiling, in
+     * survival, with an empty inventory. One click has to land the room on eco's L4 definition, leave it
+     * formed, hand every L1 part it replaced back to the player, eat the disk and put the empty one in
+     * their hand instead. Nothing is billed - the disk is the price - so an eco item appearing in the
+     * inventory would mean the swap took parts from somewhere other than the machine standing there.
+     *
+     * <p>The doll is asserted on the branch this fixture can reach: only the crafting host carries a mind,
+     * so a storage swap must never print one. The other branch - an F1 room that rolled its one-in-sixteen
+     * mind - has no suite coverage and needs a client or a seam to force the roll; it is written here so
+     * the next reader does not take a green run as proof the doll works.</p>
+     */
+    @GameTest(template = "l1_room", batch = "migration_drive_swap", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void migrationDriveMovesAnL1RoomOntoEcoL4(GameTestHelper helper) {
+        buildRoomToMaxLength(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var level = helper.getLevel();
+                    var anchor = helper.absolutePos(CARD_HOST);
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    player.getInventory().clearContent();
+
+                    int drivesBefore = 0;
+                    for (var state : machineSnapshot(helper).values()) {
+                        if (state.getBlock() == ModRegistration.SIMPLIFY_DRIVE_BLOCK.get()) {
+                            drivesBefore++;
+                        }
+                    }
+                    if (drivesBefore == 0) {
+                        helper.fail("not one simplify_drive stands in this room before the click, so the"
+                                + " refund count below is measuring nothing");
+                        return;
+                    }
+
+                    var disk = ModRegistration.MIGRATION_DRIVE_1_4.get();
+                    // Mount a filled cell into one drive before the click: this whole feature exists so
+                    // that a player's mounted contents survive it, and giveBack destroys the block without
+                    // drops, so a swap that forgets to carry them simply deletes them.
+                    if (!(host instanceof cn.dancingsnow.neoecoprototype.blockentity.storage
+                            .SimplifyStorageHostBlockEntity storageHost)
+                            || storageHost.getCluster() == null
+                            || storageHost.getCluster().getDrives().isEmpty()) {
+                        helper.fail("the fixture room has no drive to mount a cell in, so the carry check"
+                                + " below measures nothing");
+                        return;
+                    }
+                    var drives = storageHost.getCluster().getDrives();
+                    var mountedPos = drives.get(0).getBlockPos();
+                    var lastMountedPos = drives.get(drives.size() - 1).getBlockPos();
+                    // Two drives, and not neighbours: a carry that only works on the first position it
+                    // looks at has passed a fixture like the previous one and still eats a real machine.
+                    drives.get(0).setCellStack(new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1M.get()));
+                    drives.get(drives.size() - 1).setCellStack(
+                            new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_1M.get()));
+                    int cellBefore = everywhere(helper, player, ModRegistration.SIMPLIFY_ITEM_CELL_1M.get());
+                    player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(disk, 1));
+                    useCard(helper, player, disk);
+
+                    var afterHost = level.getBlockState(anchor).getBlock();
+                    if (afterHost != cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L4.get()) {
+                        helper.fail("the disk left the host on " + name(afterHost)
+                                + " instead of storage_system_l4");
+                        return;
+                    }
+                    if (!(level.getBlockEntity(anchor) instanceof MultiBlockBuildController.Host fresh)
+                            || !fresh.isFormed()) {
+                        helper.fail("the room is on eco's L4 host but not formed, so the swap put blocks"
+                                + " in without telling the new host to look at its own shape");
+                        return;
+                    }
+
+                    var back = carried(player);
+                    if (back.getOrDefault(disk, 0) != 0) {
+                        helper.fail("the swap landed but the disk was not eaten: still "
+                                + back.get(disk) + " in the inventory");
+                        return;
+                    }
+                    if (back.getOrDefault(ModRegistration.MIGRATION_DRIVE_EMPTY.get(), 0) != 1) {
+                        helper.fail("the player holds "
+                                + back.getOrDefault(ModRegistration.MIGRATION_DRIVE_EMPTY.get(), 0)
+                                + " empty disks, expected exactly the one this click should have left");
+                        return;
+                    }
+                    if (back.getOrDefault(ModRegistration.FUMO_DOLL_TEDXENON_ITEM.get(), 0) != 0) {
+                        helper.fail("a storage swap gave out a doll, but only the crafting host can carry"
+                                + " a mind to trade for one");
+                        return;
+                    }
+                    if (back.getOrDefault(ModRegistration.SIMPLIFY_DRIVE_ITEM.get(), 0) != drivesBefore) {
+                        helper.fail("the refund returned "
+                                + back.getOrDefault(ModRegistration.SIMPLIFY_DRIVE_ITEM.get(), 0)
+                                + " drives but " + drivesBefore + " were standing before the click");
+                        return;
+                    }
+                    // Conservation first: whatever the swap does with the cell, the total across the
+                    // machine, the player and the floor has to stay where it was. The placement check below
+                    // only says where it ended up; this is the one that catches both directions of wrong.
+                    var cell = ModRegistration.SIMPLIFY_ITEM_CELL_1M.get();
+                    int cellAfter = everywhere(helper, player, cell);
+                    if (cellAfter != cellBefore) {
+                        helper.fail("the swap left " + cellAfter + " mounted cells in and around this room,"
+                                + " it held " + cellBefore + " before the click, so the cell was either"
+                                + " duplicated or destroyed");
+                        return;
+                    }
+                    var after = level.getBlockEntity(mountedPos)
+                            instanceof cn.dancingsnow.neoecoae.util.ICellHost mountedDrive
+                            ? mountedDrive.getCellStack() : ItemStack.EMPTY;
+                    var afterLast = level.getBlockEntity(lastMountedPos)
+                            instanceof cn.dancingsnow.neoecoae.util.ICellHost lastDrive
+                            ? lastDrive.getCellStack() : ItemStack.EMPTY;
+                    boolean inPlace = after != null && after.is(cell)
+                            && afterLast != null && afterLast.is(cell);
+                    NeoECOPrototype.LOGGER.info("migration carry: the two mounted cells survived{}",
+                            inPlace ? " in their own drives" : " outside at least one drive");
+                    if (!inPlace && back.getOrDefault(cell, 0) < cellBefore) {
+                        helper.fail("the cells mounted at " + mountedPos + " and " + lastMountedPos
+                                + " are standing in neither those drives nor the player's inventory,"
+                                + " so the swap destroyed them");
+                        return;
+                    }
+                    var strays = new java.util.ArrayList<String>();
+                    back.forEach((item, count) -> {
+                        var id = BuiltInRegistries.ITEM.getKey(item);
+                        if (!NeoECOPrototype.MOD_ID.equals(id.getNamespace())) {
+                            strays.add(id + "=" + count);
+                        }
+                    });
+                    if (!strays.isEmpty()) {
+                        helper.fail("the swap took or invented parts from outside our own pack: " + strays);
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * The creative disk, on the one jump no lower disk can make: our own L1 storage room grown to its
+     * ceiling, one click, and the host standing on eco's L9. It keeps every other promise the ladder makes
+     * - formed, disk eaten, empty disk back in hand, the parts it replaced refunded - and it bills nothing,
+     * which is what the foreign-item check below pins: an eco part in this inventory would mean the swap
+     * took material from somewhere other than the machine standing there. "Creative" here means the rung
+     * has no recipe yet, not that the disk only works in creative mode, so the player in this fixture is a
+     * survival one.
+     */
+    @GameTest(template = "l1_room", batch = "migration_drive_creative", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void creativeDriveTakesAnL1RoomStraightToL9(GameTestHelper helper) {
+        buildRoomToMaxLength(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var level = helper.getLevel();
+                    var anchor = helper.absolutePos(CARD_HOST);
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    player.getInventory().clearContent();
+
+                    int drivesBefore = 0;
+                    for (var state : machineSnapshot(helper).values()) {
+                        if (state.getBlock() == ModRegistration.SIMPLIFY_DRIVE_BLOCK.get()) {
+                            drivesBefore++;
+                        }
+                    }
+                    if (drivesBefore == 0) {
+                        helper.fail("not one simplify_drive stands in this room before the click, so the"
+                                + " refund count below is measuring nothing");
+                        return;
+                    }
+
+                    var disk = ModRegistration.MIGRATION_DRIVE_CREATIVE.get();
+                    player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(disk, 1));
+                    useCard(helper, player, disk);
+
+                    var afterHost = level.getBlockState(anchor).getBlock();
+                    if (afterHost != cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L9.get()) {
+                        helper.fail("the creative disk left the host on " + name(afterHost)
+                                + " instead of storage_system_l9 - this disk is the only one that jumps"
+                                + " two rungs");
+                        return;
+                    }
+                    if (!(level.getBlockEntity(anchor) instanceof MultiBlockBuildController.Host fresh)
+                            || !fresh.isFormed()) {
+                        helper.fail("the room is on eco's L9 host but not formed, so the swap put blocks"
+                                + " in without telling the new host to look at its own shape");
+                        return;
+                    }
+                    var back = carried(player);
+                    if (back.getOrDefault(disk, 0) != 0) {
+                        helper.fail("the swap landed but the creative disk was not eaten: still "
+                                + back.get(disk) + " in the inventory");
+                        return;
+                    }
+                    if (back.getOrDefault(ModRegistration.MIGRATION_DRIVE_EMPTY.get(), 0) != 1) {
+                        helper.fail("the player holds "
+                                + back.getOrDefault(ModRegistration.MIGRATION_DRIVE_EMPTY.get(), 0)
+                                + " empty disks, expected exactly the one this click should have left");
+                        return;
+                    }
+                    if (back.getOrDefault(ModRegistration.SIMPLIFY_DRIVE_ITEM.get(), 0) != drivesBefore) {
+                        helper.fail("the refund returned "
+                                + back.getOrDefault(ModRegistration.SIMPLIFY_DRIVE_ITEM.get(), 0)
+                                + " drives but " + drivesBefore + " were standing before the click");
+                        return;
+                    }
+                    var strays = new java.util.ArrayList<String>();
+                    back.forEach((item, count) -> {
+                        var id = BuiltInRegistries.ITEM.getKey(item);
+                        if (!NeoECOPrototype.MOD_ID.equals(id.getNamespace())) {
+                            strays.add(id + "=" + count);
+                        }
+                    });
+                    if (!strays.isEmpty()) {
+                        helper.fail("the L1→L9 jump billed or invented parts outside our own pack: " + strays);
+                        return;
+                    }
+                    NeoECOPrototype.LOGGER.info("creative jump verified: host on L9, formed, "
+                            + drivesBefore + " drives refunded, nothing billed");
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * The top rung on a machine that is actually standing on L6: same promise as the L4→L6 case above,
+     * asserted on its own because the L6→L9 disk otherwise only ever appears in this suite as the wrong
+     * disk in someone else's hand, which proves refusal and never proves the swap.
+     */
+    @GameTest(template = "l1_room", batch = "migration_drive_rung9", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void rungNineDriveSwapsAnL6RoomWithAnEmptyHand(GameTestHelper helper) {
+        buildRoomToMaxLength(helper, CARD_HOST,
+                cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L6.get(),
+                cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_INTERFACE.get(),
+                host -> {
+                    var level = helper.getLevel();
+                    var anchor = helper.absolutePos(CARD_HOST);
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    player.getInventory().clearContent();
+
+                    int l6CellsBefore = 0;
+                    for (var state : machineSnapshot(helper).values()) {
+                        if (name(state.getBlock()).equals("energy_cell_l6")) {
+                            l6CellsBefore++;
+                        }
+                    }
+                    if (l6CellsBefore == 0) {
+                        helper.fail("no energy_cell_l6 stands in this room before the click, so the"
+                                + " refund count below is measuring nothing");
+                        return;
+                    }
+
+                    var disk = ModRegistration.MIGRATION_DRIVE_6_9.get();
+                    player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(disk, 1));
+                    useCard(helper, player, disk);
+
+                    var afterHost = level.getBlockState(anchor).getBlock();
+                    if (afterHost != cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L9.get()) {
+                        helper.fail("the L6 disk left the host on " + name(afterHost)
+                                + " instead of storage_system_l9");
+                        return;
+                    }
+                    if (!(level.getBlockEntity(anchor) instanceof MultiBlockBuildController.Host fresh)
+                            || !fresh.isFormed()) {
+                        helper.fail("the room is on L9 but no longer formed");
+                        return;
+                    }
+                    var back = carried(player);
+                    if (back.getOrDefault(disk, 0) != 0) {
+                        helper.fail("the swap landed but the disk was not consumed: still "
+                                + back.get(disk) + " in hand");
+                        return;
+                    }
+                    if (back.getOrDefault(ModRegistration.MIGRATION_DRIVE_EMPTY.get(), 0) != 1) {
+                        helper.fail("the player holds "
+                                + back.getOrDefault(ModRegistration.MIGRATION_DRIVE_EMPTY.get(), 0)
+                                + " empty disks, expected exactly the one this click should have left");
+                        return;
+                    }
+                    var oldCells = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath(
+                            "neoecoae", "energy_cell_l6"));
+                    if (back.getOrDefault(oldCells, 0) != l6CellsBefore) {
+                        helper.fail("the swap returned " + back.getOrDefault(oldCells, 0)
+                                + " energy_cell_l6 but " + l6CellsBefore + " were standing before it");
+                        return;
+                    }
+                    int l9Cells = 0;
+                    for (var state : machineSnapshot(helper).values()) {
+                        if (name(state.getBlock()).equals("energy_cell_l9")) {
+                            l9Cells++;
+                        }
+                    }
+                    if (l9Cells == 0) {
+                        helper.fail("the host says L9 but not one energy_cell_l9 is standing");
+                        return;
+                    }
+                    NeoECOPrototype.LOGGER.info("L6->L9 swap verified: host on L9, formed,"
+                            + " " + l6CellsBefore + " l6 cells refunded, " + l9Cells + " l9 cells standing");
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * The whole promise of a rung drive, on the machine it exists for: an eco L4 storage room built out to
+     * its maximum length, in survival, with an <b>empty inventory</b>. The wrong-rung drive has to refuse
+     * and stay in hand; the right one has to land on L6, be consumed, and take nothing from the player -
+     * the disk is the price, so nothing is billed. What it does owe them is every block the swap replaces:
+     * the voucher carries the cost and the parts come back, which is what the two counts below pin. That
+     * last half is the design: if the disk ever goes back through eco's builder it cannot build for an
+     * unbilled survival player at all, so this goes red rather than quietly starting to demand parts.
+     */
+    @GameTest(template = "l1_room", batch = "migration_drive_rung", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void rungDriveSwapsTierWithAnEmptyHand(GameTestHelper helper) {
         buildRoomToMaxLength(helper, CARD_HOST,
                 cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L4.get(),
                 cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_INTERFACE.get(),
@@ -6290,13 +7766,13 @@ public final class NeoECOPrototypeGameTests {
                     var player = cardPlayer(helper);
                     player.setShiftKeyDown(true);
                     player.getInventory().clearContent();
-                    var wrong = ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L6_L9.get();
-                    var right = ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L4_L6.get();
+                    var wrong = ModRegistration.MIGRATION_DRIVE_6_9.get();
+                    var right = ModRegistration.MIGRATION_DRIVE_4_6.get();
 
                     player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(wrong, 1));
                     useCard(helper, player, wrong);
                     if (player.getInventory().countItem(wrong) != 1) {
-                        helper.fail("the L6 card was eaten on an L4 machine");
+                        helper.fail("the L6 disk was eaten on an L4 machine");
                         return;
                     }
                     if (level.getBlockState(anchor).getBlock()
@@ -6305,22 +7781,62 @@ public final class NeoECOPrototypeGameTests {
                         return;
                     }
 
+                    int l4CellsBefore = 0;
+                    for (var state : machineSnapshot(helper).values()) {
+                        if (name(state.getBlock()).equals("energy_cell_l4")) {
+                            l4CellsBefore++;
+                        }
+                    }
+                    if (l4CellsBefore == 0) {
+                        helper.fail("no energy_cell_l4 stands in this room before the click, so the"
+                                + " refund count below is measuring nothing");
+                        return;
+                    }
+
                     player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(right, 1));
                     useCard(helper, player, right);
                     var afterHost = level.getBlockState(anchor).getBlock();
                     if (afterHost != cn.dancingsnow.neoecoae.all.NEBlocks.STORAGE_SYSTEM_L6.get()) {
-                        helper.fail("the L4 card left the host on " + name(afterHost)
+                        helper.fail("the L4 disk left the host on " + name(afterHost)
                                 + " instead of storage_system_l6");
                         return;
                     }
                     if (player.getInventory().countItem(right) != 0) {
-                        helper.fail("the swap landed but the card was not consumed: still "
+                        helper.fail("the swap landed but the disk was not consumed: still "
                                 + player.getInventory().countItem(right) + " in hand");
                         return;
                     }
-                    if (!carried(player).isEmpty()) {
-                        helper.fail("a free swap moved items through the inventory anyway: "
-                                + carried(player));
+                    // The refund, counted against what actually stood here rather than a number copied off
+                    // a bill: the voucher carries the price, so the parts a swap replaces go back to the
+                    // player instead of vanishing into the machine's new walls.
+                    var back = carried(player);
+                    var oldCells = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath(
+                            "neoecoae", "energy_cell_l4"));
+                    var oldHost = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath(
+                            "neoecoae", "storage_system_l4"));
+                    var newCells = BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath(
+                            "neoecoae", "energy_cell_l6"));
+                    if (oldCells == net.minecraft.world.item.Items.AIR
+                            || oldHost == net.minecraft.world.item.Items.AIR
+                            || newCells == net.minecraft.world.item.Items.AIR) {
+                        helper.fail("one of the ids this refund check looks up is not a registered item,"
+                                + " so a zero in the counts below would be my lookup and not the disk");
+                        return;
+                    }
+                    if (back.getOrDefault(newCells, 0) != 0) {
+                        helper.fail("the refund handed out " + back.get(newCells) + " energy_cell_l6,"
+                                + " which never stood in this machine");
+                        return;
+                    }
+                    if (back.getOrDefault(oldCells, 0) != l4CellsBefore) {
+                        helper.fail("the swap returned " + back.getOrDefault(oldCells, 0)
+                                + " energy_cell_l4 but " + l4CellsBefore
+                                + " were standing before it, so a cell was eaten or invented");
+                        return;
+                    }
+                    if (back.getOrDefault(oldHost, 0) != 1) {
+                        helper.fail("the host block came back as " + back.getOrDefault(oldHost, 0)
+                                + ", expected exactly the one that stood in the anchor cell");
                         return;
                     }
                     if (!(level.getBlockEntity(anchor) instanceof MultiBlockBuildController.Host fresh)
@@ -6346,13 +7862,13 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
-     * Both rung cards clicked on a machine that is not on their rung: the card has to come back out of
+     * Both rung disks clicked on a machine that is not on their rung: the disk has to come back out of
      * the click whole and the machine has to be exactly as it was stood. This is the promise that makes
-     * the card a consumable rather than a toll - refuse and eat it, and the player has paid for nothing.
+     * the disk a consumable rather than a toll - refuse and eat it, and the player has paid for nothing.
      */
-    @GameTest(template = "l1_room", batch = "structure_card_rung", timeoutTicks = 600,
+    @GameTest(template = "l1_room", batch = "migration_drive_rung_refuse", timeoutTicks = 600,
             templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void rungCardsRefuseTheWrongMachineAndAreNotConsumed(GameTestHelper helper) {
+    public static void rungDrivesRefuseTheWrongMachineAndAreNotConsumed(GameTestHelper helper) {
         buildL1Room(helper, CARD_HOST,
                 ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
                 ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
@@ -6363,20 +7879,20 @@ public final class NeoECOPrototypeGameTests {
                     player.setShiftKeyDown(true);
                     // Two of each: one would also survive being eaten, because shrink(1) would leave an
                     // empty hand and the count check would read 0 either way.
-                    for (var card : new net.minecraft.world.item.Item[]{
-                            ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L4_L6.get(),
-                            ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L6_L9.get()}) {
-                        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(card, 2));
-                        useCard(helper, player, card);
+                    for (var disk : new net.minecraft.world.item.Item[]{
+                            ModRegistration.MIGRATION_DRIVE_4_6.get(),
+                            ModRegistration.MIGRATION_DRIVE_6_9.get()}) {
+                        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(disk, 2));
+                        useCard(helper, player, disk);
                         int held = player.getItemInHand(InteractionHand.MAIN_HAND).getCount();
                         if (held != 2) {
-                            helper.fail(card.getDescriptionId() + " was consumed on a machine that is"
+                            helper.fail(disk.getDescriptionId() + " was consumed on a machine that is"
                                     + " not on its rung - it came back as " + held);
                             return;
                         }
-                        if (player.getInventory().countItem(card) != 2) {
-                            helper.fail(card.getDescriptionId() + " left the inventory at "
-                                    + player.getInventory().countItem(card) + " after a refused click");
+                        if (player.getInventory().countItem(disk) != 2) {
+                            helper.fail(disk.getDescriptionId() + " left the inventory at "
+                                    + player.getInventory().countItem(disk) + " after a refused click");
                             return;
                         }
                     }
@@ -6386,25 +7902,27 @@ public final class NeoECOPrototypeGameTests {
                         return;
                     }
                     if (!before.equals(after)) {
-                        helper.fail("a refused rung card still moved blocks: " + changed(before, after));
+                        helper.fail("a refused rung disk still moved blocks: " + changed(before, after));
                         return;
                     }
                 });
     }
 
     /**
-     * The two cards between them cover exactly one rung per family and nothing else. The rows are read
-     * off eco's own definition list by host-block id ({@code storage_system_l4} and friends) instead of
-     * being typed out here, because a hand-written table once paired the crafting rung with the
-     * computation definition and the test then failed on the test.
+     * The four disks between them cover the ladder and nothing outside it. The rows are read off eco's own
+     * definition list by host-block id ({@code storage_system_l4} and friends) instead of being typed out
+     * here, because a hand-written table once paired the crafting rung with the computation definition and
+     * the test then failed on the test. Nine tiered hosts cover the three upper disks; our own three L1
+     * definitions cover the 1→4 one and the creative one, because that bottom rung exists only on this side.
      */
-    @GameTest(template = "empty", batch = "structure_card_rung", timeoutTicks = 100,
+    @GameTest(template = "empty", batch = "migration_drive_table", timeoutTicks = 100,
             templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void rungCardsCoverOneRungPerFamilyAndNothingElse(GameTestHelper helper) {
-        var fourToSix = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem.Rung.FOUR_TO_SIX;
-        var sixToNine = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem.Rung.SIX_TO_NINE;
-        var byId = new java.util.HashMap<String, cn.dancingsnow.neoecoae.multiblock.definition
-                .MultiBlockDefinition>();
+    public static void rungDrivesCoverOneRungPerFamilyAndNothingElse(GameTestHelper helper) {
+        var oneToFour = SimplifyMigrationDriveItem.Rung.ONE_TO_FOUR;
+        var fourToSix = SimplifyMigrationDriveItem.Rung.FOUR_TO_SIX;
+        var sixToNine = SimplifyMigrationDriveItem.Rung.SIX_TO_NINE;
+        var straightToNine = SimplifyMigrationDriveItem.Rung.STRAIGHT_TO_NINE;
+        var byId = new java.util.HashMap<String, MultiBlockDefinition>();
         var tierOf = new java.util.HashMap<String, String>();
         var familyOf = new java.util.HashMap<String, String>();
         var pattern = java.util.regex.Pattern.compile("^(.*)_l([469])$");
@@ -6425,23 +7943,42 @@ public final class NeoECOPrototypeGameTests {
             var def = entry.getValue();
             String family = familyOf.get(path);
             String tier = tierOf.get(path);
-            var up = byId.get(family + "_l" + ("4".equals(tier) ? "6" : "9"));
-            var next46 = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem
-                    .rungTarget(fourToSix, def);
-            var next69 = cn.dancingsnow.neoecoprototype.items.SimplifyTierUpgradeCardItem
-                    .rungTarget(sixToNine, def);
-            // Only the rung each card owns may answer; everything else has to be refused, because a
-            // card that accepts the wrong machine eats itself on a shape it cannot build.
-            var expected = "4".equals(tier) ? up : null;
-            if (next46 != expected) {
-                helper.fail("the L4 card on " + path + " answered " + name46(next46)
-                        + ", expected " + name46(expected));
+            var l6 = byId.get(family + "_l6");
+            var l9 = byId.get(family + "_l9");
+            // Only the rung each disk owns may answer; everything else has to be refused, because a disk
+            // that accepts the wrong machine eats itself on a shape it cannot build.
+            if (SimplifyMigrationDriveItem.rungTarget(oneToFour, def) != null) {
+                helper.fail("the L1 disk answered an eco host (" + path + ")");
                 return;
             }
-            var expected69 = "6".equals(tier) ? up : null;
+            var expected46 = "4".equals(tier) ? l6 : null;
+            var next46 = SimplifyMigrationDriveItem.rungTarget(fourToSix, def);
+            if (next46 != expected46) {
+                helper.fail("the L4 disk on " + path + " answered " + defName(next46)
+                        + ", expected " + defName(expected46));
+                return;
+            }
+            var expected69 = "6".equals(tier) ? l9 : null;
+            var next69 = SimplifyMigrationDriveItem.rungTarget(sixToNine, def);
             if (next69 != expected69) {
-                helper.fail("the L6 card on " + path + " answered " + name46(next69)
-                        + ", expected " + name46(expected69));
+                helper.fail("the L6 disk on " + path + " answered " + defName(next69)
+                        + ", expected " + defName(expected69));
+                return;
+            }
+            var expectedCreative = "9".equals(tier) ? null : l9;
+            var nextCreative = SimplifyMigrationDriveItem.rungTarget(straightToNine, def);
+            if (nextCreative != expectedCreative) {
+                helper.fail("the creative disk on " + path + " answered " + defName(nextCreative)
+                        + ", expected " + defName(expectedCreative));
+                return;
+            }
+            // "There is nothing above it" may only be said where nothing is above it, and that sentence is
+            // what a player acts on, so which rung each refusal key lands on is pinned row by row.
+            var expectKey = "9".equals(tier) ? "card.neoecoprototype.migration.at_top"
+                    : "card.neoecoprototype.migration.wrong_machine";
+            if (!SimplifyMigrationDriveItem.refusalKey(def).equals(expectKey)) {
+                helper.fail("the refusal on " + path + " would say "
+                        + SimplifyMigrationDriveItem.refusalKey(def) + ", expected " + expectKey);
                 return;
             }
             rows++;
@@ -6452,11 +7989,315 @@ public final class NeoECOPrototypeGameTests {
                     + " table check proves nothing about the three families");
             return;
         }
-        NeoECOPrototype.LOGGER.info("rung-table check covered " + rows + " hosts");
+        for (var entry : java.util.Map.of(
+                SimplifyStorageDefinition.L1, "storage_system_l4",
+                SimplifyComputationDefinition.L1, "computation_system_l4",
+                SimplifyCraftingDefinition.L1, "crafting_system_l4").entrySet()) {
+            var l4 = byId.get(entry.getValue());
+            var l9 = byId.get(entry.getValue().replace("_l4", "_l9"));
+            if (l4 == null || l9 == null) {
+                helper.fail("eco ships no " + entry.getValue() + " or its L9, so this row is my lookup");
+                return;
+            }
+            if (SimplifyMigrationDriveItem.rungTarget(oneToFour, entry.getKey()) != l4) {
+                helper.fail("the L1 disk on our " + entry.getValue() + " host answered "
+                        + defName(SimplifyMigrationDriveItem.rungTarget(oneToFour, entry.getKey()))
+                        + ", expected " + defName(l4));
+                return;
+            }
+            if (SimplifyMigrationDriveItem.rungTarget(straightToNine, entry.getKey()) != l9) {
+                helper.fail("the creative disk on our " + entry.getValue() + " host answered "
+                        + defName(SimplifyMigrationDriveItem.rungTarget(straightToNine, entry.getKey()))
+                        + ", expected " + defName(l9));
+                return;
+            }
+            if (!SimplifyMigrationDriveItem.refusalKey(entry.getKey())
+                    .equals("card.neoecoprototype.migration.wrong_machine")) {
+                helper.fail("our " + entry.getValue() + " host can still climb, so a refusal there must"
+                        + " not claim the tier is full");
+                return;
+            }
+        }
+        NeoECOPrototype.LOGGER.info("rung-table check covered " + rows + " hosts and 3 L1 rows");
         helper.succeed();
     }
 
-    private static String name46(cn.dancingsnow.neoecoae.multiblock.definition.MultiBlockDefinition def) {
+    /**
+     * The three modifiers the pigmee housing claims, read off the stack itself, plus the two attribute
+     * defaults the tooltip total is built from. Exists because the javadoc that used to describe them was
+     * destroyed by an encoding accident and contained numbers nobody could re-derive from the code alone.
+     */
+    @GameTest(template = "empty", batch = "pigmee_housing_attributes", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void pigmeeHousingReportsItsModifiersInHand(GameTestHelper helper) {
+        var stack = new ItemStack(ModRegistration.PIGMEE_STORAGE_MATRIX_HOUSING.get());
+        var report = new java.util.ArrayList<String>();
+        stack.forEachModifier(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                (attribute, modifier) -> report.add(
+                        net.minecraft.core.registries.BuiltInRegistries.ATTRIBUTE.getKey(attribute.value())
+                                + " <- " + modifier.id() + " amount=" + modifier.amount()
+                                + " op=" + modifier.operation()));
+        if (report.isEmpty()) {
+            helper.fail("the housing item declares no main-hand modifiers at all");
+            return;
+        }
+        double damageBase = net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE.value()
+                .getDefaultValue();
+        double speedBase = net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED.value()
+                .getDefaultValue();
+        NeoECOPrototype.LOGGER.info("pigmee housing main-hand modifiers: {} | attribute defaults: damage={}"
+                + " speed={} so the held total is {}+ and speed {}+", report, damageBase, speedBase,
+                damageBase, speedBase);
+        if (report.size() != 3) {
+            helper.fail("expected three modifiers (damage, speed, interaction range), got " + report.size()
+                    + ": " + report);
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * What a battery reports about itself, asserted synchronously: {@code buildRoom} clears the machine and
+     * calls succeed() the moment this consumer returns, so anything scheduled from here never runs - an
+     * earlier version of this test "passed" that way and asserted nothing. Whether the grid actually folds
+     * the buffer into its ceiling needs a node tick, so it is asserted by the sibling fixture
+     * {@code energized_cell_ceiling} instead of here.
+     */
+    @GameTest(template = "l1_room", batch = "energized_cell_grid", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void energizedCellReportsItsOwnBuffer(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var level = helper.getLevel();
+                    // Two above the host. Measured, this cell is free air that touches no machine node at
+                    // all (the two batteries placed here join each other into a grid of two nodes), so
+                    // nothing here claims the machine sees them - the ceiling half is asserted in the
+                    // sibling fixture {@code energized_cell_ceiling}. Overwriting a member instead (the
+                    // first version used east(), which lands inside the 15-wide footprint) does not fail
+                    // the test - it wedges the game test server, which is why this line is here.
+                    var cellPos = helper.absolutePos(CARD_HOST).above(2);
+                    level.setBlockAndUpdate(cellPos,
+                            ModRegistration.ENERGIZED_ENERGY_CELL_16G_BLOCK.get().defaultBlockState());
+                    if (!(level.getBlockEntity(cellPos) instanceof cn.dancingsnow.neoecoprototype
+                            .blockentity.energy.EnergizedEnergyCellBlockEntity cell)) {
+                        helper.fail("the placed block runs " + level.getBlockEntity(cellPos)
+                                + ", not the battery");
+                        return;
+                    }
+                    if (cell.getAEMaxPower() != 16_000_000_000.0) {
+                        helper.fail("the 16G battery reports a buffer of " + cell.getAEMaxPower());
+                        return;
+                    }
+                    if (!cell.isAEPublicPowerStorage()) {
+                        helper.fail("the battery is not public storage, so the grid may never read it");
+                        return;
+                    }
+                    // The 512G tier must not silently inherit the other block's number: both tiers share
+                    // one block entity type, so the capacity really has to come off the block.
+                    var bigPos = cellPos.east();
+                    level.setBlockAndUpdate(bigPos,
+                            ModRegistration.ENERGIZED_ENERGY_CELL_512G_BLOCK.get().defaultBlockState());
+                    if (level.getBlockEntity(bigPos) instanceof cn.dancingsnow.neoecoprototype
+                            .blockentity.energy.EnergizedEnergyCellBlockEntity big
+                            && big.getAEMaxPower() != 512_000_000_000.0) {
+                        helper.fail("the 512G battery reports " + big.getAEMaxPower()
+                                + ", so the capacity is not coming off the block");
+                        return;
+                    }
+                });
+    }
+
+    /**
+     * The line AE2's own energy cell shows and ours did not: "Stored Energy: 1M/16G AE (0.01%)". It is
+     * compared against AE2's own formatter, so a change upstream moves the expectation with it instead of
+     * leaving a hand-typed string nobody can re-derive. The second half is the reason the line is not just
+     * decoration: the number it shows has to come out of the item, and the only thing that puts it there is
+     * the block entity exporting it when the battery is dismantled.
+     */
+    @GameTest(template = "empty", batch = "energized_cell_tooltip", timeoutTicks = 200)
+    public static void energizedCellItemsShowTheStoredEnergyLine(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var pos = helper.absolutePos(new BlockPos(0, 1, 0));
+        level.setBlockAndUpdate(pos,
+                ModRegistration.ENERGIZED_ENERGY_CELL_16G_BLOCK.get().defaultBlockState());
+        if (!(level.getBlockEntity(pos) instanceof cn.dancingsnow.neoecoprototype
+                .blockentity.energy.EnergizedEnergyCellBlockEntity cell)) {
+            helper.fail("the placed block is not the battery, so the export below proves nothing");
+            return;
+        }
+        cell.injectAEPower(1_000_000.0, Actionable.MODULATE);
+        var builder = net.minecraft.core.component.DataComponentMap.builder();
+        cell.exportSettings(appeng.util.SettingsFrom.DISMANTLE_ITEM, builder, null);
+        var carried = builder.build().get(appeng.api.ids.AEComponents.STORED_ENERGY);
+        if (carried == null || carried != 1_000_000.0) {
+            helper.fail("a dismantled battery carrying 1M AE exports " + carried
+                    + " in STORED_ENERGY, so the item has no number to show");
+            return;
+        }
+
+        var stack = new ItemStack(ModRegistration.ENERGIZED_ENERGY_CELL_16G_ITEM.get());
+        stack.set(appeng.api.ids.AEComponents.STORED_ENERGY, 1_000_000.0);
+        // The game's own entry point: ItemStack#getTooltipLines is what the tooltip screen calls, so this
+        // asserts the line a player sees rather than the one a hand-picked method would produce.
+        var lines = stack.getTooltipLines(net.minecraft.world.item.Item.TooltipContext.EMPTY, null,
+                net.minecraft.world.item.TooltipFlag.Default.NORMAL);
+        var expected = appeng.core.localization.Tooltips
+                .energyStorageComponent(1_000_000.0, 16_000_000_000.0).getString();
+        if (lines.stream().noneMatch(line -> line.getString().equals(expected))) {
+            helper.fail("the 16G item's tooltip has no line equal to '" + expected + "', it has "
+                    + lines.stream().map(Component::getString).toList()
+                    + " from item " + stack.getItem().getClass().getName());
+            return;
+        }
+
+        // The tiers share one block entity type and one item class, so the number in the tooltip is the
+        // check that the capacity is still coming off the block and not off the other tier.
+        var bigStack = new ItemStack(ModRegistration.ENERGIZED_ENERGY_CELL_512G_ITEM.get());
+        var bigLines = bigStack.getTooltipLines(net.minecraft.world.item.Item.TooltipContext.EMPTY, null,
+                net.minecraft.world.item.TooltipFlag.Default.NORMAL);
+        var bigExpected = appeng.core.localization.Tooltips
+                .energyStorageComponent(0.0, 512_000_000_000.0).getString();
+        if (bigLines.stream().noneMatch(line -> line.getString().equals(bigExpected))) {
+            helper.fail("the 512G item's tooltip has no line equal to '" + bigExpected + "', it has "
+                    + bigLines.stream().map(Component::getString).toList());
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * What the grid ceiling is actually made of: AE2 sums power capacity from the providers in the grid the
+     * node joined, so two batteries standing next to each other must land in <i>one</i> ceiling.
+     *
+     * <p>This is the assertion that catches the registration the block itself cannot make: AE2 discovers an
+     * in-world node by asking the neighbour's block entity for the {@code IN_WORLD_GRID_NODE_HOST}
+     * capability, and it only registers that capability for its own block entity types. An addon battery
+     * that is not added to that list by us sits alone in a grid of one node - each half of the sum is then
+     * its own buffer, which the earlier version of this test accepted as passing.</p>
+     */
+    @GameTest(template = "empty", batch = "energized_cell_ceiling", timeoutTicks = 200,
+            setupTicks = 10L)
+    public static void energizedCellsAddUpInTheGridCeiling(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var small = helper.absolutePos(new BlockPos(0, 1, 0));
+        var big = small.east();
+        level.setBlockAndUpdate(small,
+                ModRegistration.ENERGIZED_ENERGY_CELL_16G_BLOCK.get().defaultBlockState());
+        level.setBlockAndUpdate(big,
+                ModRegistration.ENERGIZED_ENERGY_CELL_512G_BLOCK.get().defaultBlockState());
+        helper.runAfterDelay(10, () -> {
+            var cells = new cn.dancingsnow.neoecoprototype.blockentity.energy
+                    .EnergizedEnergyCellBlockEntity[2];
+            for (var pair : java.util.List.of(
+                    java.util.Map.entry(small, 16_000_000_000.0),
+                    java.util.Map.entry(big, 512_000_000_000.0))) {
+                if (!(level.getBlockEntity(pair.getKey()) instanceof cn.dancingsnow.neoecoprototype
+                        .blockentity.energy.EnergizedEnergyCellBlockEntity cell)) {
+                    helper.fail("the block at " + pair.getKey() + " is not the battery any more");
+                    return;
+                }
+                var grid = cell.getMainNode().getGrid();
+                if (grid == null) {
+                    helper.fail("the battery at " + pair.getKey()
+                            + " has no grid 10 ticks after placement, so its node never joined");
+                    return;
+                }
+                if (cells[0] == null) {
+                    cells[0] = cell;
+                } else {
+                    cells[1] = cell;
+                }
+            }
+            var first = cells[0].getMainNode().getGrid();
+            var second = cells[1].getMainNode().getGrid();
+            if (first != second) {
+                helper.fail("the two adjacent batteries sit in two grids of " + first.size() + " and "
+                        + second.size() + " nodes, so the neighbour never found our node host - "
+                        + "is the battery block entity registered for IN_WORLD_GRID_NODE_HOST?");
+                return;
+            }
+            double expected = 16_000_000_000.0 + 512_000_000_000.0;
+            double ceiling = first.getEnergyService().getMaxStoredPower();
+            if (ceiling < expected) {
+                helper.fail("grid ceiling is " + ceiling + ", expected at least " + expected
+                        + " (16G + 512G) - the batteries were never announced to the energy service");
+                return;
+            }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Every block of ours that carries a grid node must also answer AE2's block-capability query, or nothing
+     * can find it from outside: AE2 discovers in-world nodes through {@code GridHelper.getNodeHost} ->
+     * {@code level.getCapability(IN_WORLD_GRID_NODE_HOST)}, and it registers that capability for the block
+     * entity types in <i>its own</i> registry only. This is the guard for the bug class the 16G/512G
+     * batteries shipped with - the block entity implemented {@code IInWorldGridNodeHost}, every same-block
+     * assertion stayed green, and a controller standing next to it still never added the buffer.
+     */
+    @GameTest(template = "l1_room", batch = "node_host_caps", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void everyGridBlockAnswersTheNodeHostCapability(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var missing = new ArrayList<String>();
+        var placed = new int[1];
+        var exposed = new int[1];
+        var slot = new int[]{0, 1, 0};
+        for (var block : BuiltInRegistries.BLOCK) {
+            var id = BuiltInRegistries.BLOCK.getKey(block);
+            if (!NeoECOPrototype.MOD_ID.equals(id.getNamespace())) continue;
+            // Only free air: overwriting a member of the standing machine would measure a broken room
+            // instead of a broken registration, and has wedged this server before.
+            while (!level.getBlockState(helper.absolutePos(
+                    new BlockPos(slot[0], slot[1], slot[2]))).isAir()) {
+                if (++slot[0] >= L1_ROOM_SIZE) {
+                    slot[0] = 0;
+                    if (++slot[1] >= L1_ROOM_SIZE) {
+                        slot[1] = 1;
+                        if (++slot[2] >= L1_ROOM_SIZE) {
+                            helper.fail("the " + L1_ROOM_SIZE + "^3 template ran out of air after "
+                                    + placed[0] + " of the " + NeoECOPrototype.MOD_ID + " blocks");
+                            return;
+                        }
+                    }
+                }
+            }
+            var rel = new BlockPos(slot[0], slot[1], slot[2]);
+            slot[0]++;
+            var abs = helper.absolutePos(rel);
+            helper.setBlock(rel, block.defaultBlockState());
+            placed[0]++;
+            var be = level.getBlockEntity(abs);
+            if (be instanceof IInWorldGridNodeHost) {
+                exposed[0]++;
+                if (appeng.api.networking.GridHelper.getNodeHost(level, abs) == null) {
+                    missing.add(id.getPath() + " -> " + be.getClass().getSimpleName());
+                }
+            }
+            // Take it back out again, here, in this cell. Only the template's own volume is restored after
+            // a test and this scan walks the whole cube, so a cell left standing leaks into the next test's
+            // room - which is how the first round of this guard failed an unrelated fixture one batch later.
+            helper.setBlock(rel, Blocks.AIR);
+        }
+        if (exposed[0] == 0) {
+            helper.fail("none of the " + placed[0] + " " + NeoECOPrototype.MOD_ID
+                    + " blocks placed here carries a grid node, so this scan proves nothing");
+            return;
+        }
+        if (!missing.isEmpty()) {
+            helper.fail(missing.size() + " of " + exposed[0] + " node hosts cannot be found by a neighbour,"
+                    + " so a cable or machine standing against them joins nothing: " + missing);
+            return;
+        }
+        NeoECOPrototype.LOGGER.info("node hosts: {} of {} placed blocks carry a grid node and all answer"
+                + " IN_WORLD_GRID_NODE_HOST", exposed[0], placed[0]);
+        helper.succeed();
+    }
+
+    private static String defName(MultiBlockDefinition def) {
         return def == null ? "nothing (refused)"
                 : net.minecraft.core.registries.BuiltInRegistries.BLOCK
                         .getKey(def.getOwner().value()).getPath();
@@ -6825,6 +8666,50 @@ public final class NeoECOPrototypeGameTests {
         return totals;
     }
 
+    /**
+     * How many of one item exist in the three places a tier swap can move it to: mounted inside a member of
+     * the machine, in the player's inventory, and lying on the floor within the room. A swap that "keeps"
+     * the contents has to leave this number alone in both directions - one copy too many is the duplicate a
+     * player can sell, one too few is the cell they never get back.
+     */
+    private static int everywhere(GameTestHelper helper, net.minecraft.server.level.ServerPlayer player,
+                                 Item item) {
+        int total = 0;
+        BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+        for (BlockPos pos : BlockPos.betweenClosed(origin,
+                origin.offset(L1_ROOM_SIZE - 1, 8, L1_ROOM_SIZE - 1))) {
+            var blockEntity = helper.getLevel().getBlockEntity(pos);
+            if (blockEntity instanceof cn.dancingsnow.neoecoae.util.ICellHost host) {
+                var cell = host.getCellStack();
+                if (cell != null && cell.is(item)) {
+                    total += cell.getCount();
+                }
+            }
+            if (blockEntity instanceof cn.dancingsnow.neoecoae.blocks.entity.crafting
+                    .ECOCraftingPatternBusBlockEntity bus) {
+                for (var stack : bus.getPatternSlotInventory()) {
+                    if (stack.is(item)) {
+                        total += stack.getCount();
+                    }
+                }
+            }
+        }
+        for (var stack : player.getInventory().items) {
+            if (stack.is(item)) {
+                total += stack.getCount();
+            }
+        }
+        for (var entity : helper.getLevel().getEntitiesOfClass(
+                net.minecraft.world.entity.item.ItemEntity.class,
+                new net.minecraft.world.phys.AABB(origin.getX(), origin.getY(), origin.getZ(),
+                        origin.getX() + L1_ROOM_SIZE, origin.getY() + 9, origin.getZ() + L1_ROOM_SIZE))) {
+            if (entity.getItem().is(item)) {
+                total += entity.getItem().getCount();
+            }
+        }
+        return total;
+    }
+
     private static Map<Item, Integer> carried(net.minecraft.server.level.ServerPlayer player) {
         Map<Item, Integer> totals = new HashMap<>();
         for (var stack : player.getInventory().items) {
@@ -6893,5 +8778,174 @@ public final class NeoECOPrototypeGameTests {
             }
         }
         return text.length() == 0 ? "nothing" : text.toString();
+    }
+
+    /**
+     * A dissociator fed by FE alone, with no ME network anywhere near it: one core, one run's worth of
+     * both baths and enough charge in the buffer must come out as exactly draws x perHit items, all of
+     * them kinds the shipped table names, and the core and the fluids must be gone.
+     */
+    @GameTest(template = "empty", batch = "dissociator_run", timeoutTicks = 200,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void dissociatorRunsOnItsOwnBuffer(GameTestHelper helper) {
+        var plotPos = new BlockPos(0, 1, 0);
+        helper.setBlock(plotPos, ModRegistration.METEORITE_DISSOCIATOR_BLOCK.get());
+        var level = helper.getLevel();
+        var pos = helper.absolutePos(plotPos);
+        if (!(level.getBlockEntity(pos)
+                instanceof cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                .MeteoriteDissociatorBlockEntity machine)) {
+            helper.fail("the dissociator block placed without a block entity of its own type");
+            return;
+        }
+        var recipe = level.getRecipeManager()
+                .getRecipeFor(ModRegistration.DISSOCIATION_TYPE.get(),
+                        new cn.dancingsnow.neoecoprototype.recipe.DissociationRecipe.Input(
+                                new ItemStack(ModRegistration.METEORITE_CORE_ITEM.get())), level)
+                .map(holder -> holder.value()).orElse(null);
+        if (recipe == null) {
+            helper.fail("the dissociation table that ships in the jar was not found at run time,"
+                    + " so this test would prove nothing about the machine");
+            return;
+        }
+        machine.getInputInventory().setItemDirect(0,
+                new ItemStack(ModRegistration.METEORITE_CORE_ITEM.get()));
+        // Two runs' worth of each bath, so the test can read off exactly one run's worth being spent
+        // rather than merely noticing that an empty tank stayed empty.
+        machine.getCoolantTank().setFluid(recipe.coolant().copyWithAmount(recipe.coolant().getAmount() * 2));
+        machine.getSolutionTank().setFluid(recipe.solution().copyWithAmount(recipe.solution().getAmount() * 2));
+        int neededFe = (int) Math.ceil(appeng.api.config.PowerUnit.AE
+                .convertTo(appeng.api.config.PowerUnit.FE, recipe.powerPerRun()));
+        for (int fed = 0; fed < neededFe; fed += cn.dancingsnow.neoecoprototype.blockentity
+                .dissociation.MeteoriteDissociatorBlockEntity.FE_MAX_RECEIVE) {
+            machine.getEnergyStorage().receiveEnergy(
+                    cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                            .MeteoriteDissociatorBlockEntity.FE_MAX_RECEIVE, false);
+        }
+        var state = level.getBlockState(pos);
+        for (int tick = 0; tick < recipe.ticksPerRun() + 2; tick++) {
+            cn.dancingsnow.neoecoprototype.blockentity.dissociation.MeteoriteDissociatorBlockEntity
+                    .serverTick(level, pos, state, machine);
+        }
+        if (!machine.getInputInventory().getStackInSlot(0).isEmpty()) {
+            helper.fail("the run finished but the core is still in the input slot");
+            return;
+        }
+        if (machine.getCoolantTank().getFluidAmount() != recipe.coolant().getAmount()) {
+            helper.fail("a run left the coolant bath at " + machine.getCoolantTank().getFluidAmount()
+                    + " mB of the " + recipe.coolant().getAmount() * 2 + " it was given, so it did not"
+                    + " spend the " + recipe.coolant().getAmount() + " mB the table asks for");
+            return;
+        }
+        if (machine.getSolutionTank().getFluidAmount() != recipe.solution().getAmount()) {
+            helper.fail("a run left the solution bath at " + machine.getSolutionTank().getFluidAmount()
+                    + " mB of the " + recipe.solution().getAmount() * 2 + " it was given");
+            return;
+        }
+        int produced = 0;
+        var products = recipe.weights().keySet();
+        for (int slot = 0; slot < machine.getOutputInventory().size(); slot++) {
+            var stack = machine.getOutputInventory().getStackInSlot(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (!products.contains(stack.getItem())) {
+                helper.fail("the machine produced "
+                        + BuiltInRegistries.ITEM.getKey(stack.getItem())
+                        + ", which the table does not list as a product");
+                return;
+            }
+            produced += stack.getCount();
+        }
+        if (produced != recipe.maxPerProduct()) {
+            helper.fail("a run yielded " + produced + " items but the table says draws x per_hit = "
+                    + recipe.maxPerProduct() + "; something was lost between the roll and the slots");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A machine that has never seen a bucket must still be able to sync itself to a client. This is the
+     * path that took the integrated server down once: the visual-state codec is reached on every chunk
+     * update, and a codec that refuses an empty stack turns the machine's default state into a crash.
+     */
+    @GameTest(template = "empty", batch = "dissociator_sync_packet", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void dissociatorSyncsWhileItsTanksAreEmpty(GameTestHelper helper) {
+        var plotPos = new BlockPos(0, 1, 0);
+        helper.setBlock(plotPos, ModRegistration.METEORITE_DISSOCIATOR_BLOCK.get());
+        var level = helper.getLevel();
+        var pos = helper.absolutePos(plotPos);
+        if (!(level.getBlockEntity(pos)
+                instanceof cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                .MeteoriteDissociatorBlockEntity machine)) {
+            helper.fail("the dissociator block placed without a block entity of its own type");
+            return;
+        }
+        if (!machine.getCoolantTank().isEmpty() || !machine.getSolutionTank().isEmpty()) {
+            helper.fail("a freshly placed dissociator already holds fluid, so this no longer tests the"
+                    + " state that crashed");
+            return;
+        }
+        net.minecraft.nbt.CompoundTag tag;
+        var receiver = level.getBlockEntity(pos);
+        try {
+            tag = machine.getUpdateTag(level.registryAccess());
+            receiver.handleUpdateTag(tag, level.registryAccess());
+        } catch (RuntimeException thrown) {
+            helper.fail("syncing an empty dissociator threw " + thrown.getClass().getSimpleName()
+                    + ": " + thrown.getMessage());
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The same machine with an empty coolant bath must sit there doing nothing: it may not consume the
+     * core, and it may not spend the charge. This is the other half of the assertion above - without it,
+     * a machine that ignored the fluids would still pass.
+     */
+    @GameTest(template = "empty", batch = "dissociator_refuses_without_coolant", timeoutTicks = 200,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void dissociatorRefusesToRunWithoutCoolant(GameTestHelper helper) {
+        var plotPos = new BlockPos(0, 1, 0);
+        helper.setBlock(plotPos, ModRegistration.METEORITE_DISSOCIATOR_BLOCK.get());
+        var level = helper.getLevel();
+        var pos = helper.absolutePos(plotPos);
+        if (!(level.getBlockEntity(pos)
+                instanceof cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                .MeteoriteDissociatorBlockEntity machine)) {
+            helper.fail("the dissociator block placed without a block entity of its own type");
+            return;
+        }
+        machine.getInputInventory().setItemDirect(0,
+                new ItemStack(ModRegistration.METEORITE_CORE_ITEM.get()));
+        machine.getSolutionTank().setFluid(new net.neoforged.neoforge.fluids.FluidStack(
+                ModRegistration.DISSOLUTION_SOLUTION.get(), 5_000));
+        for (int fed = 0; fed < 400_000; fed += cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                .MeteoriteDissociatorBlockEntity.FE_MAX_RECEIVE) {
+            machine.getEnergyStorage().receiveEnergy(cn.dancingsnow.neoecoprototype.blockentity.dissociation
+                    .MeteoriteDissociatorBlockEntity.FE_MAX_RECEIVE, false);
+        }
+        var state = level.getBlockState(pos);
+        for (int tick = 0; tick < 40; tick++) {
+            cn.dancingsnow.neoecoprototype.blockentity.dissociation.MeteoriteDissociatorBlockEntity
+                    .serverTick(level, pos, state, machine);
+        }
+        if (machine.getInputInventory().getStackInSlot(0).isEmpty()) {
+            helper.fail("the machine ate a core with no coolant in the bath: the fluid check is not"
+                    + " stopping a run");
+            return;
+        }
+        int produced = 0;
+        for (int slot = 0; slot < machine.getOutputInventory().size(); slot++) {
+            produced += machine.getOutputInventory().getStackInSlot(slot).getCount();
+        }
+        if (produced != 0) {
+            helper.fail("the machine yielded " + produced + " item(s) without coolant");
+            return;
+        }
+        helper.succeed();
     }
 }
