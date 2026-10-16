@@ -402,7 +402,10 @@ public class SimplifyStorageHostBlockEntity
                 .toList();
     }
 
-    private StorageHostUI.Config createStoragePanelConfig(net.minecraft.world.entity.player.Player player) {
+    /** Public for the same reason {@link #createCellEntries()} is: the suite has to drive the panel through
+     * the handles this config hands eco, not through the methods behind it. */
+    public StorageHostUI.Config createStoragePanelConfig(
+            net.minecraft.world.entity.player.Player player) {
         return new StorageHostUI.Config(
                 () -> getBlockState().getBlock().getName(),
                 // eco 21.2.3 reads this int twice: hostMarker(tier, formed) clamps it onto its own atlas,
@@ -426,60 +429,89 @@ public class SimplifyStorageHostBlockEntity
                 () -> 0,
                 createReadOnlyEmptyComponentInventory(),
                 player,
-                (drivePos, interactionId, shiftDown) -> extractCellForPanel(drivePos, player),
+                (drivePos, interactionId, shiftDown) -> extractCellForPanel(drivePos, player, shiftDown),
                 (drivePos, stack) -> insertCellForPanel(drivePos, stack, player),
                 () -> new ItemStack(getBlockState().getBlock()));
     }
 
     /**
-     * What the panel's "total consumption" line asks for: the idle drain of the grid nodes this machine
-     * owns. Every member already sets its own (the host above, each drive in {@code updateIdlePower}), so
-     * this reads it back off the nodes instead of recomputing it, and skips itself in the member list
-     * because the cluster keeps its controller separately on some paths. It used to be a literal zero,
-     * which told the player a working machine costs nothing to run.
+     * What the panel's consumption line asks for: the cost of the storage components themselves, in eco's
+     * exact shape. Read off {@code ECOStorageHostStatistics.collectStorageUiSnapshot} at offsets 344..355 -
+     * for every drive holding a cell, {@code Math.max(0, Math.round(cell.getIdleDrain()))}, added up.
+     *
+     * <p>It is deliberately not what the grid charges for the machine. Our cells report
+     * {@code bytes / 1 MiB} AE per tick, so anything under 1M rounds to zero here and a host full of 16K
+     * matrices reads 0 AE/t while the network still takes its ~32 AE/t per drive. That is what the line
+     * means upstream and the label is eco's, so the number is eco's too; the tier-scaled figure each drive
+     * publishes to its own node (see {@code SimplifyDriveBlockEntity#updateIdlePower}) is a different
+     * quantity and stays out of here.</p>
      */
     public long panelIdlePowerPerTick() {
-        var ownNode = getMainNode().getNode();
-        var total = new double[1];
-        if (ownNode != null) {
-            total[0] = ownNode.getIdlePowerUsage();
-        }
         SimplifyStorageCluster cluster = getCluster();
-        if (cluster != null) {
-            cluster.getBlockEntities().forEachRemaining(member -> {
-                if (member != this && member instanceof NEBlockEntity<?, ?> blockEntity) {
-                    var node = blockEntity.getMainNode().getNode();
-                    if (node != null) {
-                        total[0] += node.getIdlePowerUsage();
-                    }
-                }
-            });
+        if (cluster == null) {
+            return 0L;
         }
-        return Math.round(total[0]);
+        var total = 0L;
+        for (var drive : cluster.getDrives()) {
+            var cell = drive.getCellInventory();
+            if (cell != null) {
+                total += Math.max(0L, Math.round(cell.getIdleDrain()));
+            }
+        }
+        return total;
     }
 
     /**
-     * Takes the cell out of the drive at that position and puts it in the player's inventory. The position
-     * is the handle we act on - inside a formed machine it is unique, which is all the grid offers us. The
-     * id the row carries back is ours own (see {@link SimplifyDriveBlockEntity#panelInteractionId()}) and
-     * exists only so eco will send the click at all; the third argument is the grid's shift-down flag, read
-     * off {@code StorageCellGrid$CellSlot.onMouseDown}, and taking a cell out does not depend on it.
+     * Takes the cell out of the drive at that position and hands it over the way eco does: a plain click
+     * puts it on the cursor, a shift click looks for a free inventory slot.
+     *
+     * <p>Measured off {@code StorageCellUiExtraction.extract}: the shift branch scans
+     * {@code Inventory.items} for the first empty index and gives up when there is none, the plain branch
+     * gives up while the cursor still holds something, and both end in {@code broadcastChanges()}. Giving
+     * up rather than dropping is the point - the cell stays in the drive, so a full inventory costs the
+     * player nothing. The id coming back with the click is ours own (see
+     * {@link SimplifyDriveBlockEntity#panelInteractionId()}) and exists only so eco sends the click at
+     * all; the position is what selects the drive.</p>
      */
-    private boolean extractCellForPanel(net.minecraft.core.BlockPos drivePos,
-                                   net.minecraft.world.entity.player.Player player) {
-        if (level == null || level.isClientSide || !isFormed() || !canPlayerInteract(player)) {
+    public boolean extractCellForPanel(net.minecraft.core.BlockPos drivePos,
+                                   net.minecraft.world.entity.player.Player player, boolean shiftDown) {
+        if (level == null || level.isClientSide || !isFormed()) {
             return false;
         }
+        // No distance check here on purpose: eco's own extract() gates on client-side, formed, a live
+        // cluster and a non-null position and nothing else, and a gate it does not have would turn this
+        // path into another "clicked and nothing happened" - which is the bug class this whole panel has
+        // been carrying. The insert path below has never had one either.
         if (!(level.getBlockEntity(drivePos) instanceof SimplifyDriveBlockEntity drive) || !drive.hasCell()) {
+            return false;
+        }
+        var inventory = player.getInventory();
+        var menu = player.containerMenu;
+        int freeSlot = -1;
+        if (shiftDown) {
+            for (int slot = 0; slot < inventory.items.size(); slot++) {
+                if (inventory.getItem(slot).isEmpty()) {
+                    freeSlot = slot;
+                    break;
+                }
+            }
+            if (freeSlot < 0) {
+                return false;
+            }
+        } else if (!menu.getCarried().isEmpty()) {
             return false;
         }
         var cell = drive.removeCell();
         if (cell.isEmpty()) {
             return false;
         }
-        if (!player.getInventory().add(cell)) {
-            player.drop(cell, false);
+        if (shiftDown) {
+            inventory.setItem(freeSlot, cell);
+            inventory.setChanged();
+        } else {
+            menu.setCarried(cell);
         }
+        menu.broadcastChanges();
         return true;
     }
 
