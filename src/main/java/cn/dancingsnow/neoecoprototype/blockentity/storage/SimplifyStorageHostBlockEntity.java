@@ -414,7 +414,9 @@ public class SimplifyStorageHostBlockEntity
                 this::getStoredEnergy,
                 this::getMaxEnergy,
                 this::panelIdlePowerPerTick,
-                () -> Long.toString(getMaxLoadUsedBytes()),
+                // eco renders this string as it is given it, and its own host ends the same slot with
+                // HostText.ae2Amount(BigInteger): the panel shows "683K", not "683032".
+                () -> cn.dancingsnow.neoecoae.gui.common.HostText.ae2Amount(getMaxLoadUsedBytes()),
                 this::createCellEntries,
                 createStorageTypeLines(),
                 () -> false,
