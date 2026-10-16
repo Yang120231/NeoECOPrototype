@@ -40,6 +40,7 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.extensions.common.IClientBlockExtensions;
+import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
 
@@ -156,11 +157,11 @@ public final class NeoECOPrototypeClient {
             ECOCellModels.register(ModRegistration.OPTIONAL_CHEMICAL_CELL_4M.get(), cellModel("l1r_chemical"));
         }
         if (ModRegistration.OPTIONAL_FE_CELL_1M != null) {
-            // Deliberately the item cells' drive models: we have no energy stripe in cell_type (that
-            // texture only carries item / fluid / chemical media groups), so the FE cells show their tier
-            // band and keep the item media band.
-            ECOCellModels.register(ModRegistration.OPTIONAL_FE_CELL_1M.get(), cellModel("l1_item"));
-            ECOCellModels.register(ModRegistration.OPTIONAL_FE_CELL_4M.get(), cellModel("l1r_item"));
+            // The FE pair reads the energy stripe of cell_type (pixels x 8..9) instead of the item one
+            // (x 4..5), exactly the shift eco's own l4/l6/l9_fe models make against its item one. No new
+            // artwork: the stripe is already in the cell_type.png we ship, which is that file byte for byte.
+            ECOCellModels.register(ModRegistration.OPTIONAL_FE_CELL_1M.get(), cellModel("l1_fe"));
+            ECOCellModels.register(ModRegistration.OPTIONAL_FE_CELL_4M.get(), cellModel("l1r_fe"));
         }
         if (ModList.get().isLoaded("kubejs")) {
             ResourceLocation infiniteItemCellModel = ResourceLocation.fromNamespaceAndPath(
@@ -270,6 +271,12 @@ public final class NeoECOPrototypeClient {
         event.registerLayerDefinition(FumoModel.SLIM_LAYER_LOCATION, FumoModel::createSlimBodyLayer);
     }
 
+    /** These two names only resolve because blocks.json stitches them; see the guard in the suite. */
+    private static final ResourceLocation DISSOLUTION_STILL =
+            ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "block/dissolution_solution_still");
+    private static final ResourceLocation DISSOLUTION_FLOWING =
+            ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "block/dissolution_solution_flow");
+
     /**
      * Break particles come from the block atlas, and only the bundled skin is stitched into it, so a
      * downloaded player skin has no sprite there and every doll would crumble into Mita confetti.
@@ -291,6 +298,22 @@ public final class NeoECOPrototypeClient {
                 return true;
             }
         }, ModRegistration.FUMO_BLOCK.get());
+
+        // eco gets this for free from Registrate; our fluid is hand-registered, so the two sprite names
+        // have to be handed over here. IClientFluidTypeExtensions.getStillTexture defaults to null and
+        // the bucket model bakes that straight into the block atlas lookup -- a null key is an NPE, not
+        // a missing-texture placeholder.
+        event.registerFluidType(new IClientFluidTypeExtensions() {
+            @Override
+            public ResourceLocation getStillTexture() {
+                return DISSOLUTION_STILL;
+            }
+
+            @Override
+            public ResourceLocation getFlowingTexture() {
+                return DISSOLUTION_FLOWING;
+            }
+        }, ModRegistration.DISSOLUTION_SOLUTION_TYPE.get());
     }
 }
 
