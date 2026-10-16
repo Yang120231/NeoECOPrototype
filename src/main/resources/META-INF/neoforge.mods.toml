@@ -45,7 +45,7 @@ versionRange = "[19.2.17,)"
 ordering = "AFTER"
 side = "BOTH"
 
-# Floor is 21.2.3; the addon compiles and tests against 21.2.6. Two of eco's classes are load-bearing
+# Floor is 21.2.4; the addon compiles and tests against 21.2.6. Two of eco's classes are load-bearing
 # anyway: gui.common.FluidHatchUI.createFluidHatchUI, which our two fluid hatch blocks call
 # (21.2.1 keeps that factory on CraftingUIHelper and has no FluidHatchUI at all, so an older eco would
 # throw NoClassDefFoundError the moment a player opened one of those GUIs), and gui.GuiTitleProvider
@@ -54,17 +54,20 @@ side = "BOTH"
 # out identical from 21.2.1 through 21.2.6 (modId + type + ordering + versionRange per row -- eco declares
 # no "mandatory" key at all, it marks required vs optional with "type"), so no other floor here moves
 # with it.
-# The floor itself is 21.2.3 because of two constructors that kept their class names and changed shape:
-# StorageHostUI$Config gained IntSupplier tier + BooleanSupplier formed (13 -> 15 args) and
-# StorageHostActionUI$Config lost the bulk-marking trio (16 -> 13). 21.2.2 still has the old pair, so a
-# 21.2.2 player would get NoSuchMethodError opening the L1 storage host - the same symptom 1.2.7 shipped.
+# The floor has two independent reasons and the later one wins. 21.2.3 reshaped two constructors that
+# kept their class names: StorageHostUI$Config gained IntSupplier tier + BooleanSupplier formed
+# (13 -> 15 args) and StorageHostActionUI$Config lost the bulk-marking trio (16 -> 13), so a 21.2.2
+# player would get NoSuchMethodError opening the L1 storage host - the same symptom 1.2.7 shipped.
+# Then 21.2.4 is where StorageHostUI$CellEntry gained interactionId together with the 4-arg atDrive
+# our rows now call. On 21.2.3 every row would carry a null id, eco's client returns without a word,
+# and the panel opens only to ignore every click - so refusing at load is the better outcome.
 # Do not treat a range as a safety net: 1.2.7 shipped an upper bound that should have excluded
 # 21.2.0, a player still loaded it with that eco and got NoSuchMethodError when opening the L1
 # storage host GUI. ABI surprises are caught by compiling against the target, not by bounding it.
 [[dependencies.neoecoprototype]]
 modId = "neoecoae"
 mandatory = true
-versionRange = "[21.2.3,)"
+versionRange = "[21.2.4,)"
 # AFTER for the same reason as AE2 above: several of our items extend eco's cell items, so binding our
 # registry entry loads eco's class and runs its statics, which read eco's and AE2's registries.
 ordering = "AFTER"

@@ -76,8 +76,9 @@ dependencies {
 // Floor is [21.2.3,) because two constructors kept their class names and changed shape there:
 // StorageHostUI.Config gained IntSupplier tier + BooleanSupplier formed (13 -> 15 args) and
 // StorageHostActionUI.Config lost the bulk-marking trio (16 -> 13). The panel members we now call -
-// StorageHostUI$Config's 19-arg form ending in CellInserter + Supplier<ItemStack>, CellEntry's 12-arg form
-// and its 4-arg atDrive - all exist in 21.2.3 too, which is why the floor does not chase the baseline.
+// StorageHostUI$Config's 19-arg form ending in CellInserter + Supplier<ItemStack> and CellEntry's 12-arg
+// form exist in 21.2.3 too, but the 4-arg atDrive does not - it arrives in 21.2.4 together with
+// interactionId - so the floor is [21.2.4,), one release behind the baseline rather than three.
 // What 21.2.3 also took is eco's own 一键标记 button: StorageHostActionUI.create no longer builds one and
 // StorageBulkMarkingIntegration is called only from eco's mega controller - see SimplifyStorageHostBlockEntity.
 // GuiTitleProvider (PR #110) and grid.NEMachineLookup (PR #109) are still carried; both are in the 104.
