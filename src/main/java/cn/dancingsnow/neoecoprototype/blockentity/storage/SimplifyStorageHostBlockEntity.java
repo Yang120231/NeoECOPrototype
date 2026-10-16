@@ -413,7 +413,7 @@ public class SimplifyStorageHostBlockEntity
                 this::isFormed,
                 this::getStoredEnergy,
                 this::getMaxEnergy,
-                () -> 0L,
+                this::panelIdlePowerPerTick,
                 () -> Long.toString(getMaxLoadUsedBytes()),
                 this::createCellEntries,
                 createStorageTypeLines(),
@@ -427,6 +427,33 @@ public class SimplifyStorageHostBlockEntity
                 (drivePos, interactionId, shiftDown) -> extractCellForPanel(drivePos, player),
                 (drivePos, stack) -> insertCellForPanel(drivePos, stack, player),
                 () -> new ItemStack(getBlockState().getBlock()));
+    }
+
+    /**
+     * What the panel's "total consumption" line asks for: the idle drain of the grid nodes this machine
+     * owns. Every member already sets its own (the host above, each drive in {@code updateIdlePower}), so
+     * this reads it back off the nodes instead of recomputing it, and skips itself in the member list
+     * because the cluster keeps its controller separately on some paths. It used to be a literal zero,
+     * which told the player a working machine costs nothing to run.
+     */
+    public long panelIdlePowerPerTick() {
+        var ownNode = getMainNode().getNode();
+        var total = new double[1];
+        if (ownNode != null) {
+            total[0] = ownNode.getIdlePowerUsage();
+        }
+        SimplifyStorageCluster cluster = getCluster();
+        if (cluster != null) {
+            cluster.getBlockEntities().forEachRemaining(member -> {
+                if (member != this && member instanceof NEBlockEntity<?, ?> blockEntity) {
+                    var node = blockEntity.getMainNode().getNode();
+                    if (node != null) {
+                        total[0] += node.getIdlePowerUsage();
+                    }
+                }
+            });
+        }
+        return Math.round(total[0]);
     }
 
     /**

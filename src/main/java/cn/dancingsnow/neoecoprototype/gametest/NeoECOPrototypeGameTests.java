@@ -8358,6 +8358,45 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * The panel's "total consumption" slot was fed a literal zero, so a running machine told the player it
+     * cost nothing. The assertion is deliberately not just "positive": a formed L1 room always has drives and
+     * each drive sets its own node idle, so a number that counted only the controller would also be positive.
+     * Requiring it to exceed the controller's own node is what proves the members are in the sum.
+     */
+    @GameTest(template = "l1_room", batch = "storage_panel_rows", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelReportsTheWholeMachineIdleDrain(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
+                        helper.fail("the L1 storage controller is not our host block entity: " + host);
+                        return;
+                    }
+                    var ownNode = storageHost.getMainNode().getNode();
+                    if (ownNode == null) {
+                        helper.fail("the host has no grid node, so there is nothing to compare the sum with");
+                        return;
+                    }
+                    var own = ownNode.getIdlePowerUsage();
+                    var reported = storageHost.panelIdlePowerPerTick();
+                    if (reported <= 0L) {
+                        helper.fail("the panel reports an idle drain of " + reported
+                                + " AE/t for a formed machine");
+                        return;
+                    }
+                    if (reported <= Math.round(own)) {
+                        helper.fail("the panel reports " + reported + " AE/t while the controller node alone"
+                                + " draws " + own + " - the machine's other members are not in the sum");
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /**
      * Every block of ours that carries a grid node must also answer AE2's block-capability query, or nothing
      * can find it from outside: AE2 discovers in-world nodes through {@code GridHelper.getNodeHost} ->
      * {@code level.getCapability(IN_WORLD_GRID_NODE_HOST)}, and it registers that capability for the block
