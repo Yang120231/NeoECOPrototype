@@ -37,11 +37,11 @@ public final class SimplifyTooltipHandler {
     /** The expansion card has no screen, so its rules have to be readable on the item itself. */
     private static final String EXPANSION_CARD_KEY =
             "item.neoecoprototype.simplify_structure_expansion_card.desc";
-    /** Each rung card says which rung it covers and that it is spent only on a landed swap. */
-    private static final String TIER_UPGRADE_4_6_KEY =
-            "item.neoecoprototype.simplify_tier_upgrade_card_l4_l6.desc";
-    private static final String TIER_UPGRADE_6_9_KEY =
-            "item.neoecoprototype.simplify_tier_upgrade_card_l6_l9.desc";
+    /** Each disk says what the swap costs, what comes back, and the one thing it does not carry over. */
+    private static final String MIGRATION_DRIVE_KEY =
+            "item.neoecoprototype.migration_drive.desc";
+    private static final String MIGRATION_DRIVE_CREATIVE_KEY =
+            "item.neoecoprototype.migration_drive_creative.desc";
     /** Trinity is implemented but withheld from players; every one of its parts says so in red. */
     private static final String NOT_IMPLEMENTED_KEY = "item.neoecoprototype.not_implemented";
 
@@ -95,11 +95,9 @@ public final class SimplifyTooltipHandler {
         if (stack.is(ModRegistration.SIMPLIFY_STRUCTURE_EXPANSION_CARD.get())) {
             return EXPANSION_CARD_KEY;
         }
-        if (stack.is(ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L4_L6.get())) {
-            return TIER_UPGRADE_4_6_KEY;
-        }
-        if (stack.is(ModRegistration.SIMPLIFY_TIER_UPGRADE_CARD_L6_L9.get())) {
-            return TIER_UPGRADE_6_9_KEY;
+        if (stack.getItem() instanceof cn.dancingsnow.neoecoprototype.items.SimplifyMigrationDriveItem drive) {
+            return drive.rung() == cn.dancingsnow.neoecoprototype.items.SimplifyMigrationDriveItem.Rung
+                    .STRAIGHT_TO_NINE ? MIGRATION_DRIVE_CREATIVE_KEY : MIGRATION_DRIVE_KEY;
         }
         return null;
     }
