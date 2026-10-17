@@ -9462,9 +9462,25 @@ public final class NeoECOPrototypeGameTests {
                 problems.add(pair[0] + " is " + pngWidth(ours) + "x" + pngHeight(ours)
                         + " but eco's sheet is " + pngWidth(theirs) + "x" + pngHeight(theirs));
             }
-            if (java.util.Arrays.equals(ours, theirs)) {
-                problems.add(pair[0] + " is byte-identical to eco's - it replaces nothing and only"
-                        + " costs jar space");
+            var oursPixels = pngArgb(ours);
+            var theirsPixels = pngArgb(theirs);
+            if (oursPixels == null || theirsPixels == null) {
+                problems.add(pair[0] + ": a sheet could not be decoded ("
+                        + (oursPixels == null ? "ours" : "eco's") + "), so the pixel comparison is blind");
+                continue;
+            }
+            int same = 0;
+            for (int pixel = 0; pixel < theirsPixels.length; pixel++) {
+                if (oursPixels[pixel] == theirsPixels[pixel]) {
+                    same++;
+                }
+            }
+            if (same == theirsPixels.length) {
+                // A re-encoded copy of eco's own sheet passes a byte comparison and changes nothing on
+                // screen - which is exactly how a bad merge would ship. Compare what it draws, not the
+                // file's bytes.
+                problems.add(pair[0] + " draws exactly what eco already draws (" + theirsPixels.length
+                        + " of " + theirsPixels.length + " pixels identical) - it replaces nothing");
             }
         }
         if (!problems.isEmpty()) {
@@ -9491,6 +9507,21 @@ public final class NeoECOPrototypeGameTests {
         try (resource) {
             return resource.readAllBytes();
         } catch (java.io.IOException failure) {
+            return null;
+        }
+    }
+
+    /** Decodes a PNG into ARGB pixels, or null if the codec is unavailable. */
+    private static int[] pngArgb(byte[] png) {
+        try (var stream = new java.io.ByteArrayInputStream(png)) {
+            var image = javax.imageio.ImageIO.read(stream);
+            if (image == null) {
+                return null;
+            }
+            var out = new int[image.getWidth() * image.getHeight()];
+            image.getRGB(0, 0, image.getWidth(), image.getHeight(), out, 0, image.getWidth());
+            return out;
+        } catch (java.io.IOException | RuntimeException failure) {
             return null;
         }
     }
