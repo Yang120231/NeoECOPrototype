@@ -9427,4 +9427,80 @@ public final class NeoECOPrototypeGameTests {
         }
         helper.succeed();
     }
+
+    /**
+     * The five panel atlases we hand to eco's {@code ui-eco} provider have to be the same size as the
+     * sheets they replace, because every sprite on them is addressed by pixel rectangle: a sheet that
+     * comes back 2 pixels taller silently moves every other cell, and no compile or render error says so.
+     * Each one also has to actually differ from eco's, since a byte-identical file is dead weight in the
+     * jar - which is why her {@code eco_cpu_controller.png} (0.0% differing) is not carried at all.
+     */
+    @GameTest(template = "empty", batch = "panel_skins", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelSkinsMatchTheAtlasesTheyReplace(GameTestHelper helper) {
+        var pairs = new String[][]{
+                {"storage_controller", "textures/guis/storage/storage_controller.png"},
+                {"storage_widget", "textures/guis/storage/storage_widget.png"},
+                {"cpu_widget", "textures/guis/cpu_widget.png"},
+                {"crafting_controller", "textures/guis/crafting_controller.png"},
+                {"crafting_widgets", "textures/guis/crafting_widgets.png"},
+        };
+        var problems = new java.util.ArrayList<String>();
+        for (var pair : pairs) {
+            var ours = readShippedBytes("/assets/" + NeoECOPrototype.MOD_ID
+                    + "/textures/gui/host_panel/" + pair[0] + ".png");
+            var theirs = readShippedBytesFrom("neoecoae", pair[1]);
+            if (ours == null) {
+                problems.add(pair[0] + ".png: our copy is not in the jar");
+                continue;
+            }
+            if (theirs == null) {
+                problems.add(pair[1] + ": eco no longer ships it, so the replacement names nothing");
+                continue;
+            }
+            if (pngWidth(ours) != pngWidth(theirs) || pngHeight(ours) != pngHeight(theirs)) {
+                problems.add(pair[0] + " is " + pngWidth(ours) + "x" + pngHeight(ours)
+                        + " but eco's sheet is " + pngWidth(theirs) + "x" + pngHeight(theirs));
+            }
+            if (java.util.Arrays.equals(ours, theirs)) {
+                problems.add(pair[0] + " is byte-identical to eco's - it replaces nothing and only"
+                        + " costs jar space");
+            }
+        }
+        if (!problems.isEmpty()) {
+            helper.fail(String.join(" | ", problems));
+            return;
+        }
+        helper.succeed();
+    }
+
+    private static byte[] readShippedBytes(String path) {
+        try (var resource = NeoECOPrototype.class.getResourceAsStream(path)) {
+            return resource == null ? null : resource.readAllBytes();
+        } catch (java.io.IOException failure) {
+            return null;
+        }
+    }
+
+    private static byte[] readShippedBytesFrom(String namespace, String path) {
+        var resource = cn.dancingsnow.neoecoae.NeoECOAE.class.getResourceAsStream("/assets/"
+                + namespace + "/" + path);
+        if (resource == null) {
+            return null;
+        }
+        try (resource) {
+            return resource.readAllBytes();
+        } catch (java.io.IOException failure) {
+            return null;
+        }
+    }
+
+    /** PNG IHDR: an 8-byte signature, then a 4-byte length, "IHDR", then width and height big-endian. */
+    private static int pngWidth(byte[] png) {
+        return ((png[16] & 0xFF) << 24) | ((png[17] & 0xFF) << 16) | ((png[18] & 0xFF) << 8) | (png[19] & 0xFF);
+    }
+
+    private static int pngHeight(byte[] png) {
+        return ((png[20] & 0xFF) << 24) | ((png[21] & 0xFF) << 16) | ((png[22] & 0xFF) << 8) | (png[23] & 0xFF);
+    }
 }
