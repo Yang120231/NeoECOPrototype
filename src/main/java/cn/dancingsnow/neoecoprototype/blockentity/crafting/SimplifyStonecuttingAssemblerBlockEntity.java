@@ -6,7 +6,6 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
-import appeng.blockentity.crafting.IMolecularAssemblerSupportedPattern;
 import appeng.blockentity.crafting.MolecularAssemblerBlockEntity;
 import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
 import cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig;
@@ -21,7 +20,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
-/** Molecular assembler that also accepts the addon's processor patterns. */
+/** Assembler for the addon's processor recipes; it refuses ordinary molecular-assembly patterns. */
 public class SimplifyStonecuttingAssemblerBlockEntity extends MolecularAssemblerBlockEntity {
     /** The last pattern output we logged a refusal for, so a provider retrying every tick logs once. */
     @Nullable
@@ -33,12 +32,15 @@ public class SimplifyStonecuttingAssemblerBlockEntity extends MolecularAssembler
 
     @Override
     public boolean pushPattern(IPatternDetails pattern, KeyCounter[] inputs, Direction direction) {
-        if (level == null || pattern instanceof IMolecularAssemblerSupportedPattern) {
+        // Inheriting AE2's assembler made this machine a plain molecular assembler to anything that asks
+        // by behaviour - a pattern provider included - so an ordinary pattern could be pushed in from the
+        // network and run here. It is refused on purpose; see the guard test.
+        if (level == null || pattern instanceof ProcessorAssemblyPattern) {
             return super.pushPattern(pattern, inputs, direction);
         }
         ProcessorAssemblerRecipe recipe = matchRecipe(pattern);
         if (recipe == null) {
-            logRefusal(pattern, "没有对得上的配方");
+            logRefusal(pattern, "这台机器只跑处理器装配配方，普通分子装配样板请交给分子装配室");
             return false;
         }
         var plan = new ProcessorAssemblyPattern(pattern, recipe, this::deliverSurplus);

@@ -38,7 +38,10 @@ public final class MatrixMaterials {
         /** 全能 */
         UNIVERSAL("item/simplify_universal_storage_cell_1k", "block/cell/storage_cell_l1_universal"),
         /** 量子 */
-        QUANTUM("item/simplify_quantum_storage_cell_1k", "block/cell/storage_cell_l1_quantum");
+        QUANTUM("item/simplify_quantum_storage_cell_1k", "block/cell/storage_cell_l1_quantum"),
+        /** 复合全能 */
+        COMPLEX_UNIVERSAL("item/simplify_complex_universal_storage_cell_1m",
+                "block/cell/storage_cell_l1_complex_universal");
 
         private final String inventoryPath;
         private final String drivePath;
@@ -68,7 +71,7 @@ public final class MatrixMaterials {
 
     /** Family names that select a material without changing how the matrix stores things. */
     public static final java.util.List<String> FAMILY_NAMES = java.util.List.of(
-            "other", "small_bulk", "pigmee", "universal", "quantum");
+            "other", "small_bulk", "pigmee", "universal", "quantum", "complex_universal");
 
     @Nullable
     public static Kind parse(String value) {

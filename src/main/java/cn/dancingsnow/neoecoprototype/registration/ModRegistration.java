@@ -156,6 +156,7 @@ public class ModRegistration {
     public static Supplier<? extends Item> OPTIONAL_BEYOND_STORAGE_CELL;
     public static Supplier<? extends Item> OPTIONAL_UNIVERSAL_CELL_1K;
     public static Supplier<? extends Item> OPTIONAL_UNIVERSAL_CELL_1M;
+    public static Supplier<? extends Item> OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M;
     public static Supplier<? extends Item> OPTIONAL_QUANTUM_CELL_1K;
     public static Supplier<? extends Item> OPTIONAL_QUANTUM_CELL_1M;
     /** Assigned by FeStorageIntegration only when appflux is installed. */
@@ -166,6 +167,8 @@ public class ModRegistration {
             ITEMS.register("simplify_quantum_storage_matrix_housing", () -> new Item(new Item.Properties()));
     public static final Supplier<Item> SIMPLIFY_UNIVERSAL_STORAGE_MATRIX_HOUSING =
             ITEMS.register("simplify_universal_storage_matrix_housing", () -> new Item(new Item.Properties()));
+    public static final Supplier<Item> SIMPLIFY_COMPLEX_UNIVERSAL_STORAGE_MATRIX_HOUSING =
+            ITEMS.register("simplify_complex_universal_storage_matrix_housing", () -> new Item(new Item.Properties()));
     public static final Supplier<Item> SIMPLIFY_CHEMICAL_STORAGE_MATRIX_HOUSING =
             ITEMS.register("simplify_chemical_storage_matrix_housing", () -> new Item(new Item.Properties()));
 
@@ -247,7 +250,7 @@ public class ModRegistration {
 
     /** AE, not FE. eco's own top cell is 1e9, so these are 16x and 512x above it. */
     private static final double ENERGIZED_CELL_CAPACITY_16G = 16_000_000_000.0;
-    private static final double ENERGIZED_CELL_CAPACITY_512G = 512_000_000_000.0;
+    private static final double ENERGIZED_CELL_CAPACITY_256G = 256_000_000_000.0;
 
     private static final BlockBehaviour.Properties MACHINE_PROPS =
             BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(2.0F);
@@ -284,7 +287,7 @@ public class ModRegistration {
                     () -> new EnergizedEnergyCellBlock(ENERGIZED_CELL_CAPACITY_16G));
     public static final Supplier<EnergizedEnergyCellBlock> ENERGIZED_ENERGY_CELL_512G_BLOCK =
             BLOCKS.register("energized_energy_cell_512g",
-                    () -> new EnergizedEnergyCellBlock(ENERGIZED_CELL_CAPACITY_512G));
+                    () -> new EnergizedEnergyCellBlock(ENERGIZED_CELL_CAPACITY_256G));
 
     public static final Supplier<SimplifyStorageCasingBlock> SIMPLIFY_STORAGE_CASING_BLOCK =
             BLOCKS.register("simplify_storage_casing",
@@ -431,9 +434,9 @@ public class ModRegistration {
      * and the creative one is not "creative mode only": it is the disk that jumps any rung straight to
      * L9 and simply has no recipe yet, so nothing can reach it in survival.
      *
-     * <p>None of the five is in the creative tab or in any recipe, so there is no survival route to them
-     * while their recipes are still unwritten. The empty disk is what a used one becomes, so it needs no
-     * route of its own. They stack because they are spent on use, unlike the expansion card.</p>
+     * <p>All five are in the creative tab; none of them is in any recipe, so there is still no survival route
+     * while their recipes are unwritten. They stack because they are spent on use, unlike the expansion
+     * card.</p>
      */
     public static final Supplier<SimplifyMigrationDriveItem> MIGRATION_DRIVE_1_4 =
             ITEMS.register("migration_drive_1_4",
@@ -1485,10 +1488,22 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                               output.accept(OPTIONAL_QUANTUM_CELL_1K.get());
                               output.accept(OPTIONAL_QUANTUM_CELL_1M.get());
                           }
+                          if (OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M != null) {
+                              output.accept(SIMPLIFY_COMPLEX_UNIVERSAL_STORAGE_MATRIX_HOUSING.get());
+                              output.accept(OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M.get());
+                          }
                           output.accept(SIMPLIFY_CONCRETE_STORAGE_MATRIX_HOUSING.get());
                           output.accept(SIMPLIFY_CONCRETE_STORAGE_CELL.get());
                           output.accept(SIMPLIFY_SINGULARITY_CELL.get());
                         output.accept(SIMPLIFY_STRUCTURE_EXPANSION_CARD.get());
+                        // The whole ladder, next to the card it replaces: the four usable disks and the spent
+                        // shell, so a tester can hold both ends of a rung at once. None of the five has a
+                        // recipe, so this is a creative-mode route, not a survival one.
+                        output.accept(MIGRATION_DRIVE_1_4.get());
+                        output.accept(MIGRATION_DRIVE_4_6.get());
+                        output.accept(MIGRATION_DRIVE_6_9.get());
+                        output.accept(MIGRATION_DRIVE_CREATIVE.get());
+                        output.accept(MIGRATION_DRIVE_EMPTY.get());
                          output.accept(SIMPLIFY_GREEN_CRYSTAL_MATRIX.get());
                          output.accept(SIMPLIFY_ITEM_STORAGE_MATRIX_HOUSING.get());
                          output.accept(PIGMEE_STORAGE_MATRIX_HOUSING.get());

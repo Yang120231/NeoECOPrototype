@@ -19,6 +19,9 @@ public final class UniversalIntegration {
         ModRegistration.OPTIONAL_QUANTUM_CELL_1M = items.register("simplify_quantum_storage_cell_1m",
                 () -> new SimplifyQuantumStorageCellItem(new Item.Properties().stacksTo(1),
                         SimplifyQuantumStorageCellItem.BYTES_1M));
+        ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M = items.register(
+                "simplify_complex_universal_storage_cell_1m",
+                () -> new SimplifyComplexUniversalStorageCellItem(new Item.Properties().stacksTo(1)));
     }
 
     private UniversalIntegration() {

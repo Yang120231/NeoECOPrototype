@@ -1432,6 +1432,113 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * The L1 assembler inherits AE2's molecular assembler, so a pattern provider on the same grid can push
+     * an ordinary crafting pattern straight into it. It is refused on purpose - the machine's job is the
+     * processor recipes - and this is the guard that the refusal is real: the pattern used here is exactly
+     * the kind AE2's own assembler would accept, and the refusal must not consume or store anything.
+     */
+    @GameTest(template = "empty", batch = "processor_assembler", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void assemblerRefusesOrdinaryCraftingPatterns(GameTestHelper helper) {
+        var pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModRegistration.SIMPLIFY_STONECUTTING_ASSEMBLER_BLOCK.get());
+        if (!(helper.getBlockEntity(pos) instanceof cn.dancingsnow.neoecoprototype
+                .blockentity.crafting.SimplifyStonecuttingAssemblerBlockEntity assembler)) {
+            helper.fail("the assembler did not come into existence");
+            return;
+        }
+        var chest = new ItemStack(Items.CHEST);
+        net.minecraft.world.item.crafting.RecipeHolder<net.minecraft.world.item.crafting.CraftingRecipe> holder = null;
+        for (var candidate : helper.getLevel().getRecipeManager()
+                .getAllRecipesFor(net.minecraft.world.item.crafting.RecipeType.CRAFTING)) {
+            if (ItemStack.isSameItemSameComponents(candidate.value().getResultItem(
+                    helper.getLevel().registryAccess()), chest)) {
+                holder = candidate;
+                break;
+            }
+        }
+        if (holder == null) {
+            helper.fail("no vanilla crafting recipe yields a chest, so this cannot build a real pattern");
+            return;
+        }
+        var used = new ItemStack[holder.value().getIngredients().size()];
+        for (int i = 0; i < used.length; i++) {
+            var ingredient = holder.value().getIngredients().get(i);
+            used[i] = ingredient.isEmpty() ? ItemStack.EMPTY : ingredient.getItems()[0];
+        }
+        var encoded = PatternDetailsHelper.encodeCraftingPattern(holder, used, chest, false, false);
+        IPatternDetails pattern = PatternDetailsHelper.decodePattern(encoded, helper.getLevel());
+        if (!(pattern instanceof appeng.blockentity.crafting.IMolecularAssemblerSupportedPattern)) {
+            helper.fail("the test pattern is not one AE2's assembler would accept, so this proves nothing");
+            return;
+        }
+        var slots = pattern.getInputs();
+        KeyCounter[] supplied = new KeyCounter[slots.length];
+        for (int i = 0; i < slots.length; i++) {
+            KeyCounter counter = new KeyCounter();
+            for (GenericStack stack : slots[i].getPossibleInputs()) {
+                counter.add(stack.what(), stack.amount() * slots[i].getMultiplier());
+            }
+            supplied[i] = counter;
+        }
+        if (assembler.pushPattern(pattern, supplied, net.minecraft.core.Direction.UP)) {
+            helper.fail("the assembler accepted an ordinary molecular-assembly pattern");
+            return;
+        }
+        for (int i = 0; i < supplied.length; i++) {
+            long left = 0L;
+            for (GenericStack stack : slots[i].getPossibleInputs()) {
+                left += supplied[i].get(stack.what());
+            }
+            long asked = 0L;
+            for (GenericStack stack : slots[i].getPossibleInputs()) {
+                asked += stack.amount() * slots[i].getMultiplier();
+            }
+            if (left != asked) {
+                helper.fail("refusing the pattern consumed material from slot " + i + ": " + left
+                        + " left of " + asked);
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * AE2 gives a pattern provider the terminal identity of the machine it faces - right for a cable part
+     * that exists to feed one machine, wrong for our standalone 27-slot block, which was showing up in
+     * terminals as "分子装配室" or "ME驱动器" depending on what happened to be next to it. Guards that it
+     * reports itself even when an assembler is touching every side.
+     */
+    @GameTest(template = "empty", batch = "pattern_provider_group", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void patternProviderReportsItself(GameTestHelper helper) {
+        var providerPos = new BlockPos(1, 1, 1);
+        helper.setBlock(providerPos, ModRegistration.SIMPLIFY_PATTERN_PROVIDER_BLOCK.get());
+        var assembler = appeng.core.definitions.AEBlocks.MOLECULAR_ASSEMBLER.block().defaultBlockState();
+        for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            helper.setBlock(providerPos.relative(direction), assembler);
+        }
+        if (!(helper.getBlockEntity(providerPos) instanceof cn.dancingsnow.neoecoprototype
+                .blockentity.crafting.SimplifyPatternProviderBlockEntity provider)) {
+            helper.fail("the L1 pattern provider did not come into existence");
+            return;
+        }
+        var group = provider.getTerminalGroup();
+        var expectedIcon = AEItemKey.of(ModRegistration.SIMPLIFY_PATTERN_PROVIDER_BLOCK.get());
+        if (!expectedIcon.equals(group.icon())) {
+            helper.fail("the provider advertises icon " + group.icon() + " instead of " + expectedIcon
+                    + ", so it is copying the machine it faces");
+            return;
+        }
+        var name = group.name().getString();
+        if (name.contains("分子装配室") || name.contains("ME驱动器")) {
+            helper.fail("the provider advertises itself as " + name);
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
      * A batched push may not consume more than the cycle can hand over. Snowballs are the shape that
      * shows it: the recipe yields four per run and a stack holds sixteen, so four runs fill one cycle --
      * and a fifth used to be paid for out of the network and then dropped, because AE2 rebuilds the grid
@@ -2467,6 +2574,7 @@ public final class NeoECOPrototypeGameTests {
             java.util.Map.entry("storage_cell_l1r_universal", "14,0,16,6"),
             java.util.Map.entry("storage_cell_l1_quantum", "14,0,16,6"),
             java.util.Map.entry("storage_cell_l1r_quantum", "14,0,16,6"),
+            java.util.Map.entry("storage_cell_l1_complex_universal", "14,0,16,6"),
             java.util.Map.entry("storage_cell_l0_chemical_1k", "0,0,6,3"),
             java.util.Map.entry("storage_cell_l0_chemical_4k", "0,0,6,3"),
             java.util.Map.entry("storage_cell_l0_chemical_16k", "0,0,6,3"),
@@ -2679,8 +2787,8 @@ public final class NeoECOPrototypeGameTests {
 
     /**
      * Every drive that is registered has to have its own model, its own texture behind that model's layer0,
-     * and a name in both lang files. The five sit outside the creative tab and have no recipe yet, which is
-     * the point of parking them - but a parked item with no artwork is worse than an absent one, because the
+     * and a name in both lang files. All five are in the creative tab and none has a recipe yet, which is the
+     * point of parking them - but a parked item with no artwork is worse than an absent one, because the
      * player who gets one by command holds a purple-black cube with the raw key over it.
      */
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, batch = "migration_drive")
@@ -2778,6 +2886,42 @@ public final class NeoECOPrototypeGameTests {
         NeoECOPrototype.LOGGER.info("migration drives: {} registered, each with its own model, layer0"
                 + " texture and name in both languages; rung name colours {}", MIGRATION_DRIVES.size(),
                 seenColors.values().stream().map(c -> Integer.toHexString(c)).toList());
+        helper.succeed();
+    }
+
+    /**
+     * All five migration disks are reachable from the creative tab. The tab is read through the generator the
+     * client itself uses, with a known member and a known outsider checked first, so a blind or empty read
+     * cannot come back green.
+     */
+    @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, batch = "migration_drive")
+    public static void migrationDrivesAreInCreativeTab(GameTestHelper helper) {
+        var tab = ModRegistration.SIMPLIFY_TAB.get();
+        tab.buildContents(new net.minecraft.world.item.CreativeModeTab.ItemDisplayParameters(
+                net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS, true, helper.getLevel().registryAccess()));
+        var contents = tab.getDisplayItems();
+        if (contents.isEmpty()) {
+            helper.fail("the tab generator returned no stacks at all, so membership proves nothing");
+            return;
+        }
+        java.util.function.Predicate<Item> inTab =
+                item -> contents.stream().anyMatch(stack -> stack.getItem() == item);
+        if (!inTab.test(ModRegistration.SIMPLIFY_DRIVE_ITEM.get())) {
+            helper.fail("the drive is missing from the tab, so this reader cannot see membership at all");
+            return;
+        }
+        if (inTab.test(ModRegistration.FLAWLESS_BUDDING_FRIGIT_ITEM.get())) {
+            helper.fail("the outsider control is inside the tab, so the membership test is not the tab");
+            return;
+        }
+        for (String path : MIGRATION_DRIVES) {
+            var item = BuiltInRegistries.ITEM.get(
+                    ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, path));
+            if (!inTab.test(item)) {
+                helper.fail(path + " is not in the creative tab (" + contents.size() + " stacks scanned)");
+                return;
+            }
+        }
         helper.succeed();
     }
 
@@ -6011,6 +6155,25 @@ public final class NeoECOPrototypeGameTests {
             helper.fail("the infinite concrete matrix must keep its own row");
             return;
         }
+        // Read off eco's own registry rather than off our item classes: our omni families ride eco's
+        // registered cell types now, so the row they land in is eco's row, and a private type that merely
+        // looks like one would still pass a check written against our own classes.
+        var omniType = cn.dancingsnow.neoecoae.all.NERegistries.CELL_TYPE.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("neoecoae", "omni"));
+        if (omniType != null && SimplifyStorageHostBlockEntity.panelRowOf(omniType, java.util.Set.of())
+                != SimplifyStorageHostBlockEntity.ROW_UNIVERSAL) {
+            helper.fail("eco's omni cell type must be the row our universal matrix reads as, got row "
+                    + SimplifyStorageHostBlockEntity.panelRowOf(omniType, java.util.Set.of()));
+            return;
+        }
+        var complexOmniType = cn.dancingsnow.neoecoae.all.NERegistries.CELL_TYPE.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("neoecoae", "complex_omni"));
+        if (complexOmniType != null && SimplifyStorageHostBlockEntity.panelRowOf(complexOmniType, java.util.Set.of())
+                != SimplifyStorageHostBlockEntity.ROW_COMPLEX_UNIVERSAL) {
+            helper.fail("eco's complex omni cell type must have its own row, got row "
+                    + SimplifyStorageHostBlockEntity.panelRowOf(complexOmniType, java.util.Set.of()));
+            return;
+        }
         if (SimplifyStorageHostBlockEntity.panelRowOf(
                 cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.CELL_TYPE, items)
                 != SimplifyStorageHostBlockEntity.ROW_NONE) {
@@ -8383,15 +8546,15 @@ public final class NeoECOPrototypeGameTests {
                         helper.fail("the battery is not public storage, so the grid may never read it");
                         return;
                     }
-                    // The 512G tier must not silently inherit the other block's number: both tiers share
+                    // The hollow tier must not silently inherit the other block's number: both tiers share
                     // one block entity type, so the capacity really has to come off the block.
                     var bigPos = cellPos.east();
                     level.setBlockAndUpdate(bigPos,
                             ModRegistration.ENERGIZED_ENERGY_CELL_512G_BLOCK.get().defaultBlockState());
                     if (level.getBlockEntity(bigPos) instanceof cn.dancingsnow.neoecoprototype
                             .blockentity.energy.EnergizedEnergyCellBlockEntity big
-                            && big.getAEMaxPower() != 512_000_000_000.0) {
-                        helper.fail("the 512G battery reports " + big.getAEMaxPower()
+                            && big.getAEMaxPower() != 256_000_000_000.0) {
+                        helper.fail("the hollow battery reports " + big.getAEMaxPower()
                                 + ", so the capacity is not coming off the block");
                         return;
                     }
@@ -8447,9 +8610,9 @@ public final class NeoECOPrototypeGameTests {
         var bigLines = bigStack.getTooltipLines(net.minecraft.world.item.Item.TooltipContext.EMPTY, null,
                 net.minecraft.world.item.TooltipFlag.Default.NORMAL);
         var bigExpected = appeng.core.localization.Tooltips
-                .energyStorageComponent(0.0, 512_000_000_000.0).getString();
+                .energyStorageComponent(0.0, 256_000_000_000.0).getString();
         if (bigLines.stream().noneMatch(line -> line.getString().equals(bigExpected))) {
-            helper.fail("the 512G item's tooltip has no line equal to '" + bigExpected + "', it has "
+            helper.fail("the hollow item's tooltip has no line equal to '" + bigExpected + "', it has "
                     + bigLines.stream().map(Component::getString).toList());
             return;
         }
@@ -8481,7 +8644,7 @@ public final class NeoECOPrototypeGameTests {
                     .EnergizedEnergyCellBlockEntity[2];
             for (var pair : java.util.List.of(
                     java.util.Map.entry(small, 16_000_000_000.0),
-                    java.util.Map.entry(big, 512_000_000_000.0))) {
+                    java.util.Map.entry(big, 256_000_000_000.0))) {
                 if (!(level.getBlockEntity(pair.getKey()) instanceof cn.dancingsnow.neoecoprototype
                         .blockentity.energy.EnergizedEnergyCellBlockEntity cell)) {
                     helper.fail("the block at " + pair.getKey() + " is not the battery any more");
@@ -8507,11 +8670,11 @@ public final class NeoECOPrototypeGameTests {
                         + "is the battery block entity registered for IN_WORLD_GRID_NODE_HOST?");
                 return;
             }
-            double expected = 16_000_000_000.0 + 512_000_000_000.0;
+            double expected = 16_000_000_000.0 + 256_000_000_000.0;
             double ceiling = first.getEnergyService().getMaxStoredPower();
             if (ceiling < expected) {
                 helper.fail("grid ceiling is " + ceiling + ", expected at least " + expected
-                        + " (16G + 512G) - the batteries were never announced to the energy service");
+                        + " (16G + 256G) - the batteries were never announced to the energy service");
                 return;
             }
             helper.succeed();

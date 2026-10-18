@@ -4,7 +4,6 @@ import cn.dancingsnow.neoecoae.api.storage.ECOCellType;
 import cn.dancingsnow.neoecoae.integration.ae2omnicells.NEOmniCellTypes;
 import cn.dancingsnow.neoecoae.integration.ae2omnicells.item.ECOUniversalStorageCellItem;
 import cn.dancingsnow.neoecoprototype.api.SimplifyTier;
-import cn.dancingsnow.neoecoprototype.integration.omni.UniversalCellTypes;
 import net.minecraft.world.item.Item;
 
 import java.util.function.Supplier;
@@ -27,7 +26,9 @@ final class OmniMatrixSupport {
      * @param types   the type count the table was written with, used as-is for universal
      */
     static Item create(Item.Properties properties, boolean quantum, int types, long bytes) {
-        Supplier<ECOCellType> cellType = quantum ? NEOmniCellTypes.QUANTUM_OMNI::get : UniversalCellTypes.UNIVERSAL;
+        Supplier<ECOCellType> cellType = quantum
+                ? NEOmniCellTypes.QUANTUM_OMNI::get
+                : NEOmniCellTypes.OMNI::get;
         return new ECOUniversalStorageCellItem(properties, SimplifyTier.L1, cellType, IDLE_DRAIN,
                 quantum ? UNLIMITED_TYPES : types, bytes);
     }

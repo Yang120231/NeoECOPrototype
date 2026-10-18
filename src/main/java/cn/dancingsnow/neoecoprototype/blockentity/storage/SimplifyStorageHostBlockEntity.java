@@ -27,6 +27,7 @@ import cn.dancingsnow.neoecoprototype.items.SimplifyConcreteStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem;
+import cn.dancingsnow.neoecoprototype.integration.omni.SimplifyComplexUniversalStorageCellItem;
 import cn.dancingsnow.neoecoprototype.integration.omni.SimplifyUniversalStorageCellItem;
 import cn.dancingsnow.neoecoprototype.integration.omni.SimplifyQuantumStorageCellItem;
 import net.neoforged.fml.ModList;
@@ -408,10 +409,12 @@ public class SimplifyStorageHostBlockEntity
             net.minecraft.world.entity.player.Player player) {
         return new StorageHostUI.Config(
                 () -> getBlockState().getBlock().getName(),
-                // eco 21.2.3 reads this int twice: hostMarker(tier, formed) clamps it onto its own atlas,
-                // and StorageCellGrid.tierName is a tableswitch over 1→"L4", 2→"L6", 3→"L9" with
-                // default→"L0". No value prints "L1", so we pass our own tier and let the panel say "L0"
-                // rather than lie about being an L4.
+                // eco reads this int in three places and gates all of them on 1..3: the tier badge
+                // (StorageHostCharts$1, skipped at <= 0), the host marker (StorageHostCharts$HostIcon,
+                // skipped outside 1..3), and StorageCellGrid.tierName (tableswitch 1->"L4", 2->"L6",
+                // 3->"L9", default->"L0"). So our 0 costs the two painted cells and prints "L0" -
+                // confirmed in game, not inferred. Passing 1 would paint eco's L4 artwork on our own
+                // panel, and getTier() also gates cell acceptance, so 0 stays.
                 () -> getTier().getTier(),
                 this::isFormed,
                 this::getStoredEnergy,
@@ -557,6 +560,7 @@ public class SimplifyStorageHostBlockEntity
     public static final int ROW_QUANTUM = 5;
     public static final int ROW_CONCRETE = 6;
     public static final int ROW_FLUX = 7;
+    public static final int ROW_COMPLEX_UNIVERSAL = 8;
     /** Not a row: a cell the panel must not count anywhere. */
     public static final int ROW_NONE = -1;
 
@@ -572,6 +576,8 @@ public class SimplifyStorageHostBlockEntity
         if (ModList.get().isLoaded("ae2omnicells")) {
             lines.add(createStorageTypeLine(SimplifyUniversalStorageCellItem.getUniversalCellType(), ROW_UNIVERSAL));
             lines.add(createStorageTypeLine(SimplifyQuantumStorageCellItem.getQuantumCellType(), ROW_QUANTUM));
+            lines.add(createStorageTypeLine(
+                    SimplifyComplexUniversalStorageCellItem.getComplexUniversalCellType(), ROW_COMPLEX_UNIVERSAL));
         }
         // Dedicated row for the infinite concrete matrix.
         lines.add(createStorageTypeLine(SimplifyConcreteStorageCellItem.CELL_TYPE, ROW_CONCRETE));
@@ -608,6 +614,9 @@ public class SimplifyStorageHostBlockEntity
             }
             if (SimplifyQuantumStorageCellItem.getQuantumCellType().equals(cellType)) {
                 return ROW_QUANTUM;
+            }
+            if (SimplifyComplexUniversalStorageCellItem.getComplexUniversalCellType().equals(cellType)) {
+                return ROW_COMPLEX_UNIVERSAL;
             }
         }
         if (SimplifyConcreteStorageCellItem.CELL_TYPE.equals(cellType)) {

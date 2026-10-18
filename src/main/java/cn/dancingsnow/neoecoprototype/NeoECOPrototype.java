@@ -40,7 +40,6 @@ public class NeoECOPrototype {
             cn.dancingsnow.neoecoprototype.integration.mekanism.MekanismIntegration.register(ModRegistration.ITEMS);
         }
         if (ModList.get().isLoaded("ae2omnicells")) {
-            cn.dancingsnow.neoecoprototype.integration.omni.UniversalCellTypes.register(modBus);
             cn.dancingsnow.neoecoprototype.integration.omni.UniversalIntegration.register(ModRegistration.ITEMS);
         }
         if (ModList.get().isLoaded("beyonddimensions")) {

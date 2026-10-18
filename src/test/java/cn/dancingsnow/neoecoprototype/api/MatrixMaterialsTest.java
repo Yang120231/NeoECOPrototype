@@ -46,7 +46,7 @@ class MatrixMaterialsTest {
     /** Keeps the script-facing family names stable; renaming one is a breaking change for scripts. */
     @Test
     void familyNamesAreStable() {
-        assertEquals(List.of("other", "small_bulk", "pigmee", "universal", "quantum"),
+        assertEquals(List.of("other", "small_bulk", "pigmee", "universal", "quantum", "complex_universal"),
                 MatrixMaterials.FAMILY_NAMES);
     }
 }

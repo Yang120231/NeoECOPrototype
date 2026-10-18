@@ -1,6 +1,7 @@
 package cn.dancingsnow.neoecoprototype.integration.omni;
 
 import cn.dancingsnow.neoecoae.api.storage.ECOCellType;
+import cn.dancingsnow.neoecoae.integration.ae2omnicells.NEOmniCellTypes;
 import cn.dancingsnow.neoecoae.integration.ae2omnicells.item.ECOUniversalStorageCellItem;
 import cn.dancingsnow.neoecoprototype.api.SimplifyTier;
 import net.minecraft.world.item.Item;
@@ -8,8 +9,9 @@ import net.minecraft.world.item.Item;
 /**
  * L1 Omni cell using eco's native OmniCells storage backend.
  *
- * <p>The cell type is the registry entry from {@link UniversalCellTypes} rather than a private
- * instance, so eco's storage hosts recognise it and give it its own labelled row.
+ * <p>It rides eco's registered {@code neoecoae:omni} cell type, so the host panel labels this matrix's row
+ * exactly as it labels eco's own omni matrices - the same way the quantum matrix already rides
+ * {@code quantum_omni}.
  */
 public final class SimplifyUniversalStorageCellItem extends ECOUniversalStorageCellItem {
     public static final long BYTES_1K = 1L << 10;
@@ -18,11 +20,11 @@ public final class SimplifyUniversalStorageCellItem extends ECOUniversalStorageC
     public static final double IDLE_DRAIN = 8.0D;
 
     public static ECOCellType getUniversalCellType() {
-        return UniversalCellTypes.UNIVERSAL.get();
+        return NEOmniCellTypes.OMNI.get();
     }
 
     public SimplifyUniversalStorageCellItem(Item.Properties properties, long bytes) {
-        super(properties, SimplifyTier.L1, UniversalCellTypes.UNIVERSAL,
+        super(properties, SimplifyTier.L1, NEOmniCellTypes.OMNI::get,
                 IDLE_DRAIN, TOTAL_TYPES, bytes);
     }
 }

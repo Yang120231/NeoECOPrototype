@@ -1,12 +1,19 @@
 {
-  "type": "minecraft:crafting_shaped",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2omnicells"
+    }
+  ],
+  "type": "minecraft:crafting_shapeless",
   "category": "misc",
-  "key": {
-    "A": { "item": "minecraft:iron_ingot" },
-    "B": { "item": "ae2omnicells:quantum_omni_cell_component_1m" },
-    "C": { "item": "neoecoprototype:simplify_quantum_storage_matrix_housing" },
-    "D": { "item": "ae2omnicells:multidimensional_expansion_processor" }
-  },
-  "pattern": ["ABA", "CDC", "ABA"],
-  "result": { "count": 1, "id": "neoecoprototype:simplify_quantum_storage_cell_1m" }
+  "ingredients": [
+    { "item": "neoecoprototype:simplify_quantum_storage_matrix_housing" },
+    { "item": "ae2:singularity" },
+    { "item": "ae2omnicells:quantum_omni_cell_component_1m" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "neoecoprototype:simplify_quantum_storage_cell_1m"
+  }
 }

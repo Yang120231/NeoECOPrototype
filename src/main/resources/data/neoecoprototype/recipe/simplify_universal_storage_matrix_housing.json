@@ -1,15 +1,21 @@
 {
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2omnicells"
+    }
+  ],
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
     "A": { "item": "neoecoprototype:simplify_green_crystal_matrix" },
-    "B": { "item": "minecraft:redstone" },
-    "C": { "item": "ae2omnicells:omni_cell_housing" }
+    "B": { "item": "ae2:ender_dust" },
+    "C": { "item": "ae2omnicells:ender_ingot" },
+    "D": { "item": "ae2omnicells:omni_link_processor" }
   },
-  "pattern": ["ABA", "B B", "CCC"],
+  "pattern": ["ABA", "B B", "CDC"],
   "result": {
     "count": 1,
     "id": "neoecoprototype:simplify_universal_storage_matrix_housing"
   }
 }
-
