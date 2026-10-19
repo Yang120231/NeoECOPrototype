@@ -10,22 +10,37 @@ item_ids:
 
 # L1 Singularity Cell
 
-The L1 Singularity Cell is a storage cell that **consumes nothing**: once it sits in a drive its contents grow with world time, and it is drawn from like any other cell.
+Once it sits in a drive, **120 singularities land every 30 seconds**. It consumes nothing and takes nothing in, and it is drawn from like any other cell.
 
 ## How fast
 
-| Key | Default | Clamp |
-|-----|---------|-------|
-| `ticks_per_batch` | 600 ticks (30 s) | 60 ticks minimum |
-| `amount_per_batch` | 120 | 262,144 maximum |
+One batch is 120, and the bank jumps by that much each interval - it does not drip. The shipped interval is 600 ticks (30 s), which averages about 4 a second.
 
-The shipped rate is about 4 singularities a second. There is no cap - contents are counted in a `long`. Both keys live in the `singularity_cell` section of the server config.
+| Time in a drive | Ready |
+|-----------------|-------|
+| 30 s | 120 |
+| 1 min | 240 |
+| 5 min | 1,200 |
+| 30 min | 7,200 |
+| 1 hour | 14,400 |
+| 24 hours | 345,600 |
 
 | What you want it for | Needs | At the default rate |
 |----------------------|-------|---------------------|
-| This addon's three L1 interfaces | 6 | the first batch covers it |
-| one eco MEGA 4G matrix, or one infinite storage component | 128 | 32 s |
-| eco's infinite storage unlock (64 components) | 8,192 | about 34 min |
+| This addon's three L1 interfaces | 6 | the first batch covers it (30 s) |
+| one eco MEGA 4G matrix, or one infinite storage component | 128 | two batches, 60 s |
+| eco's infinite storage unlock (64 components) | 8,192 | 69 batches, about 35 min |
+
+## How far it can be tuned
+
+Both keys live in the `singularity_cell` section of the server config and are read fresh each time:
+
+| Key | Default | Range |
+|-----|---------|-------|
+| `ticks_per_batch` | 600 ticks (30 s) | 60 ticks (3 s) minimum |
+| `amount_per_batch` | 120 | 1 to 9,223,372,036,854,775,807 - write down anything |
+
+The bank itself is a `long`, and **that same top is where it stops**: past it the figure pins instead of wrapping, and because production is pinned at the same ceiling, whatever you draw after that stays drawn. The world clock running out saturates the bank the same way rather than turning it negative.
 
 ## The contents are computed, not saved
 
