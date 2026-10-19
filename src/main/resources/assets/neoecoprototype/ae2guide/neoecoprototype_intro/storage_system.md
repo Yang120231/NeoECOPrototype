@@ -53,9 +53,10 @@ Placing blocks one by one is error-prone, so use the **auto-build panel** in the
 |---------------|---------------|-------|
 | Items, fluids, chemicals (1K - 4M) | item / fluid / chemical storage matrices | chemicals also need Mekanism and Applied Mekanistics |
 | A few resources, each nearly unlimited | [Small Bulk Matrices](small_bulk_matrices.md) | MEGA Cells |
-| Many resources at once | universal / quantum / complex universal matrices | AE2 Omni Cells |
+| Many resources at once | universal / quantum / complex universal matrices (1K / 1M) | AE2 Omni Cells |
 | One item, infinitely | infinite matrix (`concrete`) / KubeJS infinite matrix | - |
 | FE | [FE Storage Matrices](flux_storage.md) | AppliedFlux |
+| Mekanism's spent nuclear waste, and only that | spent nuclear waste storage matrices (1K / 1M) | AE2 Omni Cells + Mekanism + Applied Mekanistics |
 | Singularities, no condenser | [L1 Singularity Cell](singularity_cell.md) | - |
 
 Every matrix can be partitioned: edit its whitelist in AE2's cell workbench.

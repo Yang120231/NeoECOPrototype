@@ -53,9 +53,10 @@ item_ids:
 |----------|----------|------------|
 | 物品、流体、化学品（1K - 4M） | 物品 / 流体 / 化学品存储矩阵 | 化学品另需 Mekanism 与 Applied Mekanistics |
 | 少数几种资源，单种近乎无限 | [小宗存储矩阵](small_bulk_matrices.md) | MEGA Cells |
-| 多种资源混合、类型很多 | 全能 / 量子 / 复合全能矩阵 | AE2 Omni Cells |
+| 多种资源混合、类型很多 | 全能 / 量子 / 复合全能矩阵（1K / 1M） | AE2 Omni Cells |
 | 指定物品无限囤积 | 无限矩阵（`concrete`）/ KubeJS 无限矩阵 | - |
 | FE 能量 | [FE存储矩阵](flux_storage.md) | AppliedFlux |
+| Mekanism 的乏核废料，只这一种 | 乏核废料存储矩阵（1K / 1M） | AE2 Omni Cells + Mekanism + Applied Mekanistics |
 | 奇点，不建凝聚器 | [L1 奇点元件](singularity_cell.md) | - |
 
 所有矩阵都能分区：放进 AE2 的元件工作台标记即可。

@@ -19,28 +19,11 @@ item_ids:
   <ItemIcon id="neoecoprototype:cable_superconductive_interface" />
 </ItemGrid>
 
-The high end of our two interfaces: the same doubled layout as the [L1 Powered Interface](powered_interface.md), far more room per config slot, and twenty times the output.
+The high end of our two interfaces: the same doubled layout as the [L1 Powered ME Interface](powered_interface.md) - 18 config slots, 18 stock slots - but one marker holds **8,192** items, or **512,000 mB** of fluid or chemical, and it generates **4,000 AE/t**. Marking and setting it up is the same as any ME Interface.
 
-| Aspect | ME Interface | Energized Superconductive Interface |
-|--------|--------------|--------------------------------------|
-| Stock slots | 9 | **18** |
-| Config slots | 9 | **18** |
-| Units per config slot (items) | 64 | **8,192** |
-| Units per config slot (fluids, chemicals) | 4,000 mB | **512,000 mB** |
-| Passive generation | none | **4,000 AE/t** |
-| Crafted at | crafting table | eco's Integrated Working Station |
+4,000 AE/t is usually the strongest source in the network, so one of these takes over its passive generation.
 
-Setting it up is the same as any ME interface.
+The block is assembled in eco's <ItemLink id="neoecoae:integrated_working_station" /> from 1 Cryotheum Crystal, 4 [L1 Powered ME Interfaces](powered_interface.md), 9 Energized Superconductive Ingots and 4 Superconducting Processors, for 10,000 FE.
 
-## Passive generation
-
-4,000 AE/t is usually the strongest source in the network, so one of these takes over the network's passive generation and suppresses every [L1 Powered Interface](powered_interface.md) - AE2 keeps only the highest-output passive generator per grid.
-
-## Obtaining
-
-The block is assembled in eco's **Integrated Working Station**: **1 Sky Cold Ice + 4 [L1 Powered Interfaces](powered_interface.md) + 9 Energized Superconductive Ingots + 4 Superconducting Processors**, for 10,000 AE. Station recipes cannot be rendered on this page, so the ingredients are in prose.
-
-| Form | Conversion |
-|------|------------|
-| block → cable part | <RecipeFor id="neoecoprototype:cable_superconductive_interface" /> |
-| cable part → block | the same lossless conversion, either way round |
+<RecipeFor id="neoecoprototype:superconductive_interface" />
+<RecipeFor id="neoecoprototype:cable_superconductive_interface" />

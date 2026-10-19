@@ -29,14 +29,7 @@ The shipped rate is about 4 singularities a second. There is no cap - contents a
 
 ## The contents are computed, not saved
 
-| Aspect | Rule |
-|--------|------|
-| How it is worked out | the cell stores two numbers: the world tick it started at and how much has been taken. Every question is answered from the current tick - nothing accumulates in the background. |
-| Three inputs, no more | start tick, current world tick, amount already taken. |
-| Config changes rewrite history | raising `amount_per_batch` grows the contents at once; lowering it can erase what was stored. |
-| No ticks, no growth | pausing and shutting the server down stops world time, so contents stop too. |
-| It starts inside a drive | the start tick is written the first time something asks, and only drives and hosts ask. A cell in an inventory, a chest or on the ground has not started; one that already started keeps growing when removed. |
-| What a client reads | world time syncs once a second, so a hover on a connected client is at most a second behind. Terminals always read the server value. |
+Nothing accumulates: the cell stores two numbers - the world tick it started at and how much has been taken - and every question is answered from the current tick, so output depends on start tick, current tick and amount taken and nothing else. Four consequences. Raising `amount_per_batch` re-reads history and grows the contents at once, lowering it can erase what was stored. Pausing or shutting the server stops world time, so contents stop too. The start tick is written the first time a drive or host asks, so a cell in an inventory, a chest or on the ground has not started, while one that already started keeps growing when you take it out. Terminals always read the server value; a client hover syncs once a second and can be a second behind.
 
 ## Limits
 

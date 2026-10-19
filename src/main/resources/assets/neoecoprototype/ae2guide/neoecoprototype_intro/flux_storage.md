@@ -6,6 +6,7 @@ navigation:
   parent: neoecoprototype_intro/storage_system.md
 item_ids:
   - neoecoprototype:simplify_fe_cell_housing
+  - neoecoprototype:simplify_fe_storage_cell_1k
   - neoecoprototype:simplify_fe_storage_cell_1m
   - neoecoprototype:simplify_fe_storage_cell_4m
 ---
@@ -20,6 +21,7 @@ Capacity is counted in **bytes**; what a byte is worth in FE is AppliedFlux's ow
 
 | Matrix | Bytes | At the default rate |
 | --- | --- | --- |
+| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1k" /> | 1,024 | about 1.07 billion FE |
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1m" /> | 1,048,576 | about 1.1 trillion FE |
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_4m" /> | 4,194,304 | about 4.4 trillion FE |
 
@@ -28,6 +30,8 @@ Raising `flux_cell.amount` loosens every FE cell in the game, ours included, and
 ## Recipe
 
 <RecipeFor id="neoecoprototype:simplify_fe_cell_housing" />
+
+<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1k" />
 
 <RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1m" />
 

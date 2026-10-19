@@ -6,6 +6,7 @@ navigation:
   parent: neoecoprototype_intro/storage_system.md
 item_ids:
   - neoecoprototype:simplify_fe_cell_housing
+  - neoecoprototype:simplify_fe_storage_cell_1k
   - neoecoprototype:simplify_fe_storage_cell_1m
   - neoecoprototype:simplify_fe_storage_cell_4m
 ---
@@ -20,14 +21,17 @@ FE 存储矩阵需要 **AppliedFlux（应用通量，modid `appflux`）**，用�
 
 | 矩阵 | 字节 | 默认换算 |
 | --- | --- | --- |
+| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1k" /> | 1,024 | 约 10.7 亿 FE |
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1m" /> | 1,048,576 | 约 1.1 万亿 FE |
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_4m" /> | 4,194,304 | 约 4.4 万亿 FE |
 
-调大 `flux_cell.amount`，游戏里每一只 FE 仓（包括这两只）一起变宽松，材料不变。
+调大 `flux_cell.amount`，游戏里每一只 FE 仓（包括这三只）一起变宽松，材料不变。
 
 ## 配方
 
 <RecipeFor id="neoecoprototype:simplify_fe_cell_housing" />
+
+<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1k" />
 
 <RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1m" />
 

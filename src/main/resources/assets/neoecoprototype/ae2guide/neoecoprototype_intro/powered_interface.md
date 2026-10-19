@@ -1,6 +1,6 @@
 ---
 navigation:
-  title: L1 Powered Interface
+  title: L1 Powered ME Interface
   icon: neoecoprototype:simplify_powered_me_interface
   position: 80
   parent: neoecoprototype_intro/index.md
@@ -9,7 +9,7 @@ item_ids:
   - neoecoprototype:cable_powered_me_interface
 ---
 
-# L1 Powered Interface
+# L1 Powered ME Interface
 
 <Row>
   <BlockImage id="neoecoprototype:simplify_powered_me_interface" scale="3"></BlockImage>
@@ -19,31 +19,11 @@ item_ids:
   <ItemIcon id="neoecoprototype:cable_powered_me_interface" />
 </ItemGrid>
 
-The L1 Powered Interface is a doubled ME Interface that also feeds the network. Everything else is vanilla behaviour, so anything that accepts an ME interface accepts this one.
+The **L1 Powered ME Interface** is a doubled <ItemLink id="ae2:interface" /> that also feeds the network. It carries 18 config slots and 18 stock slots instead of 9 and 9; everything else is vanilla behaviour, so anywhere an ME Interface works, this one works.
 
-| Aspect | ME Interface | L1 Powered Interface |
-|--------|--------------|----------------------|
-| Stock slots | 9 | **18** |
-| Config slots | 9 | **18** |
-| Units per config slot (items) | 64 | 64 |
-| Passive generation | none | **200 AE/t** |
-| Crafted at | crafting table | [L1 Processor Assembler](processor_assembler.md) |
+Given power and a channel it outputs **200 AE/t**. AE2 keeps only the highest-output passive generator per grid, so it stands down while a stronger source is present.
 
-## Passive generation
+The block is assembled in the [L1 Processor Assembler](processor_assembler.md) from 2 Crystal Resonance Generators, 1 ME Interface and 1 Superconducting Processor. Four of them build one [Energized Superconductive Interface](superconductive_interface.md).
 
-| Aspect | Rule |
-|--------|------|
-| Needs | power and a channel. |
-| Only the strongest counts | AE2 keeps a single passive generator per grid - the one with the highest output - so this machine stands down while a stronger source is present and resumes when it is picked again. |
-| Use | sub-network power. Cheaper than a Crystal Resonance Generator, which does 20 AE/t and wants its own connection to the main network. |
-
-## Obtaining
-
-The block is assembled in the [L1 Processor Assembler](processor_assembler.md): **2 Crystal Resonance Generators + 1 ME Interface + 1 Superconducting Processor**. The assembler's recipe cannot be rendered on this page, so the ingredients are in prose - JEI shows the grid.
-
-| Form | Conversion |
-|------|------------|
-| block → cable part | <RecipeFor id="neoecoprototype:cable_powered_me_interface" /> |
-| cable part → block | the same lossless conversion, either way round |
-
-Four of them go into one [Energized Superconductive Interface](superconductive_interface.md).
+<RecipeFor id="neoecoprototype:simplify_powered_me_interface" />
+<RecipeFor id="neoecoprototype:cable_powered_me_interface" />

@@ -19,31 +19,11 @@ item_ids:
   <ItemIcon id="neoecoprototype:cable_powered_me_interface" />
 </ItemGrid>
 
-L1 供能接口是一台布局翻倍、还会给 ME 网络供电的 ME接口。除下面这几项之外，行为与原版接口完全一致，凡是接受 ME接口的地方都能用它。
+**L1 供能接口**相当于容量翻倍的<ItemLink id="ae2:interface" />，还会给网络供电。标记槽与库存槽都是 18 个，其余行为与原版接口完全一致，凡是接受 ME接口的地方都能用它。
 
-| 项目 | 原版 ME接口 | L1 供能接口 |
-|------|-------------|-------------|
-| 标记槽 | 9 | **18** |
-| 库存槽 | 9 | **18** |
-| 单个标记可囤（物品） | 64 | 64 |
-| 被动发电 | 无 | **200 AE/t** |
-| 在哪里做 | 合成台 | [L1 处理器装配室](processor_assembler.md) |
+通电且有频道时它输出 **200 AE/t**。AE2 每个网格只保留输出功率最高的那台被动发电源，所以更强的源在场时它自动停止贡献。
 
-## 被动发电
+方块版在 [L1 处理器装配室](processor_assembler.md) 组装：2 台水晶谐振发电机 + 1 个 ME接口 + 1 枚 ECO - SA 超导处理器。四台它供一台[盈能超导接口](superconductive_interface.md)。
 
-| 项目 | 规则 |
-|------|------|
-| 生效条件 | 通电且有频道。 |
-| 只留最强的一台 | AE2 每个网格同时只保留输出功率最高的被动发电源，出现更强的源时本机停止贡献，直到重新被选中。 |
-| 用途 | 子网供电。比水晶谐振发电机划算——后者 20 AE/t，还要单独接主网络。 |
-
-## 获取
-
-方块版在 [L1 处理器装配室](processor_assembler.md) 里组装：**2 台水晶谐振发电机 + 1 个 ME接口 + 1 枚 ECO - SA 超导处理器**。装配室的配方图这一页渲染不出来，原料写在文字里，格子去 JEI 看。
-
-| 形态 | 转换 |
-|------|------|
-| 方块 → 线缆部件 | <RecipeFor id="neoecoprototype:cable_powered_me_interface" /> |
-| 线缆部件 → 方块 | 同样一条无损转换，反向即可 |
-
-一台[盈能超导接口](superconductive_interface.md)需要四台它。
+<RecipeFor id="neoecoprototype:simplify_powered_me_interface" />
+<RecipeFor id="neoecoprototype:cable_powered_me_interface" />
