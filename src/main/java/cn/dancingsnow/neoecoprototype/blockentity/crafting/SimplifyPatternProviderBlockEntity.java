@@ -37,17 +37,4 @@ public class SimplifyPatternProviderBlockEntity extends PatternProviderBlockEnti
         return new PatternProviderLogic(getMainNode(), this, PATTERN_SLOTS);
     }
 
-    /**
-     * AE2 names a provider's terminal group after the machine it faces, which is right for a part mounted
-     * on a cable feeding one machine and wrong here: this is a standalone 27-slot block, and facing a
-     * drive or an assembler made every terminal - AE2's own and any addon's - list it as "ME驱动器" or
-     * "分子装配室" instead of what it is.
-     */
-    @Override
-    public appeng.api.implementations.blockentities.PatternContainerGroup getTerminalGroup() {
-        return new appeng.api.implementations.blockentities.PatternContainerGroup(
-                appeng.api.stacks.AEItemKey.of(getBlockState().getBlock()),
-                getDisplayName(),
-                java.util.List.of());
-    }
 }

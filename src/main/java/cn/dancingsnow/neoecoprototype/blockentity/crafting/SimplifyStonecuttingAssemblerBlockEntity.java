@@ -30,6 +30,20 @@ public class SimplifyStonecuttingAssemblerBlockEntity extends MolecularAssembler
         super(type, pos, state);
     }
 
+    /**
+     * AE2's implementation names and icons this machine as {@code AEBlocks.MOLECULAR_ASSEMBLER} - both halves
+     * are hard-coded constants that never look at the block state - so an inheriting addon machine handed its
+     * own identity to every asker: terminals listed our assembler as "分子装配室" with AE2's item icon.
+     */
+    @Override
+    public appeng.api.implementations.blockentities.PatternContainerGroup getCraftingMachineInfo() {
+        var inherited = super.getCraftingMachineInfo();
+        return new appeng.api.implementations.blockentities.PatternContainerGroup(
+                AEItemKey.of(getBlockState().getBlock()),
+                hasCustomName() ? getCustomName() : getBlockState().getBlock().getName(),
+                inherited.tooltip());
+    }
+
     @Override
     public boolean pushPattern(IPatternDetails pattern, KeyCounter[] inputs, Direction direction) {
         // Inheriting AE2's assembler made this machine a plain molecular assembler to anything that asks
@@ -104,8 +118,29 @@ public class SimplifyStonecuttingAssemblerBlockEntity extends MolecularAssembler
                     .append(slot.getMultiplier()).append(']');
         }
         NeoECOPrototype.LOGGER.warn("[stonecutting assembler] refused a pattern at {}: {}；output={} "
-                        + "patternClass={} slots={} (每槽 = 候选数 x 每候选数量 x 批量倍数)",
-                worldPosition, reason, outputs, pattern.getClass().getSimpleName(), slots);
+                        + "patternClass={} slots={} askedBy={} (每槽 = 候选数 x 每候选数量 x 批量倍数)",
+                worldPosition, reason, outputs, pattern.getClass().getSimpleName(), slots, describeCallers());
+    }
+
+    /**
+     * The first few callers outside our own code, so a refusal says who pushed. Inheriting AE2's assembler
+     * makes this machine a target for anything that walks {@code ICraftingMachine}, and which thing walked
+     * in is not something the refusal should leave to inference.
+     */
+    private String describeCallers() {
+        var picked = new java.util.ArrayList<String>();
+        for (var frame : Thread.currentThread().getStackTrace()) {
+            String cls = frame.getClassName();
+            if (cls.startsWith("java.") || cls.startsWith("jdk.")
+                    || cls.startsWith("cn.dancingsnow.neoecoprototype.")) {
+                continue;
+            }
+            picked.add(cls.substring(cls.lastIndexOf('.') + 1) + "#" + frame.getMethodName());
+            if (picked.size() == 4) {
+                break;
+            }
+        }
+        return picked.isEmpty() ? "unknown" : String.join(" < ", picked);
     }
 
     /**

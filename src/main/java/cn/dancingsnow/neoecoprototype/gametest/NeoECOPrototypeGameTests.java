@@ -1504,35 +1504,88 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
-     * AE2 gives a pattern provider the terminal identity of the machine it faces - right for a cable part
-     * that exists to feed one machine, wrong for our standalone 27-slot block, which was showing up in
-     * terminals as "分子装配室" or "ME驱动器" depending on what happened to be next to it. Guards that it
-     * reports itself even when an assembler is touching every side.
+     * A provider's terminal group is the machine it pushes to, and AE2 names that machine from two inputs
+     * only: {@code Nameable.getName()} when the block entity has one, otherwise the display name of the
+     * block's own item. This guard reads exactly those two inputs on both machines, so the load-bearing half
+     * is that OUR assembler names itself while a real AE2 assembler names itself - not that the reader
+     * returns nothing at all, which is what an empty pass would look like.
      */
     @GameTest(template = "empty", batch = "pattern_provider_group", timeoutTicks = 100,
             templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void patternProviderReportsItself(GameTestHelper helper) {
-        var providerPos = new BlockPos(1, 1, 1);
-        helper.setBlock(providerPos, ModRegistration.SIMPLIFY_PATTERN_PROVIDER_BLOCK.get());
-        var assembler = appeng.core.definitions.AEBlocks.MOLECULAR_ASSEMBLER.block().defaultBlockState();
-        for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
-            helper.setBlock(providerPos.relative(direction), assembler);
-        }
-        if (!(helper.getBlockEntity(providerPos) instanceof cn.dancingsnow.neoecoprototype
-                .blockentity.crafting.SimplifyPatternProviderBlockEntity provider)) {
-            helper.fail("the L1 pattern provider did not come into existence");
+    public static void providerGroupNamesTheFacedMachine(GameTestHelper helper) {
+        var oursPos = new BlockPos(1, 1, 1);
+        helper.setBlock(oursPos, ModRegistration.SIMPLIFY_STONECUTTING_ASSEMBLER_BLOCK.get());
+        var ours = helper.getBlockEntity(oursPos);
+        if (ours == null) {
+            helper.fail("our assembler did not come into existence, so nothing below can be read");
             return;
         }
-        var group = provider.getTerminalGroup();
-        var expectedIcon = AEItemKey.of(ModRegistration.SIMPLIFY_PATTERN_PROVIDER_BLOCK.get());
-        if (!expectedIcon.equals(group.icon())) {
-            helper.fail("the provider advertises icon " + group.icon() + " instead of " + expectedIcon
-                    + ", so it is copying the machine it faces");
+        if (!(ours instanceof appeng.api.implementations.blockentities.ICraftingMachine)) {
+            helper.fail("our assembler is not an ICraftingMachine, so AE2's fromMachine can never name it");
             return;
         }
-        var name = group.name().getString();
-        if (name.contains("分子装配室") || name.contains("ME驱动器")) {
-            helper.fail("the provider advertises itself as " + name);
+        var oursExpected = ModRegistration.SIMPLIFY_STONECUTTING_ASSEMBLER_BLOCK.get().getName().getString();
+        var oursName = ours instanceof net.minecraft.world.Nameable nameable
+                ? nameable.getName().getString()
+                : AEItemKey.of(helper.getLevel().getBlockState(oursPos).getBlock())
+                        .getDisplayName().getString();
+        if (!oursExpected.equals(oursName)) {
+            helper.fail("the machine a provider faces reads as \"" + oursName + "\" but its block name is \""
+                    + oursExpected + "\"");
+            return;
+        }
+        if (oursName.contains("分子装配室") || oursName.contains("Molecular")) {
+            helper.fail("a provider facing our assembler would be listed as \"" + oursName + "\"");
+            return;
+        }
+        // The control: the same two inputs on AE2's own assembler must produce AE2's own name, so the
+        // green above cannot come from a reader that is blind.
+        var aPos = new BlockPos(5, 5, 5);
+        helper.setBlock(aPos, appeng.core.definitions.AEBlocks.MOLECULAR_ASSEMBLER.block());
+        var aBe = helper.getBlockEntity(aPos);
+        if (aBe == null) {
+            helper.fail("AE2's molecular assembler did not come into existence, so the control read nothing");
+            return;
+        }
+        var aExpected = appeng.core.definitions.AEBlocks.MOLECULAR_ASSEMBLER.block().getName().getString();
+        var aName = aBe instanceof net.minecraft.world.Nameable nameable
+                ? nameable.getName().getString()
+                : AEItemKey.of(helper.getLevel().getBlockState(aPos).getBlock())
+                        .getDisplayName().getString();
+        if (!aExpected.equals(aName) || aName.equals(oursName)) {
+            helper.fail("the control assembler reads as \"" + aName + "\", expected \"" + aExpected
+                    + "\" and distinct from ours");
+            return;
+        }
+        // The half that actually broke in game: AE2's getCraftingMachineInfo() hard-codes
+        // AEBlocks.MOLECULAR_ASSEMBLER for both the name and the icon, so a subclass that does not override
+        // it hands every asker AE2's identity. Read it on our machine and require our own.
+        if (!(ours instanceof appeng.blockentity.crafting.MolecularAssemblerBlockEntity oursMachine)) {
+            helper.fail("our assembler is not a MolecularAssemblerBlockEntity, so the info call cannot be read");
+            return;
+        }
+        var oursInfo = oursMachine.getCraftingMachineInfo();
+        var oursIcon = AEItemKey.of(ModRegistration.SIMPLIFY_STONECUTTING_ASSEMBLER_BLOCK.get());
+        if (!oursIcon.equals(oursInfo.icon())) {
+            helper.fail("our assembler advertises icon " + oursInfo.icon() + " instead of " + oursIcon);
+            return;
+        }
+        if (!oursExpected.equals(oursInfo.name().getString())) {
+            helper.fail("our assembler advertises the name \"" + oursInfo.name().getString()
+                    + "\" instead of \"" + oursExpected + "\"");
+            return;
+        }
+        // The control keeps those two from passing on a reader that is simply blind: AE2's own assembler
+        // must still report AE2's icon and AE2's name through the same method.
+        if (!(aBe instanceof appeng.blockentity.crafting.MolecularAssemblerBlockEntity aMachine)) {
+            helper.fail("AE2's assembler BE is not a MolecularAssemblerBlockEntity, so the control read nothing");
+            return;
+        }
+        var aInfo = aMachine.getCraftingMachineInfo();
+        if (!AEItemKey.of(appeng.core.definitions.AEBlocks.MOLECULAR_ASSEMBLER.block()).equals(aInfo.icon())
+                || !aExpected.equals(aInfo.name().getString())) {
+            helper.fail("AE2's own assembler reports " + aInfo.icon() + " / \"" + aInfo.name().getString()
+                    + "\", so this guard is not reading what AE2 hands out");
             return;
         }
         helper.succeed();
