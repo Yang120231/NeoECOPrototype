@@ -19,41 +19,28 @@ item_ids:
   <ItemIcon id="neoecoprototype:cable_superconductive_interface" />
 </ItemGrid>
 
-The top of the two interfaces this mod adds: the same doubled
-[L1 Powered Interface](powered_interface.md) layout, but with a far larger stock amount per
-marker and twenty times the power output.
+The high end of our two interfaces: the same doubled layout as the [L1 Powered Interface](powered_interface.md), far more room per config slot, and twenty times the output.
 
-## Doubled layout
+| Aspect | ME Interface | Energized Superconductive Interface |
+|--------|--------------|--------------------------------------|
+| Stock slots | 9 | **18** |
+| Config slots | 9 | **18** |
+| Units per config slot (items) | 64 | **8,192** |
+| Units per config slot (fluids, chemicals) | 4,000 mB | **512,000 mB** |
+| Passive generation | none | **4,000 AE/t** |
+| Crafted at | crafting table | eco's Integrated Working Station |
 
-- 18 marker slots instead of 9
-- 18 storage slots instead of 9
+Setting it up is the same as any ME interface.
 
-## Stock amount
+## Passive generation
 
-| Marker holds | AE2 interface | This interface |
-| --- | --- | --- |
-| Items | 64 | **8192** |
-| Fluid | 4,000 mB | **512,000 mB** |
-| Chemical | 4,000 mB | **512,000 mB** |
-
-Set it the same way as on an AE2 interface.
-
-## Passive power
-
-While it is powered and has a channel, it injects **4000 AE/t** into the grid. AE2 keeps only one
-passive generator per grid and always picks the highest output, so a single one of these takes over
-from every [L1 Powered Interface](powered_interface.md) on the network and suppresses them.
+4,000 AE/t is usually the strongest source in the network, so one of these takes over the network's passive generation and suppresses every [L1 Powered Interface](powered_interface.md) - AE2 keeps only the highest-output passive generator per grid.
 
 ## Obtaining
 
-The block form is assembled in the Integrated Working Station from Neo ECO AE Extension, from
-**1 Cryotheum Crystal, 4 L1 Powered Interfaces, 9 Energized Superconductive Ingots and 4
-Superconducting Processors**, at a cost of 10,000 AE. (That recipe cannot be drawn on this page
-either - the guidebook only renders crafting-table recipes.)
+The block is assembled in eco's **Integrated Working Station**: **1 Sky Cold Ice + 4 [L1 Powered Interfaces](powered_interface.md) + 9 Energized Superconductive Ingots + 4 Superconducting Processors**, for 10,000 AE. Station recipes cannot be rendered on this page, so the ingredients are in prose.
 
-**The cable-mounted form has no recipe of its own and is not a station recipe at all.** It is
-converted out of the block form in a crafting grid:
-
-<RecipeFor id="neoecoprototype:cable_superconductive_interface" />
-
-Turning it back into the block form works the same way, and both directions are lossless.
+| Form | Conversion |
+|------|------------|
+| block → cable part | <RecipeFor id="neoecoprototype:cable_superconductive_interface" /> |
+| cable part → block | the same lossless conversion, either way round |

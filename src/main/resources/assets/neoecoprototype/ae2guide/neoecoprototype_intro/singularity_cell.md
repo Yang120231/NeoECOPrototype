@@ -10,41 +10,40 @@ item_ids:
 
 # L1 Singularity Cell
 
-A storage cell that **grows singularities on its own and takes nothing in**. Put it in a drive, leave it alone, and its stock rises with world time; pull from it through the network like from any other cell.
+The L1 Singularity Cell is a storage cell that **consumes nothing**: once it sits in a drive its contents grow with world time, and it is drawn from like any other cell.
 
 ## How fast
 
-Out of the box it makes one batch of **120 singularities every 600 ticks** - 30 seconds, so about 4 per second. Both numbers are in the server config under `singularity_cell`:
+| Key | Default | Clamp |
+|-----|---------|-------|
+| `ticks_per_batch` | 600 ticks (30 s) | 60 ticks minimum |
+| `amount_per_batch` | 120 | 262,144 maximum |
 
-| Key | Default | What it is clamped to |
-| --- | --- | --- |
-| `ticks_per_batch` | 600 | at least 60 ticks (3 seconds) |
-| `amount_per_batch` | 120 | at most 262,144 |
+The shipped rate is about 4 singularities a second. There is no cap - contents are counted in a `long`. Both keys live in the `singularity_cell` section of the server config.
 
-There is **no bank ceiling**: the stock counts up in a long and is only bounded by that. What the numbers are worth in practice:
+| What you want it for | Needs | At the default rate |
+|----------------------|-------|---------------------|
+| This addon's three L1 interfaces | 6 | the first batch covers it |
+| one eco MEGA 4G matrix, or one infinite storage component | 128 | 32 s |
+| eco's infinite storage unlock (64 components) | 8,192 | about 34 min |
 
-| Wants | Cost in singularities | Time at the default rate |
-| --- | --- | --- |
-| our three L1 interfaces | 6 | covered by the first batch |
-| one eco MEGA 4G matrix, or one infinite storage component | 128 | 32 seconds |
-| eco's infinite storage unlock (64 components) | 8,192 | about 34 minutes |
+## The contents are computed, not saved
 
-At the maximum settings (262,144 per 3 seconds) a single cell outruns anything the game can spend, so treat those as pack-maker territory.
+| Aspect | Rule |
+|--------|------|
+| How it is worked out | the cell stores two numbers: the world tick it started at and how much has been taken. Every question is answered from the current tick - nothing accumulates in the background. |
+| Three inputs, no more | start tick, current world tick, amount already taken. |
+| Config changes rewrite history | raising `amount_per_batch` grows the contents at once; lowering it can erase what was stored. |
+| No ticks, no growth | pausing and shutting the server down stops world time, so contents stop too. |
+| It starts inside a drive | the start tick is written the first time something asks, and only drives and hosts ask. A cell in an inventory, a chest or on the ground has not started; one that already started keeps growing when removed. |
+| What a client reads | world time syncs once a second, so a hover on a connected client is at most a second behind. Terminals always read the server value. |
 
-## The stock is calculated, not stored
+## Limits
 
-Nothing accumulates in the background: the cell keeps only the tick it started from and how much has been drawn, and works out the rest whenever the network asks. Three consequences worth knowing:
+It holds one content type, so it cannot be partitioned in a cell workbench and cannot be stored inside another cell. It reports the L1 tier, so [the L1 storage system](storage_system.md) takes it without a whitelist entry, and eco's higher tiers do too.
 
-- **Changing the config re-reads the past.** Raising `amount_per_batch` instantly makes the bank bigger; lowering it can empty what you had saved up.
-- **Time only passes when the server ticks.** A paused or stopped server produces nothing, and a world whose clock is behind the tick the cell was stamped at simply reads as empty until it catches up.
-- **It starts in a drive.** The start tick is written the first time something asks the cell what it holds, and only drives and hosts do that - a cell in an inventory, a chest or on the ground that has never been installed produces nothing. **One that has started keeps going wherever it lives**: the cell stores a start tick, not "ticks spent inside a machine".
+## Recipe
 
-The stock line reads on a multiplayer client too: the world tick is sent to clients once a second, so a number in hand can be at most a second behind. What stays missing there is the content preview image, which cannot reach a world - the figure itself still reads. Terminals read the server's value and are always right.
+<RecipeFor id="neoecoprototype:simplify_singularity_cell" />
 
-## Where it mounts
-
-It reports the L1 tier, so an [L1 Storage System](storage_system.md) host takes it without a whitelist entry, and eco's higher hosts take it too. It holds exactly one item type, cannot be partitioned in the cell workbench (nothing to filter), and refuses to be stored inside another storage cell.
-
-## Building one
-
-Shapeless: an **infinite matrix housing**, eco's **infinite storage component** (the same part that unlocks eco's own infinite storage), one green crystal matrix, and one singularity as the seed. A separate disassembly recipe gives all four back.
+A disassembly recipe returns the four materials.

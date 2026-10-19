@@ -1,16 +1,18 @@
 ---
 navigation:
-  title: KubeJS
+  title: KubeJS support
   icon: neoecoprototype:simplify_small_bulk_expansion_card
   position: 40
   parent: neoecoprototype_intro/index.md
 ---
 
-# KubeJS Support
+# KubeJS support
 
-KubeJS is optional. With it installed, pack makers can:
+KubeJS is optional; these exist only when it is installed.
 
-- Register custom storage matrices in startup scripts (`neoecoprototype:storage_matrix` and `neoecoprototype:infinite_storage_matrix` builder types), including custom capacities, type counts, materials, and bound resources.
-- Add, remove, or replace addon recipes in server scripts - the processor assembler supports field-based recipe removal and raw JSON additions.
+| What you can do | Where |
+|-----------------|-------|
+| Register custom storage matrices | Startup scripts, two builder types: `neoecoprototype:storage_matrix` and `neoecoprototype:infinite_storage_matrix` - capacity, type limit, material and bound resource are all settable |
+| Add, change or remove this addon's recipes | Server scripts; the processor assembler's recipes can be removed by field or added as raw JSON |
 
-See `docs/kubejs.md` and `docs/kubejs-example.js` in the addon repository for full examples.
+Full examples live in this mod's repository under `docs/kubejs.md` and `docs/kubejs-example.js`.

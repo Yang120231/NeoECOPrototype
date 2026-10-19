@@ -19,42 +19,31 @@ item_ids:
   <ItemIcon id="neoecoprototype:cable_powered_me_interface" />
 </ItemGrid>
 
-An AE2 interface with a doubled layout that also feeds power into the grid. It behaves exactly like
-the stock interface - it keeps a set of markers, requests what is missing from the network and
-supplies the machines next to it - so anything that accepts an interface accepts this one.
+The L1 Powered Interface is a doubled ME Interface that also feeds the network. Everything else is vanilla behaviour, so anything that accepts an ME interface accepts this one.
 
-## Doubled layout
+| Aspect | ME Interface | L1 Powered Interface |
+|--------|--------------|----------------------|
+| Stock slots | 9 | **18** |
+| Config slots | 9 | **18** |
+| Units per config slot (items) | 64 | 64 |
+| Passive generation | none | **200 AE/t** |
+| Crafted at | crafting table | [L1 Processor Assembler](processor_assembler.md) |
 
-- 18 marker slots instead of 9
-- 18 storage slots instead of 9
+## Passive generation
 
-Everything else is AE2's own interface logic, and this page will not repeat it.
-
-## Passive power
-
-While it is powered and has a channel, it injects **200 AE/t** into the grid. AE2 keeps only one
-passive generator per grid and picks the one with the highest output, so as soon as something
-stronger is on the same network this machine stops contributing until it is chosen again.
-That makes it a practical way to supply a subnet on its own: AE2's crystal resonance generator is
-subject to the same one-per-grid rule, and at AE2's default **20 AE/t** - a tenth of this one - a
-subnet that has an interface here does not need one.
+| Aspect | Rule |
+|--------|------|
+| Needs | power and a channel. |
+| Only the strongest counts | AE2 keeps a single passive generator per grid - the one with the highest output - so this machine stands down while a stronger source is present and resumes when it is picked again. |
+| Use | sub-network power. Cheaper than a Crystal Resonance Generator, which does 20 AE/t and wants its own connection to the main network. |
 
 ## Obtaining
 
-The block form is assembled in the processor assembly room from **2 crystal resonance generators,
-1 AE2 interface and 1 superconducting processor**. Any pattern provider will push those ingredients
-in, in any order. (The page cannot draw the assembly room's recipe - the guidebook only renders
-crafting-table recipes - so the ingredients are written out here; the grid itself is in JEI.)
+The block is assembled in the [L1 Processor Assembler](processor_assembler.md): **2 Crystal Resonance Generators + 1 ME Interface + 1 Superconducting Processor**. The assembler's recipe cannot be rendered on this page, so the ingredients are in prose - JEI shows the grid.
 
-**The cable-mounted form has no recipe of its own.** It is converted out of the block form in a
-crafting grid:
+| Form | Conversion |
+|------|------------|
+| block → cable part | <RecipeFor id="neoecoprototype:cable_powered_me_interface" /> |
+| cable part → block | the same lossless conversion, either way round |
 
-<RecipeFor id="neoecoprototype:cable_powered_me_interface" />
-
-Turning the cable-mounted form back into the block form works the same way: the conversion is
-lossless, and it runs in either direction.
-
-## Further use
-
-Four of them are the base of the
-[Energized Superconductive Interface](superconductive_interface.md).
+Four of them go into one [Energized Superconductive Interface](superconductive_interface.md).

@@ -19,9 +19,25 @@ item_ids:
 
 # Small Bulk Matrices
 
-Small bulk matrices store a few marked resources with effectively unlimited capacity: three types by default, ten after combining the cell with an expansion card on a crafting table. The family has item, fluid, and chemical variants. The whole family needs MEGA Cells (4.11.0 is the build we measured) - without it none of these items are registered at all - and the chemical variant additionally needs Mekanism and its AE2 bridge, Applied Mekanistics.
+Small bulk matrices hold a handful of marked resources in nearly unlimited quantity: **3 types** by default, **10** after crafting them together with the expansion card in a crafting table.
 
-## Components
+| Aspect | Value |
+|--------|-------|
+| Type limit | 3, or 10 with the expansion card |
+| Capacity per type | nearly unlimited |
+| Needs | MEGA Cells (4.11.0 is the version measured); the chemical variant also needs Mekanism and Applied Mekanistics |
+
+## Marking
+
+The marking is the cell's whitelist, edited in AE2's cell workbench: marked resources may enter, everything else passes by as usual. The same applies to each key type on the fluid and chemical cells.
+
+## Compression chain
+
+Items only: with MEGA Cells' **compression card** in the cell workbench, any form on the chain (nugget, ingot, block...) counts towards the marked form. The terminal shows the marked form.
+
+## Taking it apart
+
+Put a matrix alone in the crafting grid to split it back into its housing and core component.
 
 <ItemGrid>
   <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_cell" />
@@ -35,17 +51,3 @@ Small bulk matrices store a few marked resources with effectively unlimited capa
   <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_matrix_housing" />
   <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_matrix_housing" />
 </ItemGrid>
-
-## Marking
-
-Marks are the cell's whitelist. Edit them in the AE2 cell workbench: a marked resource is accepted into the cell, everything else passes by. Fluid and chemical cells behave the same way with their own key types.
-
-## Compression chains (item variant)
-
-With a MegaCells **compression card** installed in the cell workbench, the item variant stores marked items as compression chains: insert any form on the chain (nugget, ingot, block, ...) and it folds into the marked form's count. Store whichever form you want to see - the marked form is what the terminal shows.
-
-## Upgrading
-
-Combine the 3-type cell with an expansion card to get the 10-type cell. AE2's cell upgrade preserves stored contents and settings.
-
-Disassemble a matrix in a crafting grid to get the housing and core component back.

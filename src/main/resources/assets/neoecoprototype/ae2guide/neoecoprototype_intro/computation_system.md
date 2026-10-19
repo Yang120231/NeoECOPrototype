@@ -13,18 +13,31 @@ item_ids:
   - neoecoprototype:simplify_computation_drive
   - neoecoprototype:simplify_computation_interface
   - neoecoprototype:simplify_computation_network_interface
+  - neoecoprototype:energized_computation_core
+  - neoecoprototype:energized_computation_threading_core
+  - neoecoprototype:energized_computation_cell_4m
 ---
 
 # L1 Computation System
 
-The L1 Computation System is the early-game version of eco's Computation System: a multiblock crafting CPU cluster that provides parallel crafting threads for the ME network.
+The L1 Computation System supplies crafting threads to the ME network. The ideas match eco's computation system, brought forward to L1 early game. The image above is the smallest working shape.
 
 <GameScene zoom="4" interactive={true}>
   <ImportStructure src="../scenes/l1_compute_min.nbt" />
   <IsometricCamera yaw="45" pitch="30" />
 </GameScene>
 
-## Components
+## What each member contributes
+
+| Member | Provides |
+|--------|----------|
+| Computation host | `cpu_threads` crafting threads (default **2**) |
+| Parallel core | **24** parallelism each |
+| Threading core | **2** crafting threads each |
+| Energized computation core | **+1,024** parallelism each, and **only in the one casing slot directly behind the controller** |
+| Energized threading core | **+16** crafting threads each, and **only in the slot nearest the controller** |
+
+## Parts
 
 <ItemGrid>
   <ItemIcon id="neoecoprototype:simplify_computation_system" />
@@ -35,48 +48,30 @@ The L1 Computation System is the early-game version of eco's Computation System:
   <ItemIcon id="neoecoprototype:simplify_computation_drive" />
   <ItemIcon id="neoecoprototype:simplify_computation_interface" />
   <ItemIcon id="neoecoprototype:simplify_computation_network_interface" />
-  <ItemIcon id="neoecoprototype:energized_computation_core" />
-  <ItemIcon id="neoecoprototype:energized_computation_threading_core" />
-  <ItemIcon id="neoecoprototype:energized_computation_cell_4m" />
 </ItemGrid>
 
-
-The concept matches eco's Computation System: the base provides **1 crafting thread** (a quarter of eco's L4), extendable with parallel and threading cores under eco's rules. The L1 variant above is the minimal working structure. As of this version the plain cores are stronger than they first shipped as: each parallel core gives **24 co-processors** and each threading core **2 crafting threads**.
-
-## Energized members
-
-Two extra parts lift an L1 subsystem above what eco's own members give it:
+## The two energized members
 
 <GameScene zoom="4" interactive={true}>
   <ImportStructure src="../scenes/l1_compute_energized.nbt" />
   <IsometricCamera yaw="45" pitch="30" />
 </GameScene>
 
-- **Energized Computation Core** (`energized_computation_core`) adds **1024 co-processors**. At most one
-  fits, in its fixed cell: the casing position directly behind the controller.
-- **Energized Computation Threading Core** (`energized_computation_threading_core`) adds **16 crafting
-  threads**, and is only accepted in the cell nearest the controller. That is the same 16 eco's CM6A
-  core gives.
+| Item | Crafted at | Ingredients |
+|------|------------|-------------|
+| Energized computation core | eco's Integrated Working Station | 3 × C4 expandable computation host, 8 × green crystal matrix, 4 × not-so-mysterious block, for 66,600 AE |
+| Energized threading core | [L1 Processor Assembler](processor_assembler.md) | 2 × CM4A threading core, 1 × C1 computation subsystem structure shell |
+| Energized flash enhancement (CE1R) | [L1 Processor Assembler](processor_assembler.md) | 2 × CE1 flash enhancement, 1 × L4 storage component |
 
-## Crafting them
+## Server config
 
-| Item | Where | Ingredients |
-| --- | --- | --- |
-| Energized Computation Core | Integrated Working Station (eco) | 3 x C4 expandable computation system, 8 x green crystal matrix, 4 x not-so-mysterious cube, 66,600 AE |
-| Energized Computation Threading Core | L1 processor assembly room | 2 x CM4A threading core, 1 x C1 computation casing |
-| Energized computation cell (CE1R) | L1 processor assembly room | 2 x CE1 cell, 1 x L4 storage component |
+The `l1_computation` section of `neoecoprototype-server.toml` applies to the L1 tier only; higher tiers keep eco's own numbers.
 
-## L1 numbers are configurable
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `cpu_threads` | 2 | crafting threads of one plain L1 subsystem |
+| `cpu_accelerators` | 24 | parallelism per plain parallel core |
+| `cpu_total_bytes` | 1,572,864 | the tier's nominal crafting storage (1.5 × 1 MiB) |
+| `energized_cell_total_bytes` | 5,242,880 | bytes per energized flash enhancement (CE1R), 4 MiB plus 30% |
 
-The `l1_computation` section of `neoecoprototype-server.toml` applies to the L1 tier alone; higher
-tiers keep eco's own values.
-
-| Option | Default | What it sets |
-| --- | --- | --- |
-| `cpu_threads` | 2 | crafting threads of a plain L1 subsystem |
-| `cpu_accelerators` | 24 | co-processors per plain parallel core |
-| `cpu_total_bytes` | 1572864 | the tier's nominal crafting storage, 1.5x the old 1 MiB |
-| `energized_cell_total_bytes` | 5242880 | bytes per energized cell (CE1R): the old 4 MiB + 30% |
-
-Re-enter the world after editing. Threads are allocated when the cluster is built, so a structure that
-is already standing has to be broken and formed again to pick up a new value.
+Re-enter the world after editing. Threads are allocated when the cluster is built, so a structure that is already formed has to be taken down and re-formed to pick up new values.
