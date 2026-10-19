@@ -98,7 +98,8 @@ public final class NeoECOPrototypeClient {
             // 脚本矩阵按家族拿模型（.material('small_bulk')），没有档位维度，所以这张不分介质的旧图
             // 还得继续加载；注册表里那 27 张才是真在用的。
             "l1_small_bulk",
-            "l1_pigmee", "l1_concrete", "l1_universal", "l1_quantum", "l1_default", "l1_custom");
+            "l1_pigmee", "l1_concrete", "l1_universal", "l1_quantum", "l1_default", "l1_custom",
+            "l0_fe_1k", "l0_spent_waste");
 
     private static ResourceLocation cellModel(String name) {
         return ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "block/cell/storage_cell_" + name);
@@ -149,6 +150,10 @@ public final class NeoECOPrototypeClient {
             ECOCellModels.register(ModRegistration.OPTIONAL_QUANTUM_CELL_1K.get(), cellModel("l1_quantum"));
             ECOCellModels.register(ModRegistration.OPTIONAL_QUANTUM_CELL_1M.get(), cellModel("l1_quantum"));
         }
+        if (ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1K != null) {
+            ECOCellModels.register(ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1K.get(),
+                    cellModel("l0_spent_waste"));
+        }
         if (ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1M != null) {
             ECOCellModels.register(ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1M.get(),
                     cellModel("l1_spent_waste"));
@@ -172,6 +177,7 @@ public final class NeoECOPrototypeClient {
             // The FE pair reads the energy stripe of cell_type (pixels x 8..9) instead of the item one
             // (x 4..5), exactly the shift eco's own l4/l6/l9_fe models make against its item one. No new
             // artwork: the stripe is already in the cell_type.png we ship, which is that file byte for byte.
+            ECOCellModels.register(ModRegistration.OPTIONAL_FE_CELL_1K.get(), cellModel("l0_fe_1k"));
             ECOCellModels.register(ModRegistration.OPTIONAL_FE_CELL_1M.get(), cellModel("l1_fe"));
             ECOCellModels.register(ModRegistration.OPTIONAL_FE_CELL_4M.get(), cellModel("l1r_fe"));
         }

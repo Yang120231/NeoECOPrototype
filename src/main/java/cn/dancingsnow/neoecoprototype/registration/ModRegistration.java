@@ -158,11 +158,13 @@ public class ModRegistration {
     public static Supplier<? extends Item> OPTIONAL_UNIVERSAL_CELL_1M;
     public static Supplier<? extends Item> OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M;
     public static Supplier<? extends Item> OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K;
+    public static Supplier<? extends Item> OPTIONAL_SPENT_WASTE_CELL_1K;
     public static Supplier<? extends Item> OPTIONAL_SPENT_WASTE_CELL_1M;
     public static Supplier<? extends Item> OPTIONAL_QUANTUM_CELL_1K;
     public static Supplier<? extends Item> OPTIONAL_QUANTUM_CELL_1M;
     /** Assigned by FeStorageIntegration only when appflux is installed. */
     public static Supplier<? extends Item> OPTIONAL_FE_CELL_HOUSING;
+    public static Supplier<? extends Item> OPTIONAL_FE_CELL_1K;
     public static Supplier<? extends Item> OPTIONAL_FE_CELL_1M;
     public static Supplier<? extends Item> OPTIONAL_FE_CELL_4M;
     public static final Supplier<Item> SIMPLIFY_QUANTUM_STORAGE_MATRIX_HOUSING =
@@ -1474,6 +1476,7 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                               output.accept(OPTIONAL_CHEMICAL_CELL_4M.get());
                          }
                          if (OPTIONAL_FE_CELL_1M != null) {
+                             output.accept(OPTIONAL_FE_CELL_1K.get());
                              output.accept(OPTIONAL_FE_CELL_1M.get());
                              output.accept(OPTIONAL_FE_CELL_4M.get());
                              output.accept(OPTIONAL_FE_CELL_HOUSING.get());
@@ -1494,6 +1497,7 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                           }
                           if (OPTIONAL_SPENT_WASTE_CELL_1M != null) {
                               output.accept(SIMPLIFY_SPENT_NUCLEAR_WASTE_STORAGE_MATRIX_HOUSING.get());
+                              output.accept(OPTIONAL_SPENT_WASTE_CELL_1K.get());
                               output.accept(OPTIONAL_SPENT_WASTE_CELL_1M.get());
                           }
                           if (OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M != null) {

@@ -14,6 +14,7 @@ import net.minecraft.world.item.Item;
  * the byte total moves.
  */
 public final class SimplifySpentNuclearWasteCellItem extends ECOUniversalStorageCellItem {
+    public static final long BYTES_1K = 1L << 10;
     public static final long BYTES_1M = 1L << 20;
     public static final int TOTAL_TYPES = 1;
     public static final double IDLE_DRAIN = 8.0D;

@@ -1,0 +1,9 @@
+{
+  "neoforge:conditions": [{"type": "neoforge:mod_loaded", "modid": "appflux"}],
+  "type": "ae2:storage_cell_disassembly",
+  "cell": "neoecoprototype:simplify_fe_storage_cell_1k",
+  "cell_disassembly_items": [
+    { "id": "neoecoprototype:simplify_fe_cell_housing", "count": 1 },
+    { "id": "ae2:cell_component_1k", "count": 1 }
+  ]
+}

@@ -19,9 +19,10 @@
     "A": { "item": "neoecoprototype:simplify_green_crystal_matrix" },
     "B": { "item": "ae2:ender_dust" },
     "C": { "item": "ae2omnicells:ender_ingot" },
-    "D": { "item": "ae2omnicells:multidimensional_expansion_processor" }
+    "D": { "item": "ae2omnicells:multidimensional_expansion_processor" },
+    "E": { "item": "mekanism:radioactive_waste_barrel" }
   },
-  "pattern": ["ABA", "B B", "CDC"],
+  "pattern": ["ABA", "BEB", "CDC"],
   "result": {
     "count": 1,
     "id": "neoecoprototype:simplify_spent_nuclear_waste_storage_matrix_housing"

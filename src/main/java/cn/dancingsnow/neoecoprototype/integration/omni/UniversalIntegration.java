@@ -27,6 +27,10 @@ public final class UniversalIntegration {
         // have to be present before this line can even build the item.
         if (net.neoforged.fml.ModList.get().isLoaded("mekanism")
                 && net.neoforged.fml.ModList.get().isLoaded("appmek")) {
+            ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1K = items.register(
+                    "simplify_spent_nuclear_waste_storage_cell_1k",
+                    () -> new SimplifySpentNuclearWasteCellItem(new Item.Properties().stacksTo(1),
+                            SimplifySpentNuclearWasteCellItem.BYTES_1K));
             ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1M = items.register(
                     "simplify_spent_nuclear_waste_storage_cell_1m",
                     () -> new SimplifySpentNuclearWasteCellItem(new Item.Properties().stacksTo(1),

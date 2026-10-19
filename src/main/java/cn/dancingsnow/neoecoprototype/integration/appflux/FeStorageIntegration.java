@@ -10,8 +10,9 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 /**
  * Optional AppliedFlux integration. This class is loaded only when appflux is present.
  *
- * <p>Our own FE housing, like every other medium in this family has one; the cells are that housing
- * plus our own 1M / 4M component.
+ * <p>Our own FE housing, like every other medium in this family has one; the 1M and 4M cells are that
+ * housing plus our own component, and the 1K one plus AE2's own 1K component, because we never drew a
+ * component below 1M.
  */
 public final class FeStorageIntegration {
     /** One card per machine, which is what appflux asks for on AE2's own interface and provider. */
@@ -20,6 +21,9 @@ public final class FeStorageIntegration {
     public static void register(DeferredRegister<Item> items) {
         ModRegistration.OPTIONAL_FE_CELL_HOUSING = items.register("simplify_fe_cell_housing",
                 () -> new Item(new Item.Properties()));
+        ModRegistration.OPTIONAL_FE_CELL_1K = items.register("simplify_fe_storage_cell_1k",
+                () -> new SimplifyFeStorageCellItem(new Item.Properties().stacksTo(1),
+                        SimplifyFeStorageCellItem::getFluxCellType, SimplifyFeStorageCellItem.BYTES_1K));
         ModRegistration.OPTIONAL_FE_CELL_1M = items.register("simplify_fe_storage_cell_1m",
                 () -> new SimplifyFeStorageCellItem(new Item.Properties().stacksTo(1),
                         SimplifyFeStorageCellItem::getFluxCellType, SimplifyFeStorageCellItem.BYTES_1M));

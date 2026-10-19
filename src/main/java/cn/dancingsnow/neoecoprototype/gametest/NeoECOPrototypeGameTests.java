@@ -2599,36 +2599,38 @@ public final class NeoECOPrototypeGameTests {
 
     /**
      * The stripe each of our in-drive cell models is meant to read off its type texture, as the north face's
-     * uv. Two textures carry stripes: {@code drive/cell_type} is eight media colours two pixels wide
-     * (chemical 0, fluid 2, item 4, air 6, energy and fe sharing 8, lightning 10, bulk 12, omni 14) and
-     * {@code drive/cell_type_lower} is three media bands six pixels wide stacked by row (chemical 0,
-     * fluid 3, item 6). The one that was wrong: both FE matrices were registered on the item cells' models
-     * and so read the item colour, on the recorded belief that our copy of {@code cell_type} carried no
-     * energy stripe. It does -- the file is eco's byte for byte, and eco's own fe models differ from its
-     * item models by nothing but the four numbers in this stripe's offset.
+     * uv. Two textures carry stripes. {@code drive/cell_type} is eight media colours two pixels wide, laid
+     * out in columns (chemical 0, fluid 2, item 4, air 6, energy and fe sharing 8, lightning 10, bulk 12,
+     * omni 14), and only the two FE models and the plain small bulk model read it now.
+     * {@code drive/cell_type_lower} is the same media as bands six pixels wide stacked by row (chemical y0,
+     * fluid y3, item y6, and a red band at y9 that nothing reads yet); everything else reads that one.
+     * The art batch of 2026-10-19 moved our own chemical / fluid / item / default / custom models onto the
+     * row sheet and turned their lamp from a vertical 2x6 strip into a horizontal 6x3 bar, so a stripe in
+     * this table is only meaningful together with the geometry shipped beside it.
+     *
+     * <p>The one that was wrong: both FE matrices were registered on the item cells' models and so read the
+     * item colour, on the recorded belief that our copy of {@code cell_type} carried no energy stripe. It
+     * does -- the file is eco's byte for byte, and eco's own fe models differ from its item models by
+     * nothing but the four numbers in this stripe's offset.
      *
      * <p>This guards the model files. The {@code ECOCellModels.register} lines that point a cell item at a
      * model are client setup, and a game test server is a dedicated server that never runs it, so a wrong
      * registration stays an eye check.
      */
     private static final java.util.Map<String, String> CELL_TYPE_STRIPE = java.util.Map.ofEntries(
-            java.util.Map.entry("storage_cell_l1_chemical", "0,0,2,6"),
-            java.util.Map.entry("storage_cell_l1r_chemical", "0,0,2,6"),
-            java.util.Map.entry("storage_cell_l1_fluid", "2,0,4,6"),
-            java.util.Map.entry("storage_cell_l1r_fluid", "2,0,4,6"),
-            java.util.Map.entry("storage_cell_l1_item", "4,0,6,6"),
-            java.util.Map.entry("storage_cell_l1r_item", "4,0,6,6"),
-            java.util.Map.entry("storage_cell_l1_default", "4,0,6,6"),
-            java.util.Map.entry("storage_cell_l1_custom", "4,0,6,6"),
+            java.util.Map.entry("storage_cell_l1_chemical", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l1r_chemical", "0,0,6,3"),
+            java.util.Map.entry("storage_cell_l1_fluid", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l1r_fluid", "0,3,6,6"),
+            java.util.Map.entry("storage_cell_l1_item", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l1r_item", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l1_default", "0,6,6,9"),
+            java.util.Map.entry("storage_cell_l1_custom", "0,6,6,9"),
             java.util.Map.entry("storage_cell_l1_small_bulk", "4,0,6,6"),
             java.util.Map.entry("storage_cell_l1_fe", "8,0,10,6"),
             java.util.Map.entry("storage_cell_l1r_fe", "8,0,10,6"),
-            java.util.Map.entry("storage_cell_l1_universal", "14,0,16,6"),
-            java.util.Map.entry("storage_cell_l1r_universal", "14,0,16,6"),
-            java.util.Map.entry("storage_cell_l1_quantum", "14,0,16,6"),
-            java.util.Map.entry("storage_cell_l1r_quantum", "14,0,16,6"),
-            java.util.Map.entry("storage_cell_l1_complex_universal", "14,0,16,6"),
-            java.util.Map.entry("storage_cell_l1_spent_waste", "0,0,2,6"),
+            // Our own 1K FE matrix: the red band she added to cell_type_lower the day this landed.
+            java.util.Map.entry("storage_cell_l0_fe_1k", "0,9,6,12"),
             java.util.Map.entry("storage_cell_l0_chemical_1k", "0,0,6,3"),
             java.util.Map.entry("storage_cell_l0_chemical_4k", "0,0,6,3"),
             java.util.Map.entry("storage_cell_l0_chemical_16k", "0,0,6,3"),
@@ -2648,9 +2650,16 @@ public final class NeoECOPrototypeGameTests {
             java.util.Map.entry("storage_cell_l1_small_bulk_item", "0,6,6,9"),
             java.util.Map.entry("storage_cell_l1r_small_bulk_item", "0,6,6,9"));
 
-    /** The three cell models that deliberately draw no type lamp at all, only the level band. */
+    /** The cell models that deliberately draw no type lamp at all, only the level bands. */
     private static final List<String> CELL_MODELS_WITHOUT_TYPE =
-            List.of("storage_cell_l1_concrete", "storage_cell_l1_pigmee", "storage_cell_l1_singularity");
+            List.of("storage_cell_l1_concrete", "storage_cell_l1_pigmee", "storage_cell_l1_singularity",
+                    // The omni families, taken by the artist batch of 2026-10-19: the type band came out and
+                    // the housing plate carries the family colour instead. Asked upstream the same day, the
+                    // answer was 靠外壳辨认 - read it off the shell.
+                    "storage_cell_l1_universal", "storage_cell_l1r_universal",
+                    "storage_cell_l1_quantum", "storage_cell_l1r_quantum",
+                    "storage_cell_l1_complex_universal", "storage_cell_l1_spent_waste",
+                    "storage_cell_l0_spent_waste");
 
     /**
      * What one cell model's type band actually says: its north uv, the texture it binds, how many faces the
@@ -2661,7 +2670,7 @@ public final class NeoECOPrototypeGameTests {
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, batch = "cell_type_stripe")
     public static void driveCellModelsReadTheirOwnTypeStripe(GameTestHelper helper) {
         // The reader is pointed at planted models first, both ways round, because a scan that finds no type
-        // band reads exactly like a model that was built without one -- and three of ours really were. The
+        // band reads exactly like a model that was built without one -- and ten of ours really were. The
         // planted copy also carries the textures map, because a face binds a key ("#type") and the sheet
         // lives in that map: reading the key instead of the resolved path is how the light check below
         // matched no model at all and still reported green.
@@ -2701,6 +2710,24 @@ public final class NeoECOPrototypeGameTests {
                     + " least " + CELL_TYPE_STRIPE.size() + ", so it checked nothing");
             return;
         }
+        // Both ways round: the loop below only reads the table for models it found, so a model file that
+        // goes missing would take its expectation with it and leave the census green.
+        var missingModels = new java.util.ArrayList<String>();
+        for (var named : CELL_TYPE_STRIPE.keySet()) {
+            if (!cellModels.containsKey(named)) {
+                missingModels.add(named);
+            }
+        }
+        for (var named : CELL_MODELS_WITHOUT_TYPE) {
+            if (!cellModels.containsKey(named)) {
+                missingModels.add(named);
+            }
+        }
+        if (!missingModels.isEmpty()) {
+            helper.fail("the census names models the scan never found, so their stripe is asserted"
+                    + " against nothing: " + missingModels);
+            return;
+        }
         var strays = new java.util.ArrayList<String>();
         var unlit = new java.util.ArrayList<String>();
         int lowerUnlitFaces = 0;
@@ -2713,7 +2740,7 @@ public final class NeoECOPrototypeGameTests {
                 if (!CELL_MODELS_WITHOUT_TYPE.contains(name)) {
                     strays.add(name + " -> " + (band == null ? "no type band" : band.northUv()));
                 } else if (band != null) {
-                    helper.fail(name + " is one of the three models that should carry no type lamp, but it"
+                    helper.fail(name + " is one of the models that should carry no type lamp, but it"
                             + " draws a band at uv " + band.northUv());
                     return;
                 }
@@ -2728,10 +2755,12 @@ public final class NeoECOPrototypeGameTests {
                         + " -- one media's colour is standing in another family's lamp");
                 return;
             }
-            // Every model that reads a stripe of the shared cell_type sheet has to light its own lamp: our
-            // own non-lower group does, and eco's cell models leave just two of their type faces dark, so a
-            // dark one here reads as a lost key rather than a look. The lower group is left out -- none of
-            // its type faces carry light at all, which is still open and is not this guard's to decide.
+            // Every model that still reads the shared cell_type sheet has to light its own lamp: the two FE
+            // models and the plain small bulk one do, and eco's cell models leave just two of their type
+            // faces dark, so a dark one here reads as a lost key rather than a look. The row-sheet group is
+            // left out -- none of its type faces carry light at all. That is her look for the whole family,
+            // and the L1 chemical / fluid / item lamps went dark with it, so it is a thing to raise rather
+            // than this guard's to decide.
             if (band.texture().endsWith("cell_type")) {
                 sharedSheetFaces += band.faces();
                 if (band.litFaces() != band.faces()) {
@@ -6089,6 +6118,11 @@ public final class NeoECOPrototypeGameTests {
             helper.succeed();
             return;
         }
+        if (ModRegistration.OPTIONAL_FE_CELL_1K == null) {
+            helper.fail("appflux is installed and the 1M/4M flux cells registered, but the 1K one did not,"
+                    + " so the ladder lost a rung rather than the whole family");
+            return;
+        }
         // The row the L1 storage host draws for a flux matrix is found by comparing the mounted cell's own
         // cell type against eco's registered flux type, so that equality is what the panel depends on.
         var fluxType = cn.dancingsnow.neoecoae.all.NERegistries.CELL_TYPE.get(
@@ -6099,7 +6133,9 @@ public final class NeoECOPrototypeGameTests {
             return;
         }
         var ladder = java.util.List.of(
-                new Object[][]{{"1m", ModRegistration.OPTIONAL_FE_CELL_1M.get(),
+                new Object[][]{{"1k", ModRegistration.OPTIONAL_FE_CELL_1K.get(),
+                        cn.dancingsnow.neoecoprototype.integration.appflux.SimplifyFeStorageCellItem.BYTES_1K},
+                        {"1m", ModRegistration.OPTIONAL_FE_CELL_1M.get(),
                         cn.dancingsnow.neoecoprototype.integration.appflux.SimplifyFeStorageCellItem.BYTES_1M},
                         {"4m", ModRegistration.OPTIONAL_FE_CELL_4M.get(),
                         cn.dancingsnow.neoecoprototype.integration.appflux.SimplifyFeStorageCellItem.BYTES_4M}});
