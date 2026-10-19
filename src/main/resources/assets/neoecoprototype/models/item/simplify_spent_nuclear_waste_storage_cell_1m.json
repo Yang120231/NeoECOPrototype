@@ -1,9 +1,9 @@
 {
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "neoecoprototype:item/storage_recolor/eco_spent_waste_cell_housing",
-    "layer1": "neoecoprototype:item/storage_recolor/eco_cell_light_1m",
-    "layer2": "neoecoprototype:item/storage_recolor/eco_cell_status_light",
-    "layer3": "neoecoprototype:item/storage_recolor/eco_spent_waste_cell_layer"
-  }
+	"parent": "minecraft:item/generated",
+	"textures": {
+		"layer0": "neoecoprototype:item/storage_recolor/eco_lower_spent_waste_cell_housing",
+		"layer1": "neoecoprototype:item/storage_recolor/eco_cell_light_1m",
+		"layer2": "neoecoprototype:item/storage_recolor/eco_cell_status_light",
+		"layer3": "neoecoprototype:item/storage_recolor/eco_spent_waste_cell_layer"
+	}
 }
