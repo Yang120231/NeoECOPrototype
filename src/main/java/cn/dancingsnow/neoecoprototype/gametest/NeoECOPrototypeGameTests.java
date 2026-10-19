@@ -7327,8 +7327,38 @@ public final class NeoECOPrototypeGameTests {
                         .SINGULARITY_CELL_TICKS_PER_BATCH_MIN == 60L,
                 "the cell's shortest interval is part of its contract");
         helper.assertTrue(cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
-                        .SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX == 262_144,
-                "the cell's biggest single batch is part of its contract");
+                        .SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX == Long.MAX_VALUE,
+                "the batch size is freely configurable up to the top of a long, which is also where the"
+                        + " bank saturates - pinning it here is what makes a silent cap change go red");
+        // The freed ceiling, tested where it can still go red: a batch well above the old 262,144 has to be
+        // honoured by the config read and paid by the bank, and the saturation still has to hold on top of it.
+        var amount = cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
+                .SINGULARITY_CELL_AMOUNT_PER_BATCH;
+        long restored = amount.get();
+        try {
+            amount.set(10_000_000L);
+            if (cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
+                    .singularityCellAmountPerBatch() != 10_000_000L) {
+                helper.fail("amount_per_batch is still clamped somewhere: writing 10000000 reads back "
+                        + cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
+                        .singularityCellAmountPerBatch());
+                return;
+            }
+            if (cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem
+                    .bankOf(fresh, 1000L + interval) != 10_000_000L) {
+                helper.fail("one batch at the new ceiling should pay 10000000, the cell reports "
+                        + cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem
+                        .bankOf(fresh, 1000L + interval));
+                return;
+            }
+            if (cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem
+                    .bankOf(fresh, Long.MAX_VALUE) != Long.MAX_VALUE) {
+                helper.fail("a huge batch should saturate the bank at the top of a long, not wrap it past it");
+                return;
+            }
+        } finally {
+            amount.set(restored);
+        }
         helper.succeed();
     }
 

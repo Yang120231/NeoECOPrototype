@@ -55,12 +55,13 @@ public final class NeoECOPrototypeServerConfig {
     /** Tick interval of the singularity cell: one batch per this many ticks. */
     public static final ModConfigSpec.LongValue SINGULARITY_CELL_TICKS_PER_BATCH;
     /** Singularities the cell makes per batch, up to {@link #SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX}. */
-    public static final ModConfigSpec.IntValue SINGULARITY_CELL_AMOUNT_PER_BATCH;
+    public static final ModConfigSpec.LongValue SINGULARITY_CELL_AMOUNT_PER_BATCH;
     /**
-     * The ceiling on a single batch: 256 Ki singularities, enough that a pack pushing the interval to its
-     * floor fills a bank of {@link Long#MAX_VALUE} in hours rather than centuries.
+     * The ceiling on a single batch: the top of a long, so a pack may set any batch size it can write down
+     * and the cell still cannot produce a number the arithmetic cannot hold. {@code bankOf} saturates at
+     * this same value, which is where overflow is decided - not here.
      */
-    public static final int SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX = 262_144;
+    public static final long SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX = Long.MAX_VALUE;
     /** The shortest interval the cell accepts, in ticks. */
     public static final long SINGULARITY_CELL_TICKS_PER_BATCH_MIN = 60L;
 
@@ -160,11 +161,14 @@ public final class NeoECOPrototypeServerConfig {
         SINGULARITY_CELL_AMOUNT_PER_BATCH = builder
                 .comment("Singularities one batch is worth, and therefore how coarse the bank is: it jumps",
                         "by this number once per interval, it does not drip.",
-                        "Clamped to at most " + SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX + ", so the fastest",
-                        "this cell can run is that many per " + SINGULARITY_CELL_TICKS_PER_BATCH_MIN
-                                + " ticks (about 3 seconds).",
+                        "Freely configurable up to " + SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX + ", the top of",
+                        "a long. The interval keeps its floor of " + SINGULARITY_CELL_TICKS_PER_BATCH_MIN
+                                + " ticks, so the fastest the cell can run is one batch every 3 seconds.",
+                        "Overflow is not a crash and not a wrap: once the bank reaches that same top it stops",
+                        "growing, and because production is pinned there too, anything you draw afterwards",
+                        "stays drawn for good.",
                         "Default: 120.")
-                .defineInRange("amount_per_batch", 120, 1, SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX);
+                .defineInRange("amount_per_batch", 120L, 1L, SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX);
         builder.pop();
         builder.push("machine_mind");
         MIND_IDLE_POWER_SAVING = builder
@@ -184,10 +188,10 @@ public final class NeoECOPrototypeServerConfig {
         return Math.max(SINGULARITY_CELL_TICKS_PER_BATCH_MIN, SINGULARITY_CELL_TICKS_PER_BATCH.get());
     }
 
-    /** The cell's batch size, capped the same way. */
-    public static int singularityCellAmountPerBatch() {
+    /** The cell's batch size, floored at one; the top of a long is both its ceiling and its saturation point. */
+    public static long singularityCellAmountPerBatch() {
         return Math.min(SINGULARITY_CELL_AMOUNT_PER_BATCH_MAX,
-                Math.max(1, SINGULARITY_CELL_AMOUNT_PER_BATCH.get()));
+                Math.max(1L, SINGULARITY_CELL_AMOUNT_PER_BATCH.get()));
     }
 
     /** Shared by the assembler and its JEI page so both agree on what is refused. */
