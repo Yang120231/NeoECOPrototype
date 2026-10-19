@@ -2601,9 +2601,10 @@ public final class NeoECOPrototypeGameTests {
      * The stripe each of our in-drive cell models is meant to read off its type texture, as the north face's
      * uv. Two textures carry stripes. {@code drive/cell_type} is eight media colours two pixels wide, laid
      * out in columns (chemical 0, fluid 2, item 4, air 6, energy and fe sharing 8, lightning 10, bulk 12,
-     * omni 14), and only the two FE models and the plain small bulk model read it now.
+     * omni 14), and one model reads it now: the plain small bulk one, which the scripted matrices borrow.
      * {@code drive/cell_type_lower} is the same media as bands six pixels wide stacked by row (chemical y0,
-     * fluid y3, item y6, and a red band at y9 that nothing reads yet); everything else reads that one.
+     * fluid y3, item y6, and a red band at y9 drawn for the FE family, which is the only thing that reads it);
+     * everything else reads that one.
      * The art batch of 2026-10-19 moved our own chemical / fluid / item / default / custom models onto the
      * row sheet and turned their lamp from a vertical 2x6 strip into a horizontal 6x3 bar, so a stripe in
      * this table is only meaningful together with the geometry shipped beside it.
@@ -2627,9 +2628,11 @@ public final class NeoECOPrototypeGameTests {
             java.util.Map.entry("storage_cell_l1_default", "0,6,6,9"),
             java.util.Map.entry("storage_cell_l1_custom", "0,6,6,9"),
             java.util.Map.entry("storage_cell_l1_small_bulk", "4,0,6,6"),
-            java.util.Map.entry("storage_cell_l1_fe", "8,0,10,6"),
-            java.util.Map.entry("storage_cell_l1r_fe", "8,0,10,6"),
-            // Our own 1K FE matrix: the red band she added to cell_type_lower the day this landed.
+            java.util.Map.entry("storage_cell_l1_fe", "0,9,6,12"),
+            java.util.Map.entry("storage_cell_l1r_fe", "0,9,6,12"),
+            // All three FE matrices read the red band she added to cell_type_lower the day this landed - the
+            // row was drawn for them. Their rungs are told apart by the level band alone, like every other
+            // family on that sheet.
             java.util.Map.entry("storage_cell_l0_fe_1k", "0,9,6,12"),
             java.util.Map.entry("storage_cell_l0_chemical_1k", "0,0,6,3"),
             java.util.Map.entry("storage_cell_l0_chemical_4k", "0,0,6,3"),
@@ -2758,12 +2761,11 @@ public final class NeoECOPrototypeGameTests {
                         + " -- one media's colour is standing in another family's lamp");
                 return;
             }
-            // Every model that still reads the shared cell_type sheet has to light its own lamp: the two FE
-            // models and the plain small bulk one do, and eco's cell models leave just two of their type
-            // faces dark, so a dark one here reads as a lost key rather than a look. The row-sheet group is
-            // left out -- none of its type faces carry light at all. That is her look for the whole family,
-            // and the L1 chemical / fluid / item lamps went dark with it, so it is a thing to raise rather
-            // than this guard's to decide.
+            // Every model that still reads the shared cell_type sheet has to light its own lamp: the plain
+            // small bulk one does, and eco's cell models leave just two of their type faces dark, so a dark
+            // one here reads as a lost key rather than a look. The row-sheet group is left out -- none of its
+            // type faces carry light at all. That is her look for the whole family, and the FE matrices moved
+            // onto that sheet with it, so it is a thing to raise rather than this guard's to decide.
             if (band.texture().endsWith("cell_type")) {
                 sharedSheetFaces += band.faces();
                 if (band.litFaces() != band.faces()) {
