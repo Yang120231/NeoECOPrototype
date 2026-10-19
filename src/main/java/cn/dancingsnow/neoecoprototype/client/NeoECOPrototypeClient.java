@@ -99,7 +99,7 @@ public final class NeoECOPrototypeClient {
             // 还得继续加载；注册表里那 27 张才是真在用的。
             "l1_small_bulk",
             "l1_pigmee", "l1_concrete", "l1_universal", "l1_quantum", "l1_default", "l1_custom",
-            "l0_fe_1k", "l0_spent_waste");
+            "l0_fe_1k", "l0_spent_waste", "l0_universal", "l0_quantum", "l0_complex_universal");
 
     private static ResourceLocation cellModel(String name) {
         return ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "block/cell/storage_cell_" + name);
@@ -143,11 +143,12 @@ public final class NeoECOPrototypeClient {
         // Its own copy of the special-cell housing, so repainting one does not move the other.
         ECOCellModels.register(ModRegistration.SIMPLIFY_SINGULARITY_CELL.get(), cellModel("l1_singularity"));
         if (ModRegistration.OPTIONAL_UNIVERSAL_CELL_1K != null) {
-            ECOCellModels.register(ModRegistration.OPTIONAL_UNIVERSAL_CELL_1K.get(), cellModel("l1_universal"));
+            ECOCellModels.register(ModRegistration.OPTIONAL_UNIVERSAL_CELL_1K.get(),
+                    cellModel("l0_universal"));
             ECOCellModels.register(ModRegistration.OPTIONAL_UNIVERSAL_CELL_1M.get(), cellModel("l1_universal"));
         }
         if (ModRegistration.OPTIONAL_QUANTUM_CELL_1K != null) {
-            ECOCellModels.register(ModRegistration.OPTIONAL_QUANTUM_CELL_1K.get(), cellModel("l1_quantum"));
+            ECOCellModels.register(ModRegistration.OPTIONAL_QUANTUM_CELL_1K.get(), cellModel("l0_quantum"));
             ECOCellModels.register(ModRegistration.OPTIONAL_QUANTUM_CELL_1M.get(), cellModel("l1_quantum"));
         }
         if (ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1K != null) {
@@ -160,7 +161,7 @@ public final class NeoECOPrototypeClient {
         }
         if (ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K != null) {
             ECOCellModels.register(ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K.get(),
-                    cellModel("l1_complex_universal"));
+                    cellModel("l0_complex_universal"));
         }
         if (ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M != null) {
             ECOCellModels.register(ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M.get(),

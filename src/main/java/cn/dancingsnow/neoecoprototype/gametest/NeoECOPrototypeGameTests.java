@@ -2659,7 +2659,10 @@ public final class NeoECOPrototypeGameTests {
                     "storage_cell_l1_universal", "storage_cell_l1r_universal",
                     "storage_cell_l1_quantum", "storage_cell_l1r_quantum",
                     "storage_cell_l1_complex_universal", "storage_cell_l1_spent_waste",
-                    "storage_cell_l0_spent_waste");
+                    // Their 1K rungs: same family plate and the same missing lamp, only the level band
+                    // moves down to the blue pair every other family's 1K reads.
+                    "storage_cell_l0_universal", "storage_cell_l0_quantum",
+                    "storage_cell_l0_complex_universal", "storage_cell_l0_spent_waste");
 
     /**
      * What one cell model's type band actually says: its north uv, the texture it binds, how many faces the
@@ -2670,7 +2673,7 @@ public final class NeoECOPrototypeGameTests {
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, batch = "cell_type_stripe")
     public static void driveCellModelsReadTheirOwnTypeStripe(GameTestHelper helper) {
         // The reader is pointed at planted models first, both ways round, because a scan that finds no type
-        // band reads exactly like a model that was built without one -- and ten of ours really were. The
+        // band reads exactly like a model that was built without one -- and thirteen of ours really were. The
         // planted copy also carries the textures map, because a face binds a key ("#type") and the sheet
         // lives in that map: reading the key instead of the resolved path is how the light check below
         // matched no model at all and still reported green.
@@ -2773,6 +2776,48 @@ public final class NeoECOPrototypeGameTests {
         if (!strays.isEmpty()) {
             helper.fail("cell models outside the census, add each one's stripe or say it draws no lamp: "
                     + strays);
+            return;
+        }
+        // The 4M rung is carried by a sheet of its own, not by a colour: cell_level_4m and her
+        // cell_level_lower_4m are both 16x32 with two frames whose only content is a green-to-blue slide, so a
+        // 4M model with no band on one of them shows a still lamp and stops saying 4M. The band that pulses is
+        // not always the wide one - the expanded small bulk models keep their static purple family band and
+        // pulse only the short one, through a second "level_4m" key - so this reads what each face binds and
+        // resolves it through the model's own textures map.
+        var noPulse = new java.util.ArrayList<String>();
+        for (var entry : cellModels.entrySet()) {
+            if (!entry.getKey().contains("_l1r_")) {
+                continue;
+            }
+            var root = com.google.gson.JsonParser.parseString(entry.getValue()).getAsJsonObject();
+            var sheets = new java.util.HashMap<String, String>();
+            root.getAsJsonObject("textures").entrySet().forEach(binding -> {
+                if (binding.getValue().isJsonPrimitive()) {
+                    sheets.put(binding.getKey(), binding.getValue().getAsString());
+                }
+            });
+            var pulses = new java.util.ArrayList<String>();
+            root.getAsJsonArray("elements").forEach(element -> {
+                var faces = element.getAsJsonObject().getAsJsonObject("faces");
+                if (faces == null) {
+                    return;
+                }
+                faces.entrySet().forEach(side -> {
+                    var bound = side.getValue().getAsJsonObject().get("texture");
+                    var sheet = bound == null ? ""
+                            : sheets.getOrDefault(bound.getAsString().substring(1), "");
+                    if (sheet.endsWith("_4m")) {
+                        pulses.add(bound.getAsString());
+                    }
+                });
+            });
+            if (pulses.isEmpty()) {
+                noPulse.add(entry.getKey());
+            }
+        }
+        if (!noPulse.isEmpty()) {
+            helper.fail("4M cell models with no band on an animated level sheet, so they never pulse:"
+                    + noPulse);
             return;
         }
         if (sharedSheetFaces == 0) {
