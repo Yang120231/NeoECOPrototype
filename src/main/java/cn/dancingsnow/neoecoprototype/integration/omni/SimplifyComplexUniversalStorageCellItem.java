@@ -14,6 +14,7 @@ import net.minecraft.world.item.Item;
  * already borrows {@code quantum_omni}.
  */
 public final class SimplifyComplexUniversalStorageCellItem extends ECOUniversalStorageCellItem {
+    public static final long BYTES_1K = 1L << 10;
     public static final long BYTES_1M = 1L << 20;
     public static final int TOTAL_TYPES = 1024;
     public static final double IDLE_DRAIN = 8.0D;
@@ -22,8 +23,8 @@ public final class SimplifyComplexUniversalStorageCellItem extends ECOUniversalS
         return NEOmniCellTypes.COMPLEX_OMNI.get();
     }
 
-    public SimplifyComplexUniversalStorageCellItem(Item.Properties properties) {
+    public SimplifyComplexUniversalStorageCellItem(Item.Properties properties, long bytes) {
         super(properties, SimplifyTier.L1, NEOmniCellTypes.COMPLEX_OMNI::get,
-                IDLE_DRAIN, TOTAL_TYPES, BYTES_1M);
+                IDLE_DRAIN, TOTAL_TYPES, bytes);
     }
 }

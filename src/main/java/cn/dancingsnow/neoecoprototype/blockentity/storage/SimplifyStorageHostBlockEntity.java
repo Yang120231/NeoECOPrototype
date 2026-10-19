@@ -28,6 +28,7 @@ import cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem;
 import cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem;
 import cn.dancingsnow.neoecoprototype.integration.omni.SimplifyComplexUniversalStorageCellItem;
+import cn.dancingsnow.neoecoprototype.integration.omni.SimplifySpentNuclearWasteCellItem;
 import cn.dancingsnow.neoecoprototype.integration.omni.SimplifyUniversalStorageCellItem;
 import cn.dancingsnow.neoecoprototype.integration.omni.SimplifyQuantumStorageCellItem;
 import net.neoforged.fml.ModList;
@@ -561,6 +562,7 @@ public class SimplifyStorageHostBlockEntity
     public static final int ROW_CONCRETE = 6;
     public static final int ROW_FLUX = 7;
     public static final int ROW_COMPLEX_UNIVERSAL = 8;
+    public static final int ROW_SPENT_WASTE = 9;
     /** Not a row: a cell the panel must not count anywhere. */
     public static final int ROW_NONE = -1;
 
@@ -578,6 +580,10 @@ public class SimplifyStorageHostBlockEntity
             lines.add(createStorageTypeLine(SimplifyQuantumStorageCellItem.getQuantumCellType(), ROW_QUANTUM));
             lines.add(createStorageTypeLine(
                     SimplifyComplexUniversalStorageCellItem.getComplexUniversalCellType(), ROW_COMPLEX_UNIVERSAL));
+            if (ModList.get().isLoaded("mekanism") && ModList.get().isLoaded("appmek")) {
+                lines.add(createStorageTypeLine(
+                        SimplifySpentNuclearWasteCellItem.getSpentWasteCellType(), ROW_SPENT_WASTE));
+            }
         }
         // Dedicated row for the infinite concrete matrix.
         lines.add(createStorageTypeLine(SimplifyConcreteStorageCellItem.CELL_TYPE, ROW_CONCRETE));
@@ -617,6 +623,10 @@ public class SimplifyStorageHostBlockEntity
             }
             if (SimplifyComplexUniversalStorageCellItem.getComplexUniversalCellType().equals(cellType)) {
                 return ROW_COMPLEX_UNIVERSAL;
+            }
+            if (ModList.get().isLoaded("mekanism") && ModList.get().isLoaded("appmek")
+                    && SimplifySpentNuclearWasteCellItem.getSpentWasteCellType().equals(cellType)) {
+                return ROW_SPENT_WASTE;
             }
         }
         if (SimplifyConcreteStorageCellItem.CELL_TYPE.equals(cellType)) {

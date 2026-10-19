@@ -157,6 +157,8 @@ public class ModRegistration {
     public static Supplier<? extends Item> OPTIONAL_UNIVERSAL_CELL_1K;
     public static Supplier<? extends Item> OPTIONAL_UNIVERSAL_CELL_1M;
     public static Supplier<? extends Item> OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M;
+    public static Supplier<? extends Item> OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K;
+    public static Supplier<? extends Item> OPTIONAL_SPENT_WASTE_CELL_1M;
     public static Supplier<? extends Item> OPTIONAL_QUANTUM_CELL_1K;
     public static Supplier<? extends Item> OPTIONAL_QUANTUM_CELL_1M;
     /** Assigned by FeStorageIntegration only when appflux is installed. */
@@ -169,6 +171,8 @@ public class ModRegistration {
             ITEMS.register("simplify_universal_storage_matrix_housing", () -> new Item(new Item.Properties()));
     public static final Supplier<Item> SIMPLIFY_COMPLEX_UNIVERSAL_STORAGE_MATRIX_HOUSING =
             ITEMS.register("simplify_complex_universal_storage_matrix_housing", () -> new Item(new Item.Properties()));
+    public static final Supplier<Item> SIMPLIFY_SPENT_NUCLEAR_WASTE_STORAGE_MATRIX_HOUSING =
+            ITEMS.register("simplify_spent_nuclear_waste_storage_matrix_housing", () -> new Item(new Item.Properties()));
     public static final Supplier<Item> SIMPLIFY_CHEMICAL_STORAGE_MATRIX_HOUSING =
             ITEMS.register("simplify_chemical_storage_matrix_housing", () -> new Item(new Item.Properties()));
 
@@ -1488,8 +1492,13 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                               output.accept(OPTIONAL_QUANTUM_CELL_1K.get());
                               output.accept(OPTIONAL_QUANTUM_CELL_1M.get());
                           }
+                          if (OPTIONAL_SPENT_WASTE_CELL_1M != null) {
+                              output.accept(SIMPLIFY_SPENT_NUCLEAR_WASTE_STORAGE_MATRIX_HOUSING.get());
+                              output.accept(OPTIONAL_SPENT_WASTE_CELL_1M.get());
+                          }
                           if (OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M != null) {
                               output.accept(SIMPLIFY_COMPLEX_UNIVERSAL_STORAGE_MATRIX_HOUSING.get());
+                              output.accept(OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K.get());
                               output.accept(OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M.get());
                           }
                           output.accept(SIMPLIFY_CONCRETE_STORAGE_MATRIX_HOUSING.get());

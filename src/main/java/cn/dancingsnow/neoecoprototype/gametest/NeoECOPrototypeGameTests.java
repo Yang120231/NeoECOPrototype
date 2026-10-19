@@ -2575,6 +2575,7 @@ public final class NeoECOPrototypeGameTests {
             java.util.Map.entry("storage_cell_l1_quantum", "14,0,16,6"),
             java.util.Map.entry("storage_cell_l1r_quantum", "14,0,16,6"),
             java.util.Map.entry("storage_cell_l1_complex_universal", "14,0,16,6"),
+            java.util.Map.entry("storage_cell_l1_spent_waste", "0,0,2,6"),
             java.util.Map.entry("storage_cell_l0_chemical_1k", "0,0,6,3"),
             java.util.Map.entry("storage_cell_l0_chemical_4k", "0,0,6,3"),
             java.util.Map.entry("storage_cell_l0_chemical_16k", "0,0,6,3"),
@@ -6172,6 +6173,15 @@ public final class NeoECOPrototypeGameTests {
                 != SimplifyStorageHostBlockEntity.ROW_COMPLEX_UNIVERSAL) {
             helper.fail("eco's complex omni cell type must have its own row, got row "
                     + SimplifyStorageHostBlockEntity.panelRowOf(complexOmniType, java.util.Set.of()));
+            return;
+        }
+        var wasteType = cn.dancingsnow.neoecoae.all.NERegistries.CELL_TYPE.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                        "neoecoae", "spent_nuclear_waste"));
+        if (wasteType != null && SimplifyStorageHostBlockEntity.panelRowOf(wasteType, java.util.Set.of())
+                != SimplifyStorageHostBlockEntity.ROW_SPENT_WASTE) {
+            helper.fail("eco's spent nuclear waste cell type must have its own row, got row "
+                    + SimplifyStorageHostBlockEntity.panelRowOf(wasteType, java.util.Set.of()));
             return;
         }
         if (SimplifyStorageHostBlockEntity.panelRowOf(

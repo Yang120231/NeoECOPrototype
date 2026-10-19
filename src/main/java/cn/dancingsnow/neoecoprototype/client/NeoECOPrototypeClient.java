@@ -149,6 +149,14 @@ public final class NeoECOPrototypeClient {
             ECOCellModels.register(ModRegistration.OPTIONAL_QUANTUM_CELL_1K.get(), cellModel("l1_quantum"));
             ECOCellModels.register(ModRegistration.OPTIONAL_QUANTUM_CELL_1M.get(), cellModel("l1_quantum"));
         }
+        if (ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1M != null) {
+            ECOCellModels.register(ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1M.get(),
+                    cellModel("l1_spent_waste"));
+        }
+        if (ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K != null) {
+            ECOCellModels.register(ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K.get(),
+                    cellModel("l1_complex_universal"));
+        }
         if (ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M != null) {
             ECOCellModels.register(ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M.get(),
                     cellModel("l1_complex_universal"));

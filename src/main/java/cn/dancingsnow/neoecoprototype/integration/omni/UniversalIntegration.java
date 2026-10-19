@@ -19,9 +19,23 @@ public final class UniversalIntegration {
         ModRegistration.OPTIONAL_QUANTUM_CELL_1M = items.register("simplify_quantum_storage_cell_1m",
                 () -> new SimplifyQuantumStorageCellItem(new Item.Properties().stacksTo(1),
                         SimplifyQuantumStorageCellItem.BYTES_1M));
+        ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1K = items.register(
+                "simplify_complex_universal_storage_cell_1k",
+                () -> new SimplifyComplexUniversalStorageCellItem(new Item.Properties().stacksTo(1),
+                        SimplifyComplexUniversalStorageCellItem.BYTES_1K));
+        // The waste family is an omni matrix whose single substance comes out of Mekanism, so all three
+        // have to be present before this line can even build the item.
+        if (net.neoforged.fml.ModList.get().isLoaded("mekanism")
+                && net.neoforged.fml.ModList.get().isLoaded("appmek")) {
+            ModRegistration.OPTIONAL_SPENT_WASTE_CELL_1M = items.register(
+                    "simplify_spent_nuclear_waste_storage_cell_1m",
+                    () -> new SimplifySpentNuclearWasteCellItem(new Item.Properties().stacksTo(1),
+                            SimplifySpentNuclearWasteCellItem.BYTES_1M));
+        }
         ModRegistration.OPTIONAL_COMPLEX_UNIVERSAL_CELL_1M = items.register(
                 "simplify_complex_universal_storage_cell_1m",
-                () -> new SimplifyComplexUniversalStorageCellItem(new Item.Properties().stacksTo(1)));
+                () -> new SimplifyComplexUniversalStorageCellItem(new Item.Properties().stacksTo(1),
+                        SimplifyComplexUniversalStorageCellItem.BYTES_1M));
     }
 
     private UniversalIntegration() {
