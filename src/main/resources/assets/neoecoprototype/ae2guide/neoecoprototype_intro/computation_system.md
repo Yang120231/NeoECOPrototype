@@ -20,7 +20,7 @@ item_ids:
 
 # L1 Computation System
 
-The L1 Computation System supplies crafting threads to the ME network. The ideas match eco's computation system, brought forward to L1 early game. The image above is the smallest working shape.
+The **L1 Computation System** is the L1 version of eco's <ItemLink id="neoecoae:computation_system_l4" />: it stores nothing, it only supplies the network's autocrafting with **crafting threads and parallelism** - more threads and more parallelism means more crafts running at once. The image above is the smallest working shape.
 
 <GameScene zoom="4" interactive={true}>
   <ImportStructure src="../scenes/l1_compute_min.nbt" />
@@ -34,10 +34,12 @@ The L1 Computation System supplies crafting threads to the ME network. The ideas
 | Computation host | `cpu_threads` crafting threads (default **2**) |
 | Parallel core | **24** parallelism each |
 | Threading core | **2** crafting threads each |
-| Energized computation core | **+1,024** parallelism each, and **only in the one casing slot directly behind the controller** |
+| Energized computation core | **+1,024** parallelism each, and **only in the one slot directly behind the controller** (a casing sits there otherwise) |
 | Energized threading core | **+16** crafting threads each, and **only in the slot nearest the controller** |
 
 ## Parts
+
+Each column added west of the host is an **outer column** (two computation drives with a transmitter between them - the cooling controller shares that middle slot) plus an **inner column** (parallel cores top and bottom, a threading core between them). Apart from the two fixed slots, the host and the computation interface, every member draws **2 AE/t** idle.
 
 <ItemGrid>
   <ItemIcon id="neoecoprototype:simplify_computation_system" />
@@ -67,11 +69,11 @@ The other two - the **Energized Reinforced Threading Core** and the **ECO - CE1R
 
 The `l1_computation` section of `neoecoprototype-server.toml` applies to the L1 tier only; higher tiers keep eco's own numbers.
 
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `cpu_threads` | 2 | crafting threads of one plain L1 subsystem |
-| `cpu_accelerators` | 24 | parallelism per plain parallel core |
-| `cpu_total_bytes` | 1,572,864 | the tier's nominal crafting storage (1.5 × 1 MiB) |
-| `energized_cell_total_bytes` | 5,242,880 | bytes per energized flash enhancement (CE1R), 4 MiB plus 30% |
+| Key | Default | Meaning | When to touch it |
+|-----|---------|---------|-----------------|
+| `cpu_threads` | 2 | crafting threads of one plain L1 subsystem | when one host cannot feed all the assemblers |
+| `cpu_accelerators` | 24 | parallelism per plain parallel core | when the same core count should open more crafts |
+| `cpu_total_bytes` | 1,572,864 | the tier's nominal crafting storage (1.5 × 1 MiB) | when a batch runs out of crafting storage |
+| `energized_cell_total_bytes` | 5,242,880 | bytes per ECO - CE1R Flash Crystal Array, 4 MiB plus 30% | the same, on the energized tier |
 
 Re-enter the world after editing. Threads are allocated when the cluster is built, so a structure that is already formed has to be taken down and re-formed to pick up new values.

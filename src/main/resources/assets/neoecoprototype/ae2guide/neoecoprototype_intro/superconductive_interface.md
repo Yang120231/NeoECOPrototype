@@ -19,9 +19,9 @@ item_ids:
   <ItemIcon id="neoecoprototype:cable_superconductive_interface" />
 </ItemGrid>
 
-The high end of our two interfaces: the same doubled layout as the [L1 Powered ME Interface](powered_interface.md) - 18 config slots, 18 stock slots - but one marker holds **8,192** items, or **512,000 mB** of fluid or chemical, and it generates **4,000 AE/t**. Marking and setting it up is the same as any ME Interface.
+The upper of our two interfaces: the same doubled layout as the [L1 Powered ME Interface](powered_interface.md) - 18 config slots, 18 stock slots - but one partition holds **8,192** items, or **512,000 mB** of fluid or chemical, and it generates **4,000 AE/t**. Partitioning and setting it up is the same as any ME Interface.
 
-4,000 AE/t is usually the strongest source in the network, so one of these takes over its passive generation.
+4,000 AE/t is usually higher than every other passive generator in the network, so one of these takes over its passive generation.
 
 The block is assembled in eco's <ItemLink id="neoecoae:integrated_working_station" /> from 1 Cryotheum Crystal, 4 [L1 Powered ME Interfaces](powered_interface.md), 9 Energized Superconductive Ingots and 4 Superconducting Processors, for 10,000 FE.
 

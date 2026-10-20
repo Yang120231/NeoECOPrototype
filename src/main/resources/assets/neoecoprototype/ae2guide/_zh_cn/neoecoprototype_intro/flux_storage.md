@@ -13,11 +13,11 @@ item_ids:
 
 # FE存储矩阵
 
-FE 存储矩阵需要 **AppliedFlux（应用通量，modid `appflux`）**，用于在 ME 网络里存储 Forge Energy（FE）。
+FE 存储矩阵是把 **Forge Energy（FE）当成一种资源存进 ME 网络**的存储矩阵，行为与物品、流体那几族一样，只是内容物换成电。它需要 **AppliedFlux（应用通量，modid `appflux`）**。
 
 ## 容量
 
-容量按**字节**算，一个字节值多少 FE 由 AppliedFlux 的 `flux_cell.amount` 决定，出厂是每字节 1,048,576 FE。
+容量按**字节**算——这里的"字节"是 AE2 给每只仓记的存储额度，不是计算机里那个 8 bit。一个字节值多少 FE 由 AppliedFlux 的 `flux_cell.amount` 决定，出厂是每字节 1,048,576 FE。
 
 | 矩阵 | 字节 | 默认换算 |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ FE 存储矩阵需要 **AppliedFlux（应用通量，modid `appflux`）**，用�
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1m" /> | 1,048,576 | 约 1.1 万亿 FE |
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_4m" /> | 4,194,304 | 约 4.4 万亿 FE |
 
-调大 `flux_cell.amount`，游戏里每一只 FE 仓（包括这三只）一起变宽松，材料不变。
+调大 `flux_cell.amount`，游戏里每一只 FE 仓（包括这三只）的容量按比例变大，材料不变。
 
 ## 配方
 
@@ -41,4 +41,4 @@ FE 存储矩阵需要 **AppliedFlux（应用通量，modid `appflux`）**，用�
 
 ## 插在哪
 
-报 L1 档位，所以 [L1 存储系统](storage_system.md) 直接收，eco 更高档的主机也收得下。在 L1 存储主机面板里它们单独占一行，那一行的名字来自 eco 注册的 FE 单元类型（"能源"），插在 eco 自己的主机里也是这个名。
+它们属于 L1 这一级，所以 [L1 存储系统](storage_system.md) 直接收，eco 更高档的主机也收得下——等级决定哪台主机肯挂它。在 L1 存储主机面板里它们单独占一行，那一行的名字来自 eco 注册的 FE 单元类型（"能源"），插在 eco 自己的主机里也是这个名。

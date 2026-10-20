@@ -15,4 +15,4 @@ KubeJS 是可选模组，装了才有下面这些。
 | 注册自定义存储矩阵 | 启动脚本，两种 builder 类型：`neoecoprototype:storage_matrix`、`neoecoprototype:infinite_storage_matrix`；可设容量、类型数、材质、绑定资源 |
 | 增删改本模组配方 | 服务端脚本；处理器装配室的配方可按字段删除，也可用原始 JSON 新增 |
 
-完整示例在本模组仓库的 `docs/kubejs.md` 与 `docs/kubejs-example.js`。
+两类脚本的时机不一样：**启动脚本**在游戏启动时跑，注册矩阵必须走它（要赶在注册表冻结之前）；**服务端脚本**在每个服务端加载时重跑，改配方用它。完整示例在本模组仓库的 `docs/kubejs.md` 与 `docs/kubejs-example.js`。

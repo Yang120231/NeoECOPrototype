@@ -16,9 +16,9 @@ item_ids:
   <BlockImage id="neoecoprototype:energized_energy_cell_512g" scale="3"></BlockImage>
 </Row>
 
-The **Energized Energy Cells** are two standalone batteries. Each one is its own grid node the moment it is placed - no multi-block definition has to know the block exists, and AE2 adds its buffer straight into the network's total. They idle at 0, and the network both charges them and draws from them.
+The **Energized Energy Cells** are two standalone batteries. Each one joins the ME network the moment it is placed - AE2 counts every public energy node into the grid total - and no structure definition has to know the block exists. They idle at 0, and the network both charges them and draws from them.
 
-| Cell | Capacity (AE) | One craft |
+| Cell | Capacity (AE) | Ingredients |
 |------|---------------|-----------|
 | <ItemLink id="neoecoprototype:energized_energy_cell_16g" /> | 16,000,000,000 | 8 ECO - LT9 High Density Energy Cells + 32 Energized Superconductive Blocks + 64 Green Crystal Matrices |
 | <ItemLink id="neoecoprototype:energized_energy_cell_512g" /> | 256,000,000,000 | 8 of the 16G cells + 1 Energized Superconductive Block |

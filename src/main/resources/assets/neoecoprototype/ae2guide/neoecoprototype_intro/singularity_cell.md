@@ -10,11 +10,11 @@ item_ids:
 
 # L1 Singularity Cell
 
-Once it sits in a drive, **120 singularities land every 30 seconds**. It consumes nothing and takes nothing in, and it is drawn from like any other cell.
+Once it sits in a drive it **produces 120 singularities every 30 seconds**. It needs no input and consumes nothing, and it is drawn from like any other storage cell - it is there for saves that want singularities before they build an <ItemLink id="ae2:condenser" />.
 
 ## How fast
 
-One batch is 120, and the bank jumps by that much each interval - it does not drip. The shipped interval is 600 ticks (30 s), which averages about 4 a second.
+One **batch** is one payout of 120: the bank jumps by that much each interval instead of trickling. The shipped interval is 600 ticks (30 s), which averages about 4 a second.
 
 | Time in a drive | Ready |
 |-----------------|-------|
@@ -40,15 +40,15 @@ Both keys live in the `singularity_cell` section of the server config and are re
 | `ticks_per_batch` | 600 ticks (30 s) | 60 ticks (3 s) minimum |
 | `amount_per_batch` | 120 | 1 to 9,223,372,036,854,775,807 - write down anything |
 
-The bank itself is a `long`, and **that same top is where it stops**: past it the figure pins instead of wrapping, and because production is pinned at the same ceiling, whatever you draw after that stays drawn. The world clock running out saturates the bank the same way rather than turning it negative.
+The stock figure itself is a `long`, and **9,223,372,036,854,775,807 is where it stops**: past that it saturates instead of wrapping, and since production is pinned at the same figure, whatever you draw afterwards stays drawn. The world clock running out saturates the same way rather than turning the stock negative.
 
 ## The contents are computed, not saved
 
-Nothing accumulates: the cell stores two numbers - the world tick it started at and how much has been taken - and every question is answered from the current tick, so output depends on start tick, current tick and amount taken and nothing else. Four consequences. Raising `amount_per_batch` re-reads history and grows the contents at once, lowering it can erase what was stored. Pausing or shutting the server stops world time, so contents stop too. The start tick is written the first time a drive or host asks, so a cell in an inventory, a chest or on the ground has not started, while one that already started keeps growing when you take it out. Terminals always read the server value; a client hover syncs once a second and can be a second behind.
+Nothing accumulates inside the cell: the stack stores two values - the world tick it started at and how much has been taken - and every query is computed as (current tick - start tick) / ticks_per_batch x amount_per_batch - taken. Output therefore depends on the start tick, the current tick and the amount taken, and on nothing else. Four consequences follow. Raising `amount_per_batch` re-reads history and grows the stock at once, lowering it can erase what was stored. While the game is paused or the server is down world time does not advance, so the stock does not grow. The start tick is written the first time a drive or host queries the cell, so a cell in an inventory, a chest or as a dropped item has not started counting, while one that has started keeps growing when you take it out. Terminals read the server value; a client tooltip syncs once a second and can be up to a second behind.
 
 ## Limits
 
-It holds one content type, so it cannot be partitioned in a cell workbench and cannot be stored inside another cell. It reports the L1 tier, so [the L1 storage system](storage_system.md) takes it without a whitelist entry, and eco's higher tiers do too.
+It holds one content type, so it cannot be partitioned in a cell workbench and cannot be stored inside another cell. It belongs to the L1 tier, so [the L1 storage system](storage_system.md) mounts it without a whitelist entry, and eco's higher tiers do too.
 
 ## Recipe
 

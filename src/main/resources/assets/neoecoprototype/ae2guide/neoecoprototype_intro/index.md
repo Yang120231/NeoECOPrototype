@@ -15,11 +15,11 @@ Neo ECO Prototype brings Neo ECO AE Extension's late-game content forward to **L
 | Bulk storage of a few resources | [Small Bulk Matrices](small_bulk_matrices.md) |
 | Keeping FE inside the network | [FE Storage Matrices](flux_storage.md) (needs AppliedFlux) |
 | Parking a block of charge in the grid | [Energized Energy Cells](energized_energy_cells.md) |
-| Singularities without a condenser | [L1 Singularity Cell](singularity_cell.md) |
+| Singularities without building a Matter Condenser | [L1 Singularity Cell](singularity_cell.md) |
 | More crafting throughput | [L1 Computation System](computation_system.md) and [L1 Crafting System](crafting_system.md) |
 | Sub-network power, big markings | [L1 Powered ME Interface](powered_interface.md) and [Energized Superconductive Interface](superconductive_interface.md) |
 | Registering matrices and recipes from scripts | [KubeJS support](kubejs.md) |
 
-The two interfaces do not stack: AE2 keeps only the highest-output passive generator per grid.
+Both interfaces generate power passively, but AE2 keeps only the highest-output generator per grid - see the [L1 Powered ME Interface](powered_interface.md).
 
 The combined three-in-one machine is still in early development and is not covered here.

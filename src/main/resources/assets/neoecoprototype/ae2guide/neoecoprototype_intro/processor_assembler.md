@@ -27,11 +27,18 @@ Both are made in a **crafting table**: the assembler is 1 Molecular Assembler + 
 
 ## Built-in recipes
 
+The three processors (the rest are derived from the inscriber, see below):
+
 | Output | Ingredients |
 |--------|-------------|
 | Logic Processor | silicon + redstone dust + gold ingot |
 | Calculation Processor | silicon + redstone dust + certus quartz crystal |
 | Engineering Processor | silicon + redstone dust + diamond |
+
+The other eight:
+
+| Output | Ingredients |
+|--------|-------------|
 | [L1 Powered ME Interface](powered_interface.md) | 2 Crystal Resonance Generators + 1 ME Interface + 1 Superconducting Processor |
 | ECOP - Structure Expansion Card | Memory Card + Aluminum Ingot + Green Crystal Matrix |
 | Energized Reinforced Threading Core | 2 ECO - CM4A Threading Cores + 1 ECO - C1 Computation Substructure Casing |
@@ -54,7 +61,7 @@ Processor recipes beyond those three are derived live from the inscriber's recip
 
 5 card slots take nothing but the <ItemLink id="ae2:speed_card" />: one craft costs 100 ticks empty and 20 ticks with five cards in.
 
-However many complete sets a push carries, they finish in a **single** cycle - output scales with the multiplier, time does not - so more cards are the only way to go faster. Each ingredient is stacked by its own stack size, and a pattern that needs **more than nine slots** is refused: the materials go back to the network and the log names the offending line. For a processor (three ingredients, stacks of 64) the ceiling is **192×**. One stack of the output reaches the machine per round; the rest is inserted into the network rather than lost.
+However many complete sets a push carries, they finish in a **single** cycle - output scales with the multiplier, time does not - so more cards are the only way to go faster. The assembler has a nine-slot grid, and one batch has to fit into those nine slots at its own stack sizes; a pattern that needs **more than nine slots** is refused - the materials go back to the network and the log names the offending line. For a processor (three ingredients, stacks of 64) the ceiling is **192×**. One stack of the output reaches the machine per round; the rest is inserted into the network rather than lost.
 
 ## L1 Pattern Provider
 

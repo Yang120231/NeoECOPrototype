@@ -15,4 +15,4 @@ KubeJS is optional; these exist only when it is installed.
 | Register custom storage matrices | Startup scripts, two builder types: `neoecoprototype:storage_matrix` and `neoecoprototype:infinite_storage_matrix` - capacity, type limit, material and bound resource are all settable |
 | Add, change or remove this addon's recipes | Server scripts; the processor assembler's recipes can be removed by field or added as raw JSON |
 
-Full examples live in this mod's repository under `docs/kubejs.md` and `docs/kubejs-example.js`.
+The two script kinds run at different moments: **startup scripts** run when the game starts, and registering a matrix has to happen there (before the registries freeze); **server scripts** re-run every time the server loads, which is what recipe changes use. Full examples live in this mod's repository under `docs/kubejs.md` and `docs/kubejs-example.js`.

@@ -13,11 +13,11 @@ item_ids:
 
 # FE Storage Matrices
 
-FE storage matrices need **AppliedFlux** and store Forge Energy (FE) in the ME network.
+FE storage matrices store **Forge Energy (FE) as a resource in the ME network** - they behave like the item and fluid families, only the contents are power. They need **AppliedFlux**.
 
 ## Capacity
 
-Capacity is counted in **bytes**; what a byte is worth in FE is AppliedFlux's own `flux_cell.amount`, 1,048,576 FE per byte out of the box.
+Capacity is counted in **bytes** - AE2's storage allowance per cell, not the 8-bit kind. What a byte is worth in FE is AppliedFlux's own `flux_cell.amount`, 1,048,576 FE per byte out of the box.
 
 | Matrix | Bytes | At the default rate |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ Capacity is counted in **bytes**; what a byte is worth in FE is AppliedFlux's ow
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1m" /> | 1,048,576 | about 1.1 trillion FE |
 | <ItemLink id="neoecoprototype:simplify_fe_storage_cell_4m" /> | 4,194,304 | about 4.4 trillion FE |
 
-Raising `flux_cell.amount` loosens every FE cell in the game, ours included, and costs no materials.
+Raising `flux_cell.amount` scales every FE cell in the game up in proportion, ours included, and costs no materials.
 
 ## Recipe
 
@@ -41,4 +41,4 @@ A disassembly recipe gives the housing and the component back.
 
 ## Where it fits
 
-They report the L1 tier, so [the L1 storage system](storage_system.md) takes them without any whitelist entry, and eco's higher tiers do too. In the L1 storage host panel each gets its own row, named after eco's own FE cell type ("energy") - the same name it carries inside eco's own hosts.
+They belong to the L1 tier, so [the L1 storage system](storage_system.md) mounts them without any whitelist entry, and eco's higher tiers do too - the tier is what decides which host accepts a cell. In the L1 storage host panel each gets its own row, named after eco's own FE cell type ("energy") - the same name it carries inside eco's own hosts.
