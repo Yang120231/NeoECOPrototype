@@ -6313,9 +6313,21 @@ public final class NeoECOPrototypeGameTests {
                 return;
             }
         }
-        final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {13, 18}, {13, 16}};
+        var corePart = cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_CORE;
+        var plainNamed = threading.getPanelTexture(
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get().defaultBlockState(), corePart);
+        var energized = (cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider)
+                ModRegistration.ENERGIZED_COMPUTATION_THREADING_CORE_BLOCK.get();
+        var energizedNamed = energized.getPanelTexture(
+                ModRegistration.ENERGIZED_COMPUTATION_THREADING_CORE_BLOCK.get().defaultBlockState(), corePart);
+        if (plainNamed == null || energizedNamed == null || plainNamed.equals(energizedNamed)) {
+            helper.fail("an energized threading column names " + energizedNamed + " where a plain one names "
+                    + plainNamed + ", so the panel cannot show which core is installed");
+            return;
+        }
+        final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {10, 6}, {13, 18}, {13, 16}};
         String[] files = {"computation_upper", "computation_core", "computation_lower",
-                "storage_tier", "storage_marker"};
+                "computation_core_energized", "storage_tier", "storage_marker"};
         for (int i = 0; i < files.length; i++) {
             var size = pngDimensions("assets/" + NeoECOPrototype.MOD_ID + "/textures/gui/panel/"
                     + files[i] + ".png");

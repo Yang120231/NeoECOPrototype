@@ -13,6 +13,8 @@ public class SimplifyComputationThreadingCoreBlock extends ECOComputationThreadi
         implements IHostPanelTextureProvider {
     private static final ResourceLocation CORE = ResourceLocation.fromNamespaceAndPath(
             NeoECOPrototype.MOD_ID, "textures/gui/panel/computation_core.png");
+    private static final ResourceLocation CORE_ENERGIZED = ResourceLocation.fromNamespaceAndPath(
+            NeoECOPrototype.MOD_ID, "textures/gui/panel/computation_core_energized.png");
 
     public SimplifyComputationThreadingCoreBlock(Properties properties) {
         this(properties, SimplifyTier.L1);
@@ -24,6 +26,11 @@ public class SimplifyComputationThreadingCoreBlock extends ECOComputationThreadi
 
     @Override
     public ResourceLocation getPanelTexture(BlockState state, IHostPanelTextureProvider.Part part) {
-        return part == IHostPanelTextureProvider.Part.COMPUTATION_CORE ? CORE : null;
+        if (part != IHostPanelTextureProvider.Part.COMPUTATION_CORE) {
+            return null;
+        }
+        // All four of our tiers report the same tier index, so the artwork cannot key off getTier()'s number -
+        // the energized threading core is its own block instance, and this is the only place its identity shows.
+        return getTier() == SimplifyTier.L1_ENERGIZED_THREADING ? CORE_ENERGIZED : CORE;
     }
 }
