@@ -46,7 +46,17 @@ dependencies {
     implementation files("libs/ldlib2-neoforge-1.21.1-2.2.40-all.jar")  // LDLib2 (eco 运行依赖, modId: ldlib2) - eco 21.2.1 raised its floor to [2.2.40,) and 21.2.2 keeps it
     implementation "dev.vfyjxf:taffy:1.1.3"
     implementation "org.appliedenergistics.yoga:yoga:1.0.0"
-// ABI target: eco 21.2.6 (moved 2026-10-16; the baseline moved twice that day, 21.2.4 -> 21.2.5 -> 21.2.6).
+// ABI target: eco 21.2.7 (moved 2026-10-20; the previous line of sight was 21.2.6, moved 2026-10-16).
+// Member-level scan over the 104 neoecoae types we reference: 21.2.6 -> 21.2.7 resolves 104 / 104 in both
+// jars and moves members on 7 of them - every removal is a synthetic lambda$... whose numbering shifted,
+// and the only additions we can see are IECOTier.getPanelTierName() / getHostMarkerTexture() (both
+// defaults) plus ECOTier.getPanelTierName(). Entry-level: 1414 -> 1477 classes, +63 / -0.
+// The resource side is NOT a pure addition: 96 png paths arrive and 48 go away, and what goes is eco's own
+// textures/block/storage/drive/* family (cell_type, cell_level, the housings). That is why this line is
+// here: none of the 25 neoecoae: paths our own resources name falls in the removed set - measured, not
+// assumed, because a deleted texture path is invisible to javac and shows up as a missing-texture cube.
+// api/me/pattern/** is 16 entries in 21.2.6 and 16 in 21.2.7, so that family arrived with 21.2.5 and is
+// still unsurveyed by us.
 // Member-level scan over the 104 neoecoae types we reference: 21.2.5 -> 21.2.6 changes none of them, and
 // all 104 resolve in both jars. That reference set is the Class constant-pool entries of our own bytecode
 // UNION our source imports, and the union is the point: a bare return type, a generic type argument and an
@@ -84,7 +94,7 @@ dependencies {
 // GuiTitleProvider (PR #110) and grid.NEMachineLookup (PR #109) are still carried; both are in the 104.
 // A sync is certified by compiling against that jar and running the suite. tools/audit_eco_abi.py is a
 // companion check, not a verdict -- read its docstring before believing its "MISSING" list.
-    implementation files("neoecobeta/neoecoae-21.2.6.jar")
+    implementation files("neoecobeta/neoecoae-21.2.7.jar")
     // MegaCells 4.11.0 is the supported optional integration version.
     implementation files("libs/megacells-4.11.0.jar")
     // Dev-runtime only: keep them off the compile classpath but on the runtime classpath.
