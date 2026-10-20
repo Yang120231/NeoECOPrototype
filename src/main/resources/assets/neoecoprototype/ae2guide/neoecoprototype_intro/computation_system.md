@@ -39,7 +39,19 @@ The **L1 Computation System** is the L1 version of eco's <ItemLink id="neoecoae:
 
 ## Parts
 
-Each column added west of the host is an **outer column** (two computation drives with a transmitter between them - the cooling controller shares that middle slot) plus an **inner column** (parallel cores top and bottom, a threading core between them). Apart from the two fixed slots, the host and the computation interface, every member draws **2 AE/t** idle.
+Apart from the two fixed slots, the host and the computation interface, every member draws **2 AE/t** idle.
+
+## Building it
+
+1. Place the host facing out, then frame the rest with casings.
+2. Put the computation network interface **behind and to the left of the host**.
+3. Starting one block right of the casing on the host's right side, lay the superconducting crystal transmitters horizontally.
+4. Put a threading core directly behind each transmitter, with a row of computation drives above and below it.
+5. Put a row of parallel cores above and below that threading core.
+6. Cap the transmitter row with the cooling controller: stand on the structure's right side and place it facing the host.
+7. Fill the remaining positions with casings.
+
+Lengthening means adding transmitters, drives, threading cores and parallel cores together. The **auto-build panel** in the host's GUI can preview and fill it in - what it plans is the authoritative shape.
 
 <ItemGrid>
   <ItemIcon id="neoecoprototype:simplify_computation_system" />

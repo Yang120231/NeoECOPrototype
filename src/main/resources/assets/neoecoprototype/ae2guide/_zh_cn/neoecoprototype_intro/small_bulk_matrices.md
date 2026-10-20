@@ -24,7 +24,7 @@ item_ids:
 | 项目 | 数值 |
 |------|------|
 | 类型上限 | 3，装上扩展卡 10 |
-| 单类型容量 | 近乎无限 |
+| 单类型容量 | 报告的字节数是 long 上限 **9,223,372,036,854,775,807**（终端里显示成 9.2E），实际到不了顶 |
 | 需要的前置 | MEGA Cells（4.11.0 是量过的那一版）；化学品变体另需 Mekanism 与 Applied Mekanistics |
 
 ## 分区
@@ -41,7 +41,9 @@ item_ids:
 
 ## 拆回
 
-流体与化学品这两只基础盘可以拆回，退回外壳与一颗 1M 元件。**物品那只基础盘和三只扩展版没有拆解配方**——扩展版尤其要留好，拆不开。
+流体与化学品这两只基础盘可以拆回，退回外壳与一颗 1M 元件。
+> **注意**：**物品那只基础盘与三只扩展版都没有拆解配方**。扩展版一旦做出来就拆不回外壳与元件，装卡前先想清楚。
+
 
 <ItemGrid>
   <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_cell" />
@@ -55,3 +57,5 @@ item_ids:
   <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_matrix_housing" />
   <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_matrix_housing" />
 </ItemGrid>
+
+<RecipeFor id="neoecoprototype:simplify_small_bulk_expansion_card" />

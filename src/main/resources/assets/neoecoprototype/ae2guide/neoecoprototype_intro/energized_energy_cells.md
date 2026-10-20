@@ -16,7 +16,9 @@ item_ids:
   <BlockImage id="neoecoprototype:energized_energy_cell_512g" scale="3"></BlockImage>
 </Row>
 
-The **Energized Energy Cells** are two standalone batteries. Each one joins the ME network the moment it is placed - AE2 counts every public energy node into the grid total - and no structure definition has to know the block exists. They idle at 0, and the network both charges them and draws from them.
+The **Energized Energy Cells** are two standalone batteries. Like eco's <ItemLink id="neoecoae:energy_cell_l4" /> family they add stored power to the network, but they are not a member of any multiblock: place one and it is a storage node on the grid, idling at 0, charging and discharging.
+
+Touching is enough - no cable has to run through it. Two of them side by side form a grid of their own, which is what the game test measures.
 
 | Cell | Capacity (AE) | Ingredients |
 |------|---------------|-----------|

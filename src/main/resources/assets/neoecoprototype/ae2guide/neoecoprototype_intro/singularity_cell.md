@@ -14,7 +14,7 @@ Once it sits in a drive it **produces 120 singularities every 30 seconds**. It n
 
 ## How fast
 
-One **batch** is one payout of 120: the bank jumps by that much each interval instead of trickling. The shipped interval is 600 ticks (30 s), which averages about 4 a second.
+One **batch** is one payout of 120: the stock - what this page and the config call the bank - jumps by that much each interval instead of trickling. The shipped interval is 600 ticks (30 s), which averages about 4 a second.
 
 | Time in a drive | Ready |
 |-----------------|-------|
@@ -38,7 +38,7 @@ Both keys live in the `singularity_cell` section of the server config and are re
 | Key | Default | Range |
 |-----|---------|-------|
 | `ticks_per_batch` | 600 ticks (30 s) | 60 ticks (3 s) minimum |
-| `amount_per_batch` | 120 | 1 to 9,223,372,036,854,775,807 - write down anything |
+| `amount_per_batch` | 120 | 1 - 9,223,372,036,854,775,807 (the top of a `long`); any value in between is accepted |
 
 The stock figure itself is a `long`, and **9,223,372,036,854,775,807 is where it stops**: past that it saturates instead of wrapping, and since production is pinned at the same figure, whatever you draw afterwards stays drawn. The world clock running out saturates the same way rather than turning the stock negative.
 

@@ -19,21 +19,21 @@ item_ids:
 
 # Small Bulk Matrices
 
-The **Small Bulk Matrix** is the extreme member of the <ItemLink id="ae2:drive" /> family: an ordinary matrix holds many kinds in limited amounts, this one holds very few kinds in nearly unlimited amounts. **3** kinds by default, **10** after an expansion card.
+The **Small Bulk Matrix** is the extreme member of the <ItemLink id="ae2:drive" /> family: an ordinary matrix holds many types in limited amounts, this one holds very few types in nearly unlimited amounts. **3** types by default, **10** after an expansion card.
 
 | Aspect | Value |
 |--------|-------|
-| Kind limit | 3, or 10 with the expansion card |
-| Amount per kind | nearly unlimited |
+| Type limit | 3, or 10 with the expansion card |
+| Amount per type | the cell reports **9,223,372,036,854,775,807** bytes - a long at its top, shown as 9.2E in a terminal - and you will not reach it |
 | Needs | MEGA Cells (4.11.0 is the version measured); the chemical variant also needs Mekanism and Applied Mekanistics |
 
 ## Partitioning
 
-Partitioning is a cell whitelist: only the kinds you allow enter the cell, everything else passes by. Edit it in AE2's cell workbench; the fluid and chemical cells partition against their own key types.
+Partitioning is a cell whitelist: only the types you allow enter the cell, everything else passes by. Edit it in AE2's cell workbench; the fluid and chemical cells partition against their own key types.
 
 ## Compression chains
 
-Only the item variant has one. Fitting a MEGA Cells **compression upgrade card** in the cell workbench makes every form on the chain (nugget, ingot, block...) count towards the one kind the cell is partitioned to, and the terminal shows that kind.
+Only the item variant has one. Fitting a MEGA Cells **compression upgrade card** in the cell workbench makes every form on the chain (nugget, ingot, block...) count towards the one type the cell is partitioned to, and the terminal shows that kind.
 
 ## Going to 10 kinds
 
@@ -41,7 +41,9 @@ Put the cell and the **expansion card** together in the cell workbench: out come
 
 ## Taking it apart
 
-The fluid and chemical base cells can be disassembled into their housing plus one 1M component. **The item base cell and all three expanded cells have no disassembly recipe** - keep the expanded ones, they cannot be undone.
+The fluid and chemical base cells can be disassembled into their housing plus one 1M component. 
+> **Warning:** **the item base cell and all three expanded cells have no disassembly recipe.** An expanded cell cannot be taken back apart, so decide before you spend the card.
+
 
 <ItemGrid>
   <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_cell" />
@@ -55,3 +57,5 @@ The fluid and chemical base cells can be disassembled into their housing plus on
   <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_matrix_housing" />
   <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_matrix_housing" />
 </ItemGrid>
+
+<RecipeFor id="neoecoprototype:simplify_small_bulk_expansion_card" />

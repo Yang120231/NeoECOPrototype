@@ -49,7 +49,17 @@ Absence has only two honest answers: the slot is fixed (the structure never form
 
 ## The shape of a column
 
-Each column added west of the host is **three drive slots plus a backing column (energy cell, vent, energy cell from the bottom up)**, and the host's build length decides how many columns there are. Placing blocks one by one is error-prone, so use the **auto-build panel** in the host's GUI: preview, then fill it in one click - what that panel plans is the authoritative shape.
+## Building it
+
+1. Place the host facing out, then frame the rest with casings.
+2. Put the storage interface **behind and to the left of the host** - a fixed slot that turns invisible once the structure forms.
+3. Starting one block right of the casing on the host's right side, lay storage matrix drives horizontally, three per column.
+4. Directly behind those drives, one column: energy cell at the bottom, storage vent in the middle, energy cell on top.
+5. Fill the remaining positions with casings.
+
+Lengthening means adding whole columns: three drives plus their backing column. If you would rather not place blocks one by one, use the **auto-build panel** in the host's GUI - what it plans is the authoritative shape, and those steps are the order it lays them out.
+
+The host's **32.25 AE/t** is not a typo: eco's baseline for a storage host is 258 AE/t, and L1 scales it by 1/8.
 
 ## Which matrix
 

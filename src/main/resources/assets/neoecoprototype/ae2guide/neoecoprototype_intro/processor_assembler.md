@@ -11,7 +11,7 @@ item_ids:
 
 # L1 Processor Assembler
 
-The **L1 Processor Assembler** is a green-shell version of the <ItemLink id="ae2:molecular_assembler" /> that runs only this mod's processor assembly recipes; ordinary molecular assembly patterns are refused, and that work belongs to a Molecular Assembler. It is used with the L1 Pattern Provider below.
+The **L1 Processor Assembler** is a green-shell version of the <ItemLink id="ae2:molecular_assembler" /> built for saves that do not have an inscriber yet: it crafts the three processors straight from patterns. It runs only this mod's processor assembly recipes; ordinary molecular assembly patterns are refused, and that work belongs to a Molecular Assembler. It is used with the L1 Pattern Provider below.
 
 <ItemGrid>
   <ItemIcon id="neoecoprototype:simplify_stonecutting_assembler" />
@@ -61,7 +61,7 @@ Processor recipes beyond those three are derived live from the inscriber's recip
 
 5 card slots take nothing but the <ItemLink id="ae2:speed_card" />: one craft costs 100 ticks empty and 20 ticks with five cards in.
 
-However many complete sets a push carries, they finish in a **single** cycle - output scales with the multiplier, time does not - so more cards are the only way to go faster. The assembler has a nine-slot grid, and one batch has to fit into those nine slots at its own stack sizes; a pattern that needs **more than nine slots** is refused - the materials go back to the network and the log names the offending line. For a processor (three ingredients, stacks of 64) the ceiling is **192×**. One stack of the output reaches the machine per round; the rest is inserted into the network rather than lost.
+However many complete sets a push carries, they finish in a **single** cycle - output scales with the multiplier, time does not - so more cards are the only way to go faster. The assembler has a nine-slot grid, and one batch has to fit into those nine slots at its own stack sizes; a pattern that needs **more than nine slots** is refused - the materials go back to the network and the log names the offending line. For a processor the ceiling is 3 ingredients x 64 per stack = **192×**. One stack of the output reaches the machine per round; the rest is inserted into the network rather than lost.
 
 ## L1 Pattern Provider
 
