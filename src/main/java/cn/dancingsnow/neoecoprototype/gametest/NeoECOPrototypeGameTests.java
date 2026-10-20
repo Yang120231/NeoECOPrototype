@@ -6325,9 +6325,12 @@ public final class NeoECOPrototypeGameTests {
                     + plainNamed + ", so the panel cannot show which core is installed");
             return;
         }
-        final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {10, 6}, {13, 18}, {13, 16}};
+        final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {10, 6}, {13, 18}, {13, 16},
+                {15, 26}, {15, 26}, {15, 26}, {15, 26}};
         String[] files = {"computation_upper", "computation_core", "computation_lower",
-                "computation_core_energized", "storage_tier", "storage_marker"};
+                "computation_core_energized", "storage_tier", "storage_marker",
+                "computation_switch_on", "computation_switch_on_hover",
+                "crafting_mode_button_on", "crafting_mode_button_on_hover"};
         for (int i = 0; i < files.length; i++) {
             var size = pngDimensions("assets/" + NeoECOPrototype.MOD_ID + "/textures/gui/panel/"
                     + files[i] + ".png");
