@@ -410,12 +410,10 @@ public class SimplifyStorageHostBlockEntity
             net.minecraft.world.entity.player.Player player) {
         return new StorageHostUI.Config(
                 () -> getBlockState().getBlock().getName(),
-                // eco reads this int in three places and gates all of them on 1..3: the tier badge
-                // (StorageHostCharts$1, skipped at <= 0), the host marker (StorageHostCharts$HostIcon,
-                // skipped outside 1..3), and StorageCellGrid.tierName (tableswitch 1->"L4", 2->"L6",
-                // 3->"L9", default->"L0"). So our 0 costs the two painted cells and prints "L0" -
-                // confirmed in game, not inferred. Passing 1 would paint eco's L4 artwork on our own
-                // panel, and getTier() also gates cell acceptance, so 0 stays.
+                // This int is no longer what the panel reads our tier from: HostPanelTier.drawName takes the
+                // IECOTier and asks it for getPanelTierName() (SimplifyTier answers "L1"), and the two painted
+                // cells come from IHostPanelTextureProvider on the controller block. What still reads the
+                // number is cell acceptance, so it stays 0 rather than borrowing eco's 1.
                 () -> getTier().getTier(),
                 this::isFormed,
                 this::getStoredEnergy,
@@ -744,6 +742,17 @@ public class SimplifyStorageHostBlockEntity
             ECOCellType cellType = cell.getCellType();
             int typeId = panelRowOf(cellType, keyTypesOf(drive));
             if (typeId == ROW_NONE) {
+                // A cell no row claims still stands on a drive, and that drive still occupies a slot of the
+                // face. eco's StoragePanelState.cellPage derives the face width as ceil(size / 3) and then
+                // reads row r column c at r * width + c, so dropping this entry narrows the width by a third
+                // of a bay and every row below the missing cell slides one slot left in the panel - which
+                // also pushes the last column off the page, where it shows up as the panel background's own
+                // "no bay here" cross. Hand over the row without any of the numbers: EMPTY is typeId -1 with
+                // zeroed bytes, so a singularity cell stays out of every type line and out of the byte bar,
+                // while the stack, position and interaction id make the slot draw and clickable - without it
+                // the panel cannot take the cell back out.
+                entries.add(StorageHostUI.CellEntry.EMPTY.atDrive(drive.getBlockPos(), drive.getCellStack(),
+                        null, drive.panelInteractionId()));
                 continue;
             }
             entries.add(new StorageHostUI.CellEntry(
@@ -755,7 +764,13 @@ public class SimplifyStorageHostBlockEntity
                             .of(drive.getCellStack(), cell)),
                     Math.max(0L, cell.getUsedBytes()),
                     Math.max(0L, cell.getTotalBytes()),
-                    cell.hasInfiniteTypeCapacity(),
+                    // Not cell.hasInfiniteTypeCapacity(). eco reads this per-row flag inside
+                    // StoragePanelState.usage, where a single true makes the whole byte bar return 1.0 - and
+                    // eco only pairs that with its "unbounded" tooltip when the panel-level infiniteStorage
+                    // supplier is also true, which ours is not. So a row that says "unbounded types" pins the
+                    // bar to 100% next to a "0 / 27M" line. The byte figure is already handled: our infinite
+                    // family reports Long.MAX_VALUE, and usage() skips exactly that value out of both sums.
+                    false,
                     drive.getCellState(),
                     isFormed())
                     // eco 21.2.3's grid draws a slot from the entry's own position and stack - a cell that
