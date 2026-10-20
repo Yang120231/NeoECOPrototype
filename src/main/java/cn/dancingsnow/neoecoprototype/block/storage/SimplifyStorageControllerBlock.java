@@ -2,12 +2,15 @@ package cn.dancingsnow.neoecoprototype.block.storage;
 
 import appeng.api.orientation.IOrientationStrategy;
 import appeng.api.orientation.OrientationStrategies;
+import cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider;
 import cn.dancingsnow.neoecoae.blocks.NEBlock;
+import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
 import cn.dancingsnow.neoecoprototype.blockentity.storage.SimplifyStorageHostBlockEntity;
 import com.lowdragmc.lowdraglib2.gui.factory.BlockUIMenuType;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -23,7 +26,18 @@ import org.jetbrains.annotations.Nullable;
 
 /** L1 storage subsystem host (controller) block. */
 public class SimplifyStorageControllerBlock extends NEBlock<SimplifyStorageHostBlockEntity>
-        implements BlockUIMenuType.BlockUI {
+        implements BlockUIMenuType.BlockUI, IHostPanelTextureProvider {
+
+    /**
+     * Cropped from the artwork sheet at the coordinates eco cuts its own panel cells from: the tier badge is
+     * 13x18 at the sheet's top-left, and the marker is two 13x8 states stacked (eco reads (0,0) and (0,8)).
+     * {@code HostPanelTextureState.capture} asks the host block - through the item's default state - so this
+     * is the only place the storage panel can be re-skinned by an addon.
+     */
+    private static final ResourceLocation PANEL_TIER = ResourceLocation.fromNamespaceAndPath(
+            NeoECOPrototype.MOD_ID, "textures/gui/panel/storage_tier.png");
+    private static final ResourceLocation PANEL_MARKER = ResourceLocation.fromNamespaceAndPath(
+            NeoECOPrototype.MOD_ID, "textures/gui/panel/storage_marker.png");
 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty MIRRORED = BooleanProperty.create("mirrored");
@@ -42,6 +56,15 @@ public class SimplifyStorageControllerBlock extends NEBlock<SimplifyStorageHostB
                 .setValue(FACING, Direction.NORTH)
                 .setValue(MIRRORED, false)
                 .setValue(COMMUNICATION_INTERFACE, false));
+    }
+
+    @Override
+    public ResourceLocation getPanelTexture(BlockState state, IHostPanelTextureProvider.Part part) {
+        return switch (part) {
+            case STORAGE_TIER -> PANEL_TIER;
+            case STORAGE_MARKER -> PANEL_MARKER;
+            default -> null;
+        };
     }
 
     @Override

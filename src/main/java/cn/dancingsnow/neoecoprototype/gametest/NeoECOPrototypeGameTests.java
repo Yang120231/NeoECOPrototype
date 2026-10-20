@@ -2275,6 +2275,20 @@ public final class NeoECOPrototypeGameTests {
                 // until someone opens a CPU picker.
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
                         "textures/gui/tier/l1.png"),
+                // The five panel sprites eco cuts at their top-left corner once our blocks answer
+                // IHostPanelTextureProvider: 10x5 / 10x6 / 10x6 for the computation rows and 13x18 plus a
+                // 13x16 two-state strip for the storage panel. Nothing in Java loads them by name, so a
+                // deleted file would only show as a blank cell in someone's panel.
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/gui/panel/computation_upper.png"),
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/gui/panel/computation_core.png"),
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/gui/panel/computation_lower.png"),
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/gui/panel/storage_tier.png"),
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/gui/panel/storage_marker.png"),
                 // FumoRenderer.localSkin: the named dolls carry their owner's skin inside the jar. A
                 // missing file is not an error at runtime - the doll silently falls back to whatever
                 // default face its uuid hashes to, which is precisely the kind of regression nobody
@@ -6249,6 +6263,90 @@ public final class NeoECOPrototypeGameTests {
             }
         }
         helper.succeed();
+    }
+
+    /**
+     * eco asks the <em>block</em> - not the block entity - which texture to cut a panel cell from, and it
+     * always reads a custom texture at its own top-left corner. Two things are worth pinning there: our
+     * blocks answer exactly the parts eco requests and stay silent on the rest (answering everything would
+     * hand the storage panel a computation glyph), and the files they name are the size eco cuts - a 10x6
+     * sprite behind a 10x5 request loses the bottom row of the drawing and nothing complains about it.
+     */
+    @GameTest(template = "empty", batch = "storage_panel_rows", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelSkinsAnswerThePartsEcoAsks(GameTestHelper helper) {
+        var parts = cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.values();
+        var parallel = (cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider)
+                ModRegistration.SIMPLIFY_COMPUTATION_PARALLEL_CORE_BLOCK.get();
+        var threading = (cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider)
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get();
+        var host = (cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider)
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get();
+        for (var part : parts) {
+            boolean ours = part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_UPPER
+                    || part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_LOWER;
+            if (parallel.getPanelTexture(
+                    ModRegistration.SIMPLIFY_COMPUTATION_PARALLEL_CORE_BLOCK.get().defaultBlockState(), part)
+                    != null != ours) {
+                helper.fail("the parallel core should answer the two rows it sits in and nothing else, but"
+                        + " its answer for " + part + " was " + ours);
+                return;
+            }
+            ours = part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_CORE;
+            if (threading.getPanelTexture(
+                    ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get().defaultBlockState(), part)
+                    != null != ours) {
+                helper.fail("the threading core sits in the middle row only, and its answer for " + part
+                        + " was " + ours);
+                return;
+            }
+            ours = part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.STORAGE_TIER
+                    || part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.STORAGE_MARKER;
+            if (host.getPanelTexture(
+                    ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get().defaultBlockState(), part)
+                    != null != ours) {
+                helper.fail("the storage host owns the tier badge and the marker, and its answer for "
+                        + part + " was " + ours);
+                return;
+            }
+        }
+        final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {13, 18}, {13, 16}};
+        String[] files = {"computation_upper", "computation_core", "computation_lower",
+                "storage_tier", "storage_marker"};
+        for (int i = 0; i < files.length; i++) {
+            var size = pngDimensions("assets/" + NeoECOPrototype.MOD_ID + "/textures/gui/panel/"
+                    + files[i] + ".png");
+            if (size == null) {
+                helper.fail(files[i] + ".png is not on the classpath, so the panel would draw nothing");
+                return;
+            }
+            if (size[0] != wanted[i][0] || size[1] != wanted[i][1]) {
+                helper.fail(files[i] + ".png is " + size[0] + "x" + size[1] + ", eco cuts it at "
+                        + wanted[i][0] + "x" + wanted[i][1]);
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /** PNG header width and height, big-endian at byte 16 - no image library needed for a size check. */
+    @javax.annotation.Nullable
+    private static int[] pngDimensions(String path) {
+        try (var in = NeoECOPrototype.class.getResourceAsStream("/" + path)) {
+            if (in == null) {
+                return null;
+            }
+            var head = in.readNBytes(24);
+            if (head.length < 24) {
+                return null;
+            }
+            return new int[]{(head[16] & 0xFF) << 24 | (head[17] & 0xFF) << 16 | (head[18] & 0xFF) << 8
+                            | (head[19] & 0xFF),
+                    (head[20] & 0xFF) << 24 | (head[21] & 0xFF) << 16 | (head[22] & 0xFF) << 8
+                            | (head[23] & 0xFF)};
+        } catch (java.io.IOException failure) {
+            return null;
+        }
     }
 
     /**
