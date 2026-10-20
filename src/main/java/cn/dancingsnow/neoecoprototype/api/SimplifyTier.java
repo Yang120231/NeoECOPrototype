@@ -150,4 +150,17 @@ public enum SimplifyTier implements IECOTier {
     public net.minecraft.network.chat.Component getPanelTierName() {
         return net.minecraft.network.chat.Component.literal("L1");
     }
+
+    /**
+     * The brackets eco paints above and below the host icon on the computation and crafting panels. It asks
+     * the tier, not the block, so one file answers both machines - the storage panel never comes here
+     * because its own widget prefers the texture its block hands over. eco reads this at 13x8 twice: the
+     * lower half is the idle bracket, the upper half the lit one, which is why the file is 13x16.
+     * {@code ECOTier} does not override this method, so eco's own panels keep their painted markers.
+     */
+    @Override
+    public net.minecraft.resources.ResourceLocation getHostMarkerTexture() {
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                "neoecoprototype", "textures/gui/panel/host_marker.png");
+    }
 }

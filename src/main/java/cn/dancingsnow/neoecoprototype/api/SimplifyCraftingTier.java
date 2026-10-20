@@ -83,4 +83,11 @@ public enum SimplifyCraftingTier implements IECOTier {
     public net.minecraft.network.chat.Component getPanelTierName() {
         return net.minecraft.network.chat.Component.literal("L1");
     }
+
+    /** Same brackets as {@link SimplifyTier#getHostMarkerTexture()}; eco asks each tier separately. */
+    @Override
+    public net.minecraft.resources.ResourceLocation getHostMarkerTexture() {
+        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                "neoecoprototype", "textures/gui/panel/host_marker.png");
+    }
 }

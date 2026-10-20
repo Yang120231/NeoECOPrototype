@@ -37,6 +37,7 @@ import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementPlan;
 import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementService;
 import cn.dancingsnow.neoecoae.multiblock.placement.WorldPlannedBlock;
 import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockBuildController;
+import cn.dancingsnow.neoecoprototype.api.SimplifyCraftingTier;
 import cn.dancingsnow.neoecoprototype.api.SimplifyTier;
 import cn.dancingsnow.neoecoprototype.block.computation.SimplifyComputationSystemBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingSystemBlock;
@@ -2289,6 +2290,8 @@ public final class NeoECOPrototypeGameTests {
                         "textures/gui/panel/storage_tier.png"),
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
                         "textures/gui/panel/storage_marker.png"),
+                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                        "textures/gui/panel/host_marker.png"),
                 // FumoRenderer.localSkin: the named dolls carry their owner's skin inside the jar. A
                 // missing file is not an error at runtime - the doll silently falls back to whatever
                 // default face its uuid hashes to, which is precisely the kind of regression nobody
@@ -6325,6 +6328,42 @@ public final class NeoECOPrototypeGameTests {
                         + wanted[i][0] + "x" + wanted[i][1]);
                 return;
             }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The brackets around the host icon on the computation and crafting panels are the one panel cell eco
+     * asks the <em>tier</em> about rather than the block - {@code HostPanelTier.drawMarker} reads
+     * {@code IECOTier.getHostMarkerTexture()}. Both facts matter: eco's own tiers leave that method alone, so
+     * answering it changes nothing on their panels, and because it is the tier answering, one file serves
+     * both machines. The file has to be 13 wide and 16 tall - eco cuts the idle bracket from its lower half
+     * and the lit one from its upper half.
+     */
+    @GameTest(template = "empty", batch = "storage_panel_rows", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void hostMarkerComesFromTheTierAndCarriesBothHalves(GameTestHelper helper) {
+        var fromTier = SimplifyTier.L1.getHostMarkerTexture();
+        var fromCraftingTier = SimplifyCraftingTier.L1.getHostMarkerTexture();
+        if (fromTier == null || fromCraftingTier == null) {
+            helper.fail("a tier left getHostMarkerTexture() at eco's null default, so both host panels keep"
+                    + " eco's painted brackets");
+            return;
+        }
+        if (!"neoecoprototype".equals(fromTier.getNamespace()) || !"neoecoprototype".equals(
+                fromCraftingTier.getNamespace())) {
+            helper.fail("a host marker points outside our namespace: " + fromTier + " / " + fromCraftingTier);
+            return;
+        }
+        var size = pngDimensions("assets/" + fromTier.getNamespace() + "/" + fromTier.getPath());
+        if (size == null) {
+            helper.fail(fromTier + " is not on the classpath, so the marker cell draws nothing");
+            return;
+        }
+        if (size[0] != 13 || size[1] != 16) {
+            helper.fail(fromTier + " is " + size[0] + "x" + size[1]
+                    + ", eco cuts 13x8 twice from it (y=0 idle, y=8 lit)");
+            return;
         }
         helper.succeed();
     }
