@@ -3,7 +3,7 @@ navigation:
   title: Energized Energy Cells
   icon: neoecoprototype:energized_energy_cell_16g
   position: 23
-  parent: neoecoprototype_intro/storage_system.md
+  parent: neoecoprototype_intro/index.md
 item_ids:
   - neoecoprototype:energized_energy_cell_16g
   - neoecoprototype:energized_energy_cell_512g

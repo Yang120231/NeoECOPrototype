@@ -3,7 +3,7 @@ navigation:
   title: FE Storage Matrices
   icon: neoecoprototype:simplify_fe_storage_cell_1m
   position: 21
-  parent: neoecoprototype_intro/storage_system.md
+  parent: neoecoprototype_intro/index.md
 item_ids:
   - neoecoprototype:simplify_fe_cell_housing
   - neoecoprototype:simplify_fe_storage_cell_1k

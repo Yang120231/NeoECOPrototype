@@ -23,7 +23,7 @@ The **L1 Powered ME Interface** is a doubled <ItemLink id="ae2:interface" /> tha
 
 Given power and a channel it outputs **200 AE/t**. AE2 keeps only the highest-output passive generator per grid, so it stands down while a stronger source is present.
 
-The block is assembled in the [L1 Processor Assembler](processor_assembler.md) from 2 Crystal Resonance Generators, 1 ME Interface and 1 Superconducting Processor. Four of them build one [Energized Superconductive Interface](superconductive_interface.md).
+The block is assembled in the [L1 Processor Assembler](processor_assembler.md), whose recipe table on that page carries the ingredients. Four of them build one [Energized Superconductive Interface](superconductive_interface.md).
 
 <RecipeFor id="neoecoprototype:simplify_powered_me_interface" />
 <RecipeFor id="neoecoprototype:cable_powered_me_interface" />

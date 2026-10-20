@@ -3,7 +3,7 @@ navigation:
   title: Small Bulk Matrices
   icon: neoecoprototype:simplify_small_bulk_storage_cell
   position: 20
-  parent: neoecoprototype_intro/storage_system.md
+  parent: neoecoprototype_intro/index.md
 item_ids:
   - neoecoprototype:simplify_small_bulk_storage_cell
   - neoecoprototype:simplify_small_bulk_storage_cell_expanded

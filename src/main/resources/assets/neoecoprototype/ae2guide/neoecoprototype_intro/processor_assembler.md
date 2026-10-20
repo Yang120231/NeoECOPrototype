@@ -18,6 +18,13 @@ The **L1 Processor Assembler** is a green-shell version of the <ItemLink id="ae2
   <ItemIcon id="neoecoprototype:simplify_pattern_provider" />
 </ItemGrid>
 
+Both are made in a **crafting table**: the assembler is 1 Molecular Assembler + 4 Trait Casings + 4 Green Crystal Matrices, and the provider is 1 ME Pattern Provider + 4 Quartz Glass + 4 Green Crystal Matrices, giving **2** per craft.
+
+<Row>
+  <RecipeFor id="neoecoprototype:simplify_stonecutting_assembler" />
+  <RecipeFor id="neoecoprototype:simplify_pattern_provider" />
+</Row>
+
 ## Built-in recipes
 
 | Output | Ingredients |
@@ -34,7 +41,14 @@ The **L1 Processor Assembler** is a green-shell version of the <ItemLink id="ae2
 | Yang120's Fumo Doll | eco's L4 storage host + C4 computation host + F4 crafting host |
 | kouooki's Fumo Doll | pink dye + dried kelp + brown mushroom |
 
-Silicon, gold and diamond are taken by tag, so any mod's version counts. Processor recipes beyond those three are derived live from the inscriber's recipes, so a recipe another mod adds to the inscriber works with no data file; the server config can switch the derivation off (`derive_processor_recipes_from_inscriber`) or exclude outputs (`disabled_processor_recipes`).
+Silicon, gold and diamond are taken by tag, so any mod's version counts.
+
+Processor recipes beyond those three are derived live from the inscriber's recipes, so a recipe another mod adds to the inscriber works with no data file. Two server config keys govern that:
+
+| Config key | What it does |
+|------------|--------------|
+| `derive_processor_recipes_from_inscriber` | switches the inscriber derivation off |
+| `disabled_processor_recipes` | excludes processors by output |
 
 ## Speed and batching
 
@@ -44,9 +58,4 @@ However many complete sets a push carries, they finish in a **single** cycle - o
 
 ## L1 Pattern Provider
 
-The **L1 Pattern Provider** is the L1 version of the <ItemLink id="ae2:pattern_provider" />: **27 pattern slots** instead of 9, and it round-robins ingredients into adjacent inventories exactly as vanilla does. Its crafting recipe gives **2** at a time.
-
-<Row>
-  <RecipeFor id="neoecoprototype:simplify_pattern_provider" />
-  <RecipeFor id="neoecoprototype:cable_pattern_provider" />
-</Row>
+The **L1 Pattern Provider** is the L1 version of the <ItemLink id="ae2:pattern_provider" />: **27 pattern slots** instead of 9, and it round-robins ingredients into adjacent inventories exactly as vanilla does. Its recipe is at the top of this page.

@@ -3,7 +3,7 @@ navigation:
   title: L1 奇点元件
   icon: neoecoprototype:simplify_singularity_cell
   position: 22
-  parent: neoecoprototype_intro/storage_system.md
+  parent: neoecoprototype_intro/index.md
 item_ids:
   - neoecoprototype:simplify_singularity_cell
 ---

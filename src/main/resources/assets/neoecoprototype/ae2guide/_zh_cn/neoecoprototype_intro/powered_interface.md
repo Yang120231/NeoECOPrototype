@@ -23,7 +23,7 @@ item_ids:
 
 通电且有频道时它输出 **200 AE/t**。AE2 每个网格只保留输出功率最高的那台被动发电源，所以更强的源在场时它自动停止贡献。
 
-方块版在 [L1 处理器装配室](processor_assembler.md) 组装：2 台水晶谐振发电机 + 1 个 ME接口 + 1 枚 ECO - SA 超导处理器。四台它供一台[盈能超导接口](superconductive_interface.md)。
+方块版在 [L1 处理器装配室](processor_assembler.md) 组装，原料写在那一页的出厂配方表里。四台它供一台[盈能超导接口](superconductive_interface.md)。
 
 <RecipeFor id="neoecoprototype:simplify_powered_me_interface" />
 <RecipeFor id="neoecoprototype:cable_powered_me_interface" />

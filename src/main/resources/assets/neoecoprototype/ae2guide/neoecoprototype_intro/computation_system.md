@@ -59,9 +59,9 @@ The L1 Computation System supplies crafting threads to the ME network. The ideas
 
 | Item | Crafted at | Ingredients |
 |------|------------|-------------|
-| Energized computation core | eco's Integrated Working Station | 3 × C4 expandable computation host, 8 × green crystal matrix, 4 × not-so-mysterious block, for 66,600 AE |
-| Energized threading core | [L1 Processor Assembler](processor_assembler.md) | 2 × CM4A threading core, 1 × C1 computation subsystem structure shell |
-| Energized flash enhancement (CE1R) | [L1 Processor Assembler](processor_assembler.md) | 2 × CE1 flash enhancement, 1 × L4 storage component |
+| Energized computation core | eco's Integrated Working Station | 3 × ECO - C4 Extensible Computation Subsystem Host, 8 × Green Crystal Matrix, 4 × Not So Mysterious Cube, for 66,600 FE |
+
+The other two - the **Energized Reinforced Threading Core** and the **ECO - CE1R Flash Crystal Array** - carry their ingredients on the [L1 Processor Assembler](processor_assembler.md) and are not repeated here.
 
 ## Server config
 

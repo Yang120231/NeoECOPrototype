@@ -18,6 +18,13 @@ item_ids:
   <ItemIcon id="neoecoprototype:simplify_pattern_provider" />
 </ItemGrid>
 
+装配室与供应器都在**合成台**做：装配室 = 1 台分子装配室 + 4 只特质机壳 + 4 个绿晶晶格；供应器 = 1 个 ME样板供应器 + 4 个石英玻璃 + 4 个绿晶晶格，一次出 2 台。
+
+<Row>
+  <RecipeFor id="neoecoprototype:simplify_stonecutting_assembler" />
+  <RecipeFor id="neoecoprototype:simplify_pattern_provider" />
+</Row>
+
 ## 出厂配方
 
 | 产物 | 原料 |
@@ -34,19 +41,21 @@ item_ids:
 | Yang120 的 Fumo 玩偶 | eco 的 L4 存储主机 + C4 计算主机 + F4 合成主机 |
 | kouooki 的 Fumo 玩偶 | 粉色染料 + 干海带 + 棕色蘑菇 |
 
-硅、金锭、钻石都收标签，任意模组的对应物品都算。三种处理器之外的其余处理器配方从压印器的配方现场推导，别的模组给压印器加的配方不需要数据文件就能用；服务端配置可以关掉推导（`derive_processor_recipes_from_inscriber`）或按输出排除（`disabled_processor_recipes`）。
+硅、金锭、钻石都收标签，任意模组的对应物品都算。
+
+三种处理器之外的其余处理器配方，从压印器的配方现场推导——别的模组给压印器加的配方不需要数据文件就能用。两个服务端配置键管这一条：
+
+| 配置键 | 作用 |
+|--------|------|
+| `derive_processor_recipes_from_inscriber` | 关掉从压印器推导 |
+| `disabled_processor_recipes` | 按输出排除某一种处理器 |
 
 ## 速度与批量
 
 5 个卡槽只吃<ItemLink id="ae2:speed_card" />：不装卡一份要 100 刻，装满 5 张要 20 刻。
 
-一次推送带几份完整材料就在**一个**周期里做完，产出按份数翻倍而耗时不变，所以想更快只能继续加卡。每种原料按自己一组的数量分摞，**摞过九格这张样板就被拒收**，原料退回网络，日志写明是哪一条卡的；以处理器为例（三种原料、一组 64 个）上限是 **192 倍**。一轮只有一组产出送到机器前面，交不下的那部分直接进网络，不会消失。
+一次推送带几份完整材料就在**一个**周期里做完，产出按份数翻倍而耗时不变，所以想更快只能继续加卡。每种原料按自己一组的数量分摞，**过九格这张样板就被拒收**，原料退回网络，日志写明是哪一条卡的；以处理器为例（三种原料、一组 64 个）上限是 **192 倍**。一轮只有一组产出送到机器前面，交不下的那部分直接进网络，不会消失。
 
 ## L1 样板供应器
 
-**L1 样板供应器**是<ItemLink id="ae2:pattern_provider" />的 L1 版：样板槽位从 9 个变成 **27 个**，向相邻容器轮转推送原料的方式与原版一致。合成配方一次给出 **2 台**。
-
-<Row>
-  <RecipeFor id="neoecoprototype:simplify_pattern_provider" />
-  <RecipeFor id="neoecoprototype:cable_pattern_provider" />
-</Row>
+**L1 样板供应器**是<ItemLink id="ae2:pattern_provider" />的 L1 版：样板槽位从 9 个变成 **27 个**，向相邻容器轮转推送原料的方式与原版一致。配方见本页上方。
