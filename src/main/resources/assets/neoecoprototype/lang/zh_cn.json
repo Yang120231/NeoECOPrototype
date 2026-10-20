@@ -113,7 +113,7 @@
   "card.neoecoprototype.expansion.no_blank": "背包里没有空白样板，这张工单样板写不出来。这一档需要：%s",
   "eco_cell_type.neoecoprototype.singularity": "奇点元件",
   "emi.category.neoecoprototype.processor_assembler": "L1 装配室",
-  "tooltip.neoecoprototype.singularity_stock": "奇点库存：%s",
+  "tooltip.neoecoprototype.singularity_stock": "自产库存：%2$s × %1$s",
   "eco_cell_type.neoecoprototype.infinite": "无限存储矩阵",
   "item.neoecoprototype.not_implemented": "暂未实现",
   "item.neoecoprototype.pigmee_storage_matrix_housing": "ECO - 猪咪存储矩阵外壳",

@@ -228,6 +228,7 @@ StartupEvents.registry('item', event => {
 - `.size('infinite'/'1k'/'4k'/'16k'/'64k'/'1m'/'4m')`：设置容量。
 - `.bytes(n)`：改用自定义字节数，**它会顶掉先前的或之后的 `size(...)` 档位**（两种顺序都一样）；`size('infinite')` 与 `.bytes(...)` 同时出现会明确报错。
 - `.totalTypes(n)`：改类型数，默认 256（物品/流体）或 25（化学品）。
+- `.grows(perBatch, ticksPerBatch)`：把它变成**自产矩阵**，见下一节。
 - `.inventoryModel('namespace:item/model')`：覆盖物品栏模型。
 - `.cellModel('namespace:block/model')`：覆盖驱动器内格子模型。
 - `.parentModel(...)` / `.textures(...)`：完全接管物品栏模型；设置后不再套用默认模型。
@@ -286,6 +287,48 @@ StartupEvents.registry('item', event => {
   })
 })
 ```
+
+## 自产矩阵（`grows`）
+
+`.grows(单批产量, 间隔刻)` 造的是一只**什么都不吃、自己长货**的仓：每隔
+`ticksPerBatch` 世界刻跳一次，每次给出 `perBatch` 个，内容就是
+`itemType` / `fluidType` / `chemicalType` 绑的那一个 AE key。本模组的奇点存储矩阵
+就是这一族里注册出来的那一只，`grows` 让整合包加自己的成员。
+
+```js
+StartupEvents.registry('item', event => {
+  event.create('lava_grower', 'neoecoprototype:storage_matrix')
+       .fluidType('minecraft:lava')
+       .grows(128, 600)
+       .displayName('熔岩自产矩阵')
+
+  event.create('hydrogen_grower', 'neoecoprototype:storage_matrix')
+       .chemicalType('mekanism:hydrogen')
+       .grows(1, 1200)
+       .displayName('氢气自产矩阵')
+})
+```
+
+规则与限制，一条一句：
+
+- 两个数都必须写、都必须为正；写 0 或负数当场报错，不做"缺省回配置"。
+- 产量与间隔是这只仓自己的数字，**不读服务端配置**：改配置只影响注册的那只奇点仓。
+- 脚本这条路只要求为正，没有配置那条 60 刻的地板；想要慢就直接写大间隔。
+- 内容用哪个媒介由绑定的 key 决定，任意 mod 的物品、流体、化学品都可以；化学品照旧要 Mekanism 与 Applied Mekanistics。
+- `perBatch` 的单位就是那个 key 自己的计量单位，AE2 终端怎么显示那个媒介，这里就按什么计。
+- 往它推任何东西都是 0，只出不进。
+- 插进驱动器、被网络问过库存才开始计时；**放在身上不算**（和奇点仓同一条规则）。
+- 库存没有上限，长到 `long` 顶就饱和、不回绕；已经被取走的部分不会自己回来。
+- 它不进 `StorageMatrixRegistry`，所以 `cellModel(...)` 会被拒绝（那张注册表正是驱动器格子模型的来源）；`bytes(...)`、`totalTypes(...)`、`size(...)` 同样拒绝 —— 它没有字节预算可描述。
+- 不能借 `universal` / `quantum` 家族：那两个后端存的是网络推进来的东西。
+- 待机耗电固定 1.0，与奇点仓一致；物品堆叠上限 1。
+- 主机面板上它和奇点仓一样不占存储那一族的行；数量写在它自己的 tooltip 与玉的驱动器提示里，那一行会带上内容名。
+- 脚本造的这一只在驱动器格子里长什么样**没有眼验过**：我们只给注册的那只奇点仓登记过格子模型，所以这一格要开一次客户端确认。
+- 注册表冻结之后不能再造物品，所以这类脚本只在启动脚本里跑，改完要重启游戏。
+
+**这条的套件面只断在算法上**：注册表冻结后连一个没注册的 `Item` 都造不出来，
+gameTest 恰好跑在冻结之后，所以断言落在 `SimplifySingularityCellItem.Growth` 这份记录上；
+`grows(...)` 接到真物品、真驱动器的那一段，只能开一次客户端配一份脚本来读。
 
 ### 新矩阵注册 API（Java）
 

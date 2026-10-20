@@ -6348,6 +6348,98 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * What a pack's own member of the family is made of: a {@code Growth} naming its content and its pace.
+     * Both halves are worth a test because neither is visible on the item - the medium a drive routes a cell
+     * through comes from the key it grows, and the figures come from the cell rather than the server config,
+     * so a regression here would silently hand every scripted cell the built-in's lava-free, config-paced
+     * behaviour.
+     *
+     * <p>This asserts on the record, not on an item, and that is a hard limit worth stating: an {@code Item}
+     * cannot be constructed once the registry has frozen, which is exactly when a gameTest runs. So the
+     * scripted path itself - {@code grows()} reaching this record through a real item, in a real drive - has
+     * no suite face at all and is verified in a client with a script.
+     */
+    @GameTest(template = "empty", batch = "singularity_cell_yield", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void scriptedGrowingCellPaysItsOwnContentAtItsOwnSpeed(GameTestHelper helper) {
+        var lava = appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.LAVA);
+        var water = appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.WATER);
+        var growth = new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.Growth(lava, 7L, 600L);
+        // The drive picks a cell's medium off the item, which forwards the key's own type. Lose this and a
+        // fluid cell would be mounted in the item row and pay nothing forever.
+        helper.assertTrue(growth.content().getType() == appeng.api.stacks.AEKeyType.fluids(),
+                "a lava growth reports its medium as " + growth.content().getType());
+        if (!growth.pays(lava)) {
+            helper.fail("a cell built to grow lava refuses lava, so it would never pay its own stock");
+            return;
+        }
+        if (growth.pays(water)) {
+            helper.fail("a cell built to grow lava pays water - the content is a filter, not a label");
+            return;
+        }
+        if (growth.readyAt(0L, 0L, 1800L) != 21L || growth.readyAt(0L, 0L, 599L) != 0L
+                || growth.readyAt(0L, 0L, 600L) != 7L) {
+            helper.fail("7 per 600 ticks over 1800 should jump 0, 7, then 21, the growth reports "
+                    + growth.readyAt(0L, 0L, 599L) + ", " + growth.readyAt(0L, 0L, 600L) + ", "
+                    + growth.readyAt(0L, 0L, 1800L));
+            return;
+        }
+        if (growth.readyAt(0L, 14L, 1800L) != 7L) {
+            helper.fail("drawing two batches of a seven-item bank should leave 7, the growth reports "
+                    + growth.readyAt(0L, 14L, 1800L));
+            return;
+        }
+        // The two paces have to stay two paces: rewrite the server config and the built-in follows it while
+        // the scripted growth keeps the numbers its item was built with. If these ever agree, a pack's cell
+        // is reading the config and nobody would notice from the item.
+        var amount = cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
+                .SINGULARITY_CELL_AMOUNT_PER_BATCH;
+        var ticks = cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
+                .SINGULARITY_CELL_TICKS_PER_BATCH;
+        long restoredAmount = amount.get();
+        long restoredTicks = ticks.get();
+        try {
+            amount.set(1000L);
+            ticks.set(60L);
+            var cell = new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem
+                    .Bank(0L, 0L);
+            if (cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.bankOf(cell, 1800L) != 30_000L) {
+                helper.fail("the registered cell ignores the config it just changed: 1000 per 60 over 1800"
+                        + " should be 30000, it reports "
+                        + cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.bankOf(cell, 1800L));
+                return;
+            }
+            if (growth.readyAt(0L, 0L, 1800L) != 21L) {
+                helper.fail("a scripted growth followed the server config instead of its own 7 per 600 -"
+                        + " it reports " + growth.readyAt(0L, 0L, 1800L));
+                return;
+            }
+        } finally {
+            amount.set(restoredAmount);
+            ticks.set(restoredTicks);
+        }
+        // And the record refuses the two nonsense paces rather than growing a cell that pays nothing.
+        if (!refusesGrowth(0L, 600L) || !refusesGrowth(7L, 0L) || !refusesGrowth(-1L, 600L)) {
+            helper.fail("a growth accepts a batch or interval of zero or less, so a typo in a script makes"
+                    + " a dead cell instead of a rejected one");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /** Whether constructing a {@code Growth} with these figures throws, as the record's own guard says it must. */
+    private static boolean refusesGrowth(long perBatch, long ticksPerBatch) {
+        try {
+            new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.Growth(
+                    appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.LAVA),
+                    perBatch, ticksPerBatch);
+            return false;
+        } catch (IllegalArgumentException expected) {
+            return true;
+        }
+    }
+
+    /**
      * The brackets around the host icon on the computation and crafting panels are the one panel cell eco
      * asks the <em>tier</em> about rather than the block - {@code HostPanelTier.drawMarker} reads
      * {@code IECOTier.getHostMarkerTexture()}. Both facts matter: eco's own tiers leave that method alone, so

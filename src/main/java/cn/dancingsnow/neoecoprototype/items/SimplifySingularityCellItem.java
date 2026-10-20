@@ -1,6 +1,7 @@
 package cn.dancingsnow.neoecoprototype.items;
 
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import appeng.core.AEConfig;
@@ -21,22 +22,29 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.inventory.tooltip.TooltipComponent;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
 
 /**
- * A cell that grows singularities out of nothing and takes nothing in.
+ * A cell that grows something out of nothing and takes nothing in.
  *
  * <p>AE2's {@code StorageCell} has no tick method and the L1 drive has no ticker at all, so the bank is
  * never accumulated - it is <em>derived</em> from the world clock whenever somebody asks. Two numbers live
  * on the stack (the world tick it started from, and how much the network has drawn), everything else is
  * arithmetic, and a read never writes. That is what lets the same cell work mounted in our drive, in an
  * eco one, or lying in a chest.
+ *
+ * <p>The registered instance grows AE2's singularity at the speed the server config says. A scripted one -
+ * see {@code StorageMatrixBuilder#grows} - carries its own content and its own batch figures on the item,
+ * which is why {@link #content()}, {@link #perBatch()} and {@link #ticksPerBatch()} are instance methods
+ * rather than more statics: what a pack makes has to be readable without a registry lookup, and the
+ * matrix registry freezes before any cell is ever asked a question.
  */
 public final class SimplifySingularityCellItem extends Item implements IBasicECOCellItem {
 
-    /** The one thing this cell ever holds. */
+    /** The one thing the registered cell ever holds. */
     public static AEItemKey singularity() {
         return SingularityKey.SINGULARITY;
     }
@@ -61,13 +69,15 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
     /**
      * Its own cell type rather than the shared item row: eco's storage host would otherwise read this as one
      * more ordinary matrix, and "1 / 1 types against an unbounded budget" says nothing a player can act on.
+     * Scripted members of this family keep this type too, which puts them in the same "one row, no numbers"
+     * place as the registered one regardless of whether they grow items, fluids or chemicals.
      */
     public static final ECOCellType CELL_TYPE = new ECOCellType(
             Component.translatable("eco_cell_type.neoecoprototype.singularity"), TYPES, false);
 
     /**
      * All of the cell's state. {@code startGameTime} is the world tick it began counting from; {@code drawn}
-     * is how many singularities the network has already taken out of it.
+     * is how many of its own content the network has already taken out of it.
      */
     public record Bank(long startGameTime, long drawn) {
         public static final Codec<Bank> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -77,8 +87,81 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
                 ByteBufCodecs.fromCodec(CODEC);
     }
 
+    /**
+     * What this instance grows and how fast, or null on the registered one.
+     *
+     * <p>Its own record rather than fields on the item, because an {@code Item} cannot be built after the
+     * registry freezes - which is exactly when a pack's cell would first be interesting to read. The arithmetic
+     * and the "does this cell pay that key" rule live here so both are reachable without an item at all.
+     */
+    public record Growth(AEKey content, long perBatch, long ticksPerBatch) {
+        public Growth {
+            if (content == null) {
+                throw new IllegalArgumentException("A growing cell has to say what it grows");
+            }
+            if (perBatch < 1L || ticksPerBatch < 1L) {
+                throw new IllegalArgumentException("A growing cell's batch and interval must be positive: "
+                        + perBatch + "/" + ticksPerBatch);
+            }
+        }
+
+        /** How much of {@link #content} is ready for a bank that started at {@code startGameTime}. */
+        public long readyAt(long startGameTime, long drawn, long nowGameTime) {
+            return bankOf(new Bank(startGameTime, drawn), nowGameTime, perBatch, ticksPerBatch);
+        }
+
+        /** Whether this cell hands out {@code what} at all. */
+        public boolean pays(AEKey what) {
+            return content.equals(what);
+        }
+    }
+
+    @Nullable
+    private final Growth growth;
+
+    /** The registered cell: it grows AE2's singularity and takes its speed from the server config. */
     public SimplifySingularityCellItem(Item.Properties properties) {
         super(properties);
+        this.growth = null;
+    }
+
+    /**
+     * A scripted sibling: it grows {@code content} instead of a singularity, jumping {@code perBatch} at a
+     * time every {@code ticksPerBatch} world ticks. Both figures are required, because a half-set cell would
+     * slow down whenever somebody edits the server config, which is not what a pack asked for.
+     */
+    public SimplifySingularityCellItem(Item.Properties properties, AEKey content, long perBatch, long ticksPerBatch) {
+        super(properties);
+        this.growth = new Growth(content, perBatch, ticksPerBatch);
+    }
+
+    /** Its own figures if a pack wrote them, otherwise the registered cell's: the config's. */
+    public Growth growth() {
+        return growth != null
+                ? growth
+                : new Growth(singularity(),
+                        NeoECOPrototypeServerConfig.singularityCellAmountPerBatch(),
+                        NeoECOPrototypeServerConfig.singularityCellTicksPerBatch());
+    }
+
+    /** What this cell hands out, and the only thing it will ever hold. */
+    public AEKey content() {
+        return growth().content();
+    }
+
+    /** How much the bank jumps per batch. */
+    public long perBatch() {
+        return growth().perBatch();
+    }
+
+    /** How long between jumps, in world ticks. */
+    public long ticksPerBatch() {
+        return growth().ticksPerBatch();
+    }
+
+    /** Whether this cell was written by a pack rather than registered by us. */
+    public boolean isScripted() {
+        return growth != null;
     }
 
     static DataComponentType<Bank> bankComponent() {
@@ -86,17 +169,30 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
     }
 
     /**
-     * How many singularities are ready at {@code nowGameTime}. There is no bank ceiling to stop at - the
-     * stock is a long and it is allowed to reach the top of one - so the only limit left is arithmetic:
-     * the cumulative total saturates instead of wrapping. A batch is what the bank jumps by; it does not drip.
+     * How many are ready at {@code nowGameTime} on the registered cell.
+     *
+     * <p>There is no bank ceiling to stop at - the stock is a long and it is allowed to reach the top of one
+     * - so the only limit left is arithmetic: the cumulative total saturates instead of wrapping. A batch is
+     * what the bank jumps by; it does not drip.
      */
     public static long bankOf(Bank bank, long nowGameTime) {
         long interval = NeoECOPrototypeServerConfig.singularityCellTicksPerBatch();
         long batch = NeoECOPrototypeServerConfig.singularityCellAmountPerBatch();
+        return bankOf(bank, nowGameTime, batch, interval);
+    }
+
+    /** The same arithmetic with a cell's own figures, which is what a scripted sibling runs on. */
+    public static long bankOf(Bank bank, long nowGameTime, long batch, long interval) {
         long batches = Math.max(0L, (nowGameTime - bank.startGameTime()) / interval);
         long produced = batches > Long.MAX_VALUE / batch ? Long.MAX_VALUE : batches * batch;
         long stored = produced - bank.drawn;
         return stored <= 0L ? 0L : stored;
+    }
+
+    /** How many are ready on this cell, with its own batch and interval. */
+    public long readyAt(Bank bank, long nowGameTime) {
+        Growth own = growth();
+        return own.readyAt(bank.startGameTime(), bank.drawn(), nowGameTime);
     }
 
     /**
@@ -105,7 +201,12 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
      */
     public static long stockOf(ItemStack stack, long nowGameTime) {
         Bank bank = stack.get(bankComponent());
-        return bank == null ? -1L : bankOf(bank, nowGameTime);
+        if (bank == null) {
+            return -1L;
+        }
+        return stack.getItem() instanceof SimplifySingularityCellItem cell
+                ? cell.readyAt(bank, nowGameTime)
+                : bankOf(bank, nowGameTime);
     }
 
     /**
@@ -144,7 +245,7 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
 
     @Override
     public AEKeyType getKeyType() {
-        return AEKeyType.items();
+        return content().getType();
     }
 
     @Override
@@ -214,8 +315,17 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
             return;
         }
         tooltip.add(Component.translatable("tooltip.neoecoprototype.singularity_stock",
-                appeng.core.localization.Tooltips.ofNumber(stock))
+                appeng.core.localization.Tooltips.ofNumber(stock), stockSubject())
                 .withStyle(net.minecraft.ChatFormatting.AQUA));
+    }
+
+    /**
+     * What the stock line names as its content. A pack's member of this family grows whatever key its item
+     * was built with, so the sentence cannot say "singularity" for the whole family; both places that print
+     * the figure (here and Jade's drive panel) take the subject from the cell itself.
+     */
+    public Component stockSubject() {
+        return content().getDisplayName();
     }
 
     /**
@@ -236,9 +346,9 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
         if (bank == null || now < 0L) {
             return Optional.empty();
         }
-        long ready = bankOf(bank, now);
+        long ready = readyAt(bank, now);
         List<GenericStack> content = ready > 0L
-                ? List.of(new GenericStack(singularity(), ready))
+                ? List.of(new GenericStack(content(), ready))
                 : List.of();
         return Optional.of(new StorageCellTooltipComponent(List.of(), content, false, true));
     }

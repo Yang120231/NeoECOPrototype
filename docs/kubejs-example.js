@@ -91,6 +91,23 @@ StartupEvents.registry('item', event => {
     layer2: 'neoecoprototype:item/storage_recolor/eco_cell_status_light'
   })
   custom.displayName('自定义外观 1K 钻石矩阵')
+
+  // ---------- 7. 自产矩阵：不吃东西，按世界时间自己长货 ----------
+  // grows(单批产量, 间隔刻)：每隔 ticksPerBatch 世界刻跳一次，每次给 perBatch 个，
+  // 内容就是 itemType/fluidType/chemicalType 绑的那一个 key，任意 mod 的都可以。
+  // 两个数都必须为正且不读服务端配置；往它推东西一律拒收。
+  // 插进驱动器、被网络问过库存才开始计时，放在身上不算。
+  event.create('lava_grower', 'neoecoprototype:storage_matrix')
+    .fluidType('minecraft:lava')
+    .grows(128, 600)
+    .displayName('熔岩自产矩阵 | 每 600 刻 128')
+
+  // 不写数量档位：bytes(...) / totalTypes(...) / size(...) / cellModel(...) 一律会被拒绝，
+  // 它没有字节预算可描述，也不进矩阵注册表。
+  event.create('hydrogen_grower', 'neoecoprototype:storage_matrix')
+    .chemicalType('mekanism:hydrogen')
+    .grows(1, 1200)
+    .displayName('氢气自产矩阵 | 每 1200 刻 1')
 })
 
 // -----------------------------------------------------------------------------

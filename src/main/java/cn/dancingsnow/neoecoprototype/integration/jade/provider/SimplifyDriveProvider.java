@@ -52,14 +52,17 @@ public enum SimplifyDriveProvider implements IBlockComponentProvider, IServerDat
                     ? Component.translatable("jade.neoecoprototype.types_infinite", used)
                     : Tooltips.typesUsed(used, serverData.getLong("totalItemTypes")));
         }
-        // The one figure a singularity cell's drive panel can carry: it reports no byte numbers by design,
+        ItemStack cell = mountedCellOf(serverData);
+        // The one figure a growing cell's drive panel can carry: it reports no byte numbers by design,
         // and the number is computed where the clock is, then sent over like any other server data.
-        if (serverData.contains("singularityStock")) {
+        // The subject comes from the mounted cell because a pack's member of the family grows whatever
+        // key it was built with, and naming it "singularity" on a lava cell would be a lie.
+        if (serverData.contains("singularityStock")
+                && cell.getItem() instanceof SimplifySingularityCellItem grown) {
             tooltip.add(Component.translatable("tooltip.neoecoprototype.singularity_stock",
-                    Tooltips.ofNumber(serverData.getLong("singularityStock")))
+                    Tooltips.ofNumber(serverData.getLong("singularityStock")), grown.stockSubject())
                     .withStyle(ChatFormatting.AQUA));
         }
-        ItemStack cell = mountedCellOf(serverData);
         if (!cell.isEmpty()) {
             // Icon first, then the name - the order eco's drive tooltip reads in on screen. Worth knowing
             // where that icon does NOT come from: no class in eco's jar references IElementHelper,

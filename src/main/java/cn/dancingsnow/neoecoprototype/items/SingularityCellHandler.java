@@ -19,8 +19,9 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The cell engine behind {@link SimplifySingularityCellItem}: it grows singularities on the world clock,
- * hands them out on request, and refuses everything pushed into it.
+ * The cell engine behind {@link SimplifySingularityCellItem}: it grows its own content on the world clock,
+ * hands it out on request, and refuses everything pushed into it. The registered cell grows AE2's
+ * singularity; a scripted sibling of the same class grows whatever its item was built with.
  *
  * <p>No accumulator thread and no ticker - the bank is computed from the two numbers on the stack each time
  * it is asked, so nothing has to run while the cell sits idle.
@@ -93,13 +94,18 @@ public final class SingularityCellHandler implements IECOCellHandler {
                     && !blockEntity.getLevel().isClientSide;
         }
 
+        /** The cell's own content and speed, which is the whole difference between ours and a scripted one. */
+        private SimplifySingularityCellItem cellItem() {
+            return (SimplifySingularityCellItem) stack.getItem();
+        }
+
         private long ready() {
             long now = serverGameTime();
             if (now < 0L) {
                 return 0L;
             }
             var bank = SimplifySingularityCellItem.stampIfNeeded(stack, now, mayStamp());
-            return bank == null ? 0L : SimplifySingularityCellItem.bankOf(bank, now);
+            return bank == null ? 0L : cellItem().readyAt(bank, now);
         }
 
         @Override
@@ -110,7 +116,7 @@ public final class SingularityCellHandler implements IECOCellHandler {
 
         @Override
         public long extract(AEKey what, long amount, Actionable mode, IActionSource source) {
-            if (!SimplifySingularityCellItem.singularity().equals(what)) {
+            if (!cellItem().content().equals(what)) {
                 return 0L;
             }
             long ready = ready();
@@ -132,7 +138,7 @@ public final class SingularityCellHandler implements IECOCellHandler {
         public void getAvailableStacks(KeyCounter out) {
             long ready = ready();
             if (ready > 0L) {
-                out.add(SimplifySingularityCellItem.singularity(), ready);
+                out.add(cellItem().content(), ready);
             }
         }
 

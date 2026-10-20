@@ -129,7 +129,7 @@
   "card.neoecoprototype.expansion.no_blank": "No blank pattern in your bag, so this work-order pattern could not be written. This step needs: %s",
   "eco_cell_type.neoecoprototype.singularity": "Singularity Cell",
   "emi.category.neoecoprototype.processor_assembler": "L1 Processor Assembler",
-  "tooltip.neoecoprototype.singularity_stock": "Singularities stored: %s",
+  "tooltip.neoecoprototype.singularity_stock": "Grown stock: %2$s × %1$s",
   "eco_cell_type.neoecoprototype.infinite": "Infinite storage matrix",
   "item.neoecoprototype.not_implemented": "Not implemented yet",
   "item.neoecoprototype.pigmee_storage_matrix_housing": "ECO - Pigmee Storage Matrix Housing",

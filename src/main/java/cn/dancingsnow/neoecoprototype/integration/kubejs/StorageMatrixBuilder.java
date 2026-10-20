@@ -30,6 +30,10 @@ public final class StorageMatrixBuilder extends ItemBuilder {
     private ResourceLocation boundChemical;
     private ResourceLocation inventoryModel;
     private ResourceLocation driveModel;
+    /** Set by {@link #grows}: the cell makes its bound key instead of storing what the network pushes. */
+    private boolean growing;
+    private long growPerBatch;
+    private long growTicksPerBatch;
     private MatrixMaterials.Kind material;
     private Long customBytes;
     private Integer customTotalTypes;
@@ -182,6 +186,24 @@ public final class StorageMatrixBuilder extends ItemBuilder {
         return this;
     }
 
+    /**
+     * Turn this matrix into a self-growing one: it hands out {@code perBatch} of whatever
+     * {@code itemType}/{@code fluidType}/{@code chemicalType} bound, jumping once every {@code ticksPerBatch}
+     * world ticks, and it refuses everything pushed into it. Both numbers are required - a cell that took its
+     * speed from the server config would change under a pack that never asked for that.
+     */
+    @Info("让它自产：每 ticksPerBatch 世界刻跳一次，每次 perBatch 个；内容就用 itemType/fluidType/chemicalType 指定")
+    public StorageMatrixBuilder grows(long perBatch, long ticksPerBatch) {
+        if (perBatch < 1L || ticksPerBatch < 1L) {
+            throw new IllegalArgumentException("grows() needs positive batch and interval: "
+                    + perBatch + "/" + ticksPerBatch);
+        }
+        this.growing = true;
+        this.growPerBatch = perBatch;
+        this.growTicksPerBatch = ticksPerBatch;
+        return this;
+    }
+
     @Info("设置驱动器内格子模型")
     public StorageMatrixBuilder cellModel(ResourceLocation model) {
         this.driveModel = model;
@@ -241,6 +263,35 @@ public final class StorageMatrixBuilder extends ItemBuilder {
                     "Matrix '%s' needs Mekanism and Applied Mekanistics for the chemical backend"
                             .formatted(id));
         }
+        if (growing) {
+            // A growing cell is its own item class and answers for itself: it is deliberately not put in the
+            // matrix registry, whose whole job is describing capacity, and whose model pass assumes that.
+            if (key == null) {
+                throw new IllegalStateException("Growing matrix '" + id
+                        + "' must bind what it grows with itemType(...), fluidType(...) or chemicalType(...)");
+            }
+            if (material == MatrixMaterials.Kind.UNIVERSAL || material == MatrixMaterials.Kind.QUANTUM) {
+                throw new IllegalStateException("Growing matrix '" + id
+                        + "' cannot borrow an omni family: that backend stores what the network pushes");
+            }
+            if (customBytes != null || customTotalTypes != null) {
+                throw new IllegalStateException("Growing matrix '" + id
+                        + "' cannot set bytes(...) or totalTypes(...) - it is unbounded by construction");
+            }
+            if (size != StorageMatrixDefinition.MatrixSize.INFINITE) {
+                // The tier would be read by nothing, and a script that wrote it believes it capped something.
+                throw new IllegalStateException("Growing matrix '" + id
+                        + "' cannot set size(...) - it has no byte budget to size");
+            }
+            if (driveModel != null) {
+                throw new IllegalStateException("Growing matrix '" + id
+                        + "' cannot set cellModel(...): a growing cell never joins the matrix registry"
+                        + " that feeds the in-drive model");
+            }
+            return new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem(
+                    createItemProperties().stacksTo(1), key.get(), growPerBatch, growTicksPerBatch);
+        }
+
         long bytes = customBytes != null ? customBytes : size.bytes();
         int totalTypes = customTotalTypes != null
                 ? customTotalTypes
