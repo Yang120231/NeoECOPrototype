@@ -132,4 +132,15 @@ public enum SimplifyTier implements IECOTier {
     public ResourceLocation getCPUOverlayTexture() {
         return ResourceLocation.fromNamespaceAndPath("neoecoprototype", "textures/gui/tier/l1.png");
     }
+
+    /**
+     * eco's own default spells the tier number, and our tier index is 0, so without this the host panel
+     * labels every L1 cell "L0" - a tier that does not exist. eco started reading this on the panel path
+     * in 21.2.7 ({@code HostPanelTier.name} resolves the cell's tier and calls it), so on the floor we
+     * ship this method simply has no caller yet: it is a label waiting for its reader, not a version gate.
+     */
+    @Override
+    public net.minecraft.network.chat.Component getPanelTierName() {
+        return net.minecraft.network.chat.Component.literal("L1");
+    }
 }

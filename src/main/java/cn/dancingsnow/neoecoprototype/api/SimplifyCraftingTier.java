@@ -77,4 +77,10 @@ public enum SimplifyCraftingTier implements IECOTier {
     public ResourceLocation getCPUOverlayTexture() {
         return ResourceLocation.fromNamespaceAndPath("neoecoprototype", "textures/gui/tier/l1.png");
     }
+
+    /** Same reason as {@link SimplifyTier#getPanelTierName()}: the tier index is 0, and "L0" is not a tier. */
+    @Override
+    public net.minecraft.network.chat.Component getPanelTierName() {
+        return net.minecraft.network.chat.Component.literal("L1");
+    }
 }

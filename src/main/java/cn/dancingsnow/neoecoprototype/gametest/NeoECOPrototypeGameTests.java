@@ -6252,6 +6252,35 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * eco spells a tier with its own number, and our tier index is 0 - so if the override in
+     * {@link SimplifyTier} goes away, the host panel starts calling every L1 cell "L0", a tier that exists
+     * nowhere in the ecosystem. eco only began reading the hook on the panel path in 21.2.7, which is why
+     * this asserts the value rather than a drawn panel: on the floor we ship there is no caller to observe
+     * yet. The second half is the load-bearing one: tier index 0 is what makes an L1 host refuse a
+     * higher-tier cell, so if that number ever moves, the label is the least of what changed.
+     */
+    @GameTest(template = "empty", batch = "storage_panel_rows", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelTierNameReadsL1NotTheTierIndex(GameTestHelper helper) {
+        for (cn.dancingsnow.neoecoae.api.IECOTier tier : List.of(SimplifyTier.L1, SimplifyTier.L1_REINFORCED,
+                SimplifyTier.L1_ENERGIZED_THREADING, SimplifyTier.L1_PARALLEL_SWITCH,
+                cn.dancingsnow.neoecoprototype.api.SimplifyCraftingTier.L1)) {
+            String shown = tier.getPanelTierName().getString();
+            if (!"L1".equals(shown)) {
+                helper.fail(((Enum<?>) tier).name() + " labels itself \"" + shown + "\", expected L1 - eco's default"
+                        + " spells the tier index, which would read L0");
+                return;
+            }
+            if (tier.getTier() != 0) {
+                helper.fail(((Enum<?>) tier).name() + " no longer reports tier index 0, so the mount gate moved; it"
+                        + " now reports " + tier.getTier());
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
      * The host panel joins a cell to a row by number, so this table is the one place where a wrong digit
      * turns a fluid matrix into a mega item matrix - and the join is invisible until somebody opens the
      * panel. Asserted off the mapping itself rather than through a formed host, because the mapping is pure.
