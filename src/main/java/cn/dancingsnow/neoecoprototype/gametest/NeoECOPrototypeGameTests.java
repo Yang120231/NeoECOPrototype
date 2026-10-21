@@ -6354,17 +6354,32 @@ public final class NeoECOPrototypeGameTests {
      * so a regression here would silently hand every scripted cell the built-in's lava-free, config-paced
      * behaviour.
      *
-     * <p>This asserts on the record, not on an item, and that is a hard limit worth stating: an {@code Item}
-     * cannot be constructed once the registry has frozen, which is exactly when a gameTest runs. So the
-     * scripted path itself - {@code grows()} reaching this record through a real item, in a real drive - has
-     * no suite face at all and is verified in a client with a script.
+     * <p>This asserts on {@code Growth}, not on an item, and that is a hard limit worth stating: an
+     * {@code Item} cannot be constructed once the registry has frozen, which is exactly when a gameTest runs.
+     * So the scripted path itself - {@code grows()} reaching a growth object through a real item, in a real
+     * drive - has no suite face at all and is verified in a client with a script.
      */
     @GameTest(template = "empty", batch = "singularity_cell_yield", timeoutTicks = 100,
             templateNamespace = NeoECOPrototype.MOD_ID)
     public static void scriptedGrowingCellPaysItsOwnContentAtItsOwnSpeed(GameTestHelper helper) {
         var lava = appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.LAVA);
         var water = appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.WATER);
-        var growth = new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.Growth(lava, 7L, 600L);
+        var growth = new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.Growth(
+                () -> lava, 7L, 600L);
+        // The content is a supplier because a chemical id is not readable while items are still being
+        // registered, and the first read is kept: a drive asks this on every check, and resolving through the
+        // registry each time would make the mount path depend on a lookup that can only fail at runtime.
+        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        var lazy = new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.Growth(
+                () -> {
+                    reads.incrementAndGet();
+                    return water;
+                }, 1L, 60L);
+        if (!lazy.pays(water) || !lazy.content().equals(water) || reads.get() != 1) {
+            helper.fail("a growth resolved its key " + reads.get()
+                    + " times across two reads - it should ask its supplier once and keep the answer");
+            return;
+        }
         // The drive picks a cell's medium off the item, which forwards the key's own type. Lose this and a
         // fluid cell would be mounted in the item row and pay nothing forever.
         helper.assertTrue(growth.content().getType() == appeng.api.stacks.AEKeyType.fluids(),
@@ -6427,11 +6442,11 @@ public final class NeoECOPrototypeGameTests {
         helper.succeed();
     }
 
-    /** Whether constructing a {@code Growth} with these figures throws, as the record's own guard says it must. */
+    /** Whether constructing a {@code Growth} with these figures throws, as its own guard says it must. */
     private static boolean refusesGrowth(long perBatch, long ticksPerBatch) {
         try {
             new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.Growth(
-                    appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.LAVA),
+                    () -> appeng.api.stacks.AEFluidKey.of(net.minecraft.world.level.material.Fluids.LAVA),
                     perBatch, ticksPerBatch);
             return false;
         } catch (IllegalArgumentException expected) {

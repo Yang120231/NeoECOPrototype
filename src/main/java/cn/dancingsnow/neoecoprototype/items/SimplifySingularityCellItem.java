@@ -90,12 +90,23 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
     /**
      * What this instance grows and how fast, or null on the registered one.
      *
-     * <p>Its own record rather than fields on the item, because an {@code Item} cannot be built after the
+     * <p>Its own object rather than fields on the item, because an {@code Item} cannot be built after the
      * registry freezes - which is exactly when a pack's cell would first be interesting to read. The arithmetic
      * and the "does this cell pay that key" rule live here so both are reachable without an item at all.
+     *
+     * <p>The content is a supplier whose first read is kept, because a script builds this during the item
+     * registration event and {@code MekanismAPI.CHEMICAL_REGISTRY.get(id)} is not readable at that moment -
+     * it answers {@code NullPointerException: this.defaultValue is null} (measured 10-21, client startup).
+     * Everything that asks what a cell grows - a drive, a tooltip, Jade - runs after the freeze.
      */
-    public record Growth(AEKey content, long perBatch, long ticksPerBatch) {
-        public Growth {
+    public static final class Growth {
+        private final java.util.function.Supplier<AEKey> content;
+        @Nullable
+        private AEKey resolved;
+        private final long perBatch;
+        private final long ticksPerBatch;
+
+        public Growth(java.util.function.Supplier<AEKey> content, long perBatch, long ticksPerBatch) {
             if (content == null) {
                 throw new IllegalArgumentException("A growing cell has to say what it grows");
             }
@@ -103,16 +114,40 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
                 throw new IllegalArgumentException("A growing cell's batch and interval must be positive: "
                         + perBatch + "/" + ticksPerBatch);
             }
+            this.content = content;
+            this.perBatch = perBatch;
+            this.ticksPerBatch = ticksPerBatch;
         }
 
-        /** How much of {@link #content} is ready for a bank that started at {@code startGameTime}. */
+        /** How much of {@link #content()} is ready for a bank that started at {@code startGameTime}. */
         public long readyAt(long startGameTime, long drawn, long nowGameTime) {
             return bankOf(new Bank(startGameTime, drawn), nowGameTime, perBatch, ticksPerBatch);
         }
 
         /** Whether this cell hands out {@code what} at all. */
         public boolean pays(AEKey what) {
-            return content.equals(what);
+            return content().equals(what);
+        }
+
+        /** The one thing this cell ever holds, read on first use and then kept. */
+        public AEKey content() {
+            AEKey own = resolved;
+            if (own == null) {
+                own = java.util.Objects.requireNonNull(content.get(),
+                        "a growing cell's bound key resolved to nothing");
+                resolved = own;
+            }
+            return own;
+        }
+
+        /** How much the bank jumps per batch. */
+        public long perBatch() {
+            return perBatch;
+        }
+
+        /** How long between jumps, in world ticks. */
+        public long ticksPerBatch() {
+            return ticksPerBatch;
         }
     }
 
@@ -130,7 +165,9 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
      * time every {@code ticksPerBatch} world ticks. Both figures are required, because a half-set cell would
      * slow down whenever somebody edits the server config, which is not what a pack asked for.
      */
-    public SimplifySingularityCellItem(Item.Properties properties, AEKey content, long perBatch, long ticksPerBatch) {
+    public SimplifySingularityCellItem(Item.Properties properties,
+                                       java.util.function.Supplier<AEKey> content,
+                                       long perBatch, long ticksPerBatch) {
         super(properties);
         this.growth = new Growth(content, perBatch, ticksPerBatch);
     }
@@ -139,7 +176,7 @@ public final class SimplifySingularityCellItem extends Item implements IBasicECO
     public Growth growth() {
         return growth != null
                 ? growth
-                : new Growth(singularity(),
+                : new Growth(SimplifySingularityCellItem::singularity,
                         NeoECOPrototypeServerConfig.singularityCellAmountPerBatch(),
                         NeoECOPrototypeServerConfig.singularityCellTicksPerBatch());
     }

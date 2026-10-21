@@ -288,8 +288,16 @@ public final class StorageMatrixBuilder extends ItemBuilder {
                         + "' cannot set cellModel(...): a growing cell never joins the matrix registry"
                         + " that feeds the in-drive model");
             }
+            // Resolve what we can while the script is still running, so a wrong item or fluid id is a startup
+            // sentence naming the id rather than a crash the first time somebody mounts the cell. The chemical
+            // registry is the one that cannot be read yet at this moment (see ChemicalMatrixSupport), so a
+            // chemical growth stays a supplier and resolves on the cell's first runtime read.
+            appeng.api.stacks.AEKey eagerContent =
+                    type == StorageMatrixDefinition.MatrixType.CHEMICAL ? null : key.get();
             return new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem(
-                    createItemProperties().stacksTo(1), key.get(), growPerBatch, growTicksPerBatch);
+                    createItemProperties().stacksTo(1),
+                    eagerContent != null ? () -> eagerContent : key,
+                    growPerBatch, growTicksPerBatch);
         }
 
         long bytes = customBytes != null ? customBytes : size.bytes();
