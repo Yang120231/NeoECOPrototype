@@ -28,6 +28,8 @@ item_ids:
 
 L1 存储系统是一套可扩展的多方块，作用与 AE2 的<ItemLink id="ae2:drive" />相同——把存储矩阵挂进 ME 网络——但它自带能量缓冲，并且把 eco 的 L4 那套结构提前到 L1 这一级。待机总耗电是 eco L4 同级结构的 **1/8**。
 
+能挂进这台驱动器的矩阵有哪几族、各自容量与类型上限，集中在 [支持的存储矩阵](matrix_types.md) 一页对照。
+
 <GameScene zoom="4" interactive={true}>
   <ImportStructure src="../scenes/l1_storage_min.nbt" />
   <IsometricCamera yaw="45" pitch="30" />

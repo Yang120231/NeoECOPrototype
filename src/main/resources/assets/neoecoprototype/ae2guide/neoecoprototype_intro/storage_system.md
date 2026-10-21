@@ -28,6 +28,8 @@ item_ids:
 
 The L1 Storage System is an extensible multiblock that does the job of AE2's <ItemLink id="ae2:drive" /> - it mounts storage matrices into the ME network - but it carries its own energy buffer, and it brings eco's L4 shape forward to the L1 tier. It idles at **1/8** of what eco's L4 equivalent costs.
 
+Which matrix families fit in this drive, and what each one's capacity and type limit is, is laid out on one page: [Supported storage matrices](matrix_types.md).
+
 <GameScene zoom="4" interactive={true}>
   <ImportStructure src="../scenes/l1_storage_min.nbt" />
   <IsometricCamera yaw="45" pitch="30" />
