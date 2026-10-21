@@ -152,15 +152,29 @@ public enum SimplifyTier implements IECOTier {
     }
 
     /**
-     * The brackets eco paints above and below the host icon on the computation and crafting panels. It asks
-     * the tier, not the block, so one file answers both machines - the storage panel never comes here
-     * because its own widget prefers the texture its block hands over. eco reads this at 13x8 twice: the
-     * lower half is the idle bracket, the upper half the lit one, which is why the file is 13x16.
-     * {@code ECOTier} does not override this method, so eco's own panels keep their painted markers.
+     * The brackets eco paints above and below the host icon. It used to ask only the tier, which forced one
+     * file to answer every machine; since 21.2.9 each host block answers its own {@code *_MARKER} part and
+     * {@code HostPanelTier.drawMarker} is consulted only when the block stayed silent - so this is the
+     * fallback now, kept because a tier is also read by panels that have no block to ask. eco reads it at
+     * 13x8 twice: the lower half is the idle bracket, the upper half the lit one, which is why the file is
+     * 13x16. {@code ECOTier} does not override this method, so eco's own panels keep their painted markers.
      */
     @Override
     public net.minecraft.resources.ResourceLocation getHostMarkerTexture() {
         return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
                 "neoecoprototype", "textures/gui/panel/host_marker.png");
+    }
+
+    /**
+     * The whole panel sheet, asked by name. Each answer is a full-size copy of eco's own sheet with our L1
+     * columns drawn over it, and it is the only channel that reaches the cells cut by tier number - the
+     * queue strip's bracket pairs and the gauge ticks are read out of the sheet at a column eco only painted
+     * for its own L4/L6/L9, so on our machine they land on blank pixels no per-cell ask can cover.
+     * Names we do not have answer null, which is eco's own sheet unchanged.
+     */
+    @Override
+    @org.jetbrains.annotations.Nullable
+    public net.minecraft.resources.ResourceLocation getPanelAtlas(String atlas) {
+        return PanelAtlas.resolve(atlas);
     }
 }

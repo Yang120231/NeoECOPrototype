@@ -6565,24 +6565,113 @@ public final class NeoECOPrototypeGameTests {
         helper.succeed();
     }
 
+    /**
+     * The one channel that reaches a cell cropped by tier number: eco asks the tier for the sheet itself, by
+     * name, and every sprite on it is cut from the answer. Four things are worth pinning. Each name we answer
+     * has to name a file that is on the classpath <em>and</em> the same pixel size as the sheet it replaces -
+     * a wrong-size sheet stretches across the whole panel and nothing complains. A name we do not have has to
+     * answer null, which is eco's own sheet. Both of our tiers answer all six, because the storage panel asks
+     * {@code SimplifyTier} and the crafting one asks {@code SimplifyCraftingTier}. And eco's own tiers have to
+     * keep answering null - that is what proves shipping six sheets changes nothing on an L4/L6/L9 panel.
+     */
+    @GameTest(template = "empty", batch = "storage_panel_rows", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelAtlasesMatchTheSheetsTheyReplace(GameTestHelper helper) {
+        var ecoSheets = java.util.Map.<String, String[]>of(
+                "Computation-BACKGROUND_ATLAS", new String[]{"assets", "neoecoae", "textures", "guis",
+                        "eco_cpu_controller.png"},
+                "Computation-WIDGETS_ATLAS", new String[]{"assets", "neoecoae", "textures", "guis",
+                        "cpu_widget.png"},
+                "Crafting-CONTROLLER_ATLAS", new String[]{"assets", "neoecoae", "textures", "guis",
+                        "crafting_controller.png"},
+                "Crafting-WIDGETS_ATLAS", new String[]{"assets", "neoecoae", "textures", "guis",
+                        "crafting_widgets.png"},
+                "Storage-CONTROLLER_ATLAS", new String[]{"assets", "neoecoae", "textures", "guis", "storage",
+                        "storage_controller.png"},
+                "Storage-ATLAS", new String[]{"assets", "neoecoae", "textures", "guis", "storage",
+                        "storage_widget.png"});
+        for (var atlas : cn.dancingsnow.neoecoprototype.api.PanelAtlas.values()) {
+            var texture = atlas.texture();
+            var ours = pngDimensions("assets/" + texture.getNamespace() + "/" + texture.getPath());
+            if (ours == null) {
+                helper.fail(atlas.atlas() + " points at " + texture + ", which is not on the classpath,"
+                        + " so the whole panel would draw missing textures");
+                return;
+            }
+            var theirs = pngDimensionsFromMod("neoecoae", ecoSheets.get(atlas.atlas()));
+            if (theirs == null) {
+                helper.fail("eco's own sheet for " + atlas.atlas() + " is not readable, so this test cannot"
+                        + " say our copy matches it - the name or the path moved upstream");
+                return;
+            }
+            if (ours[0] != theirs[0] || ours[1] != theirs[1]) {
+                helper.fail(atlas.atlas() + ": our sheet is " + ours[0] + "x" + ours[1]
+                        + ", eco's is " + theirs[0] + "x" + theirs[1] + " - every rect on it is cut by"
+                        + " eco's own coordinates, so a different size slides them all");
+                return;
+            }
+            if (!texture.equals(SimplifyTier.L1.getPanelAtlas(atlas.atlas()))
+                    || !texture.equals(SimplifyCraftingTier.L1.getPanelAtlas(atlas.atlas()))) {
+                helper.fail("a tier did not answer " + atlas.atlas() + " with " + texture);
+                return;
+            }
+            if (cn.dancingsnow.neoecoae.api.ECOTier.L4.getPanelAtlas(atlas.atlas()) != null
+                    || cn.dancingsnow.neoecoae.api.ECOTier.L9.getPanelAtlas(atlas.atlas()) != null) {
+                helper.fail("eco's own tier answered " + atlas.atlas() + " with a sheet of its own, so the"
+                        + " null-means-eco's-copy contract this test leans on is not what ships");
+                return;
+            }
+        }
+        if (SimplifyTier.L1.getPanelAtlas("Storage-NO_SUCH_ATLAS") != null
+                || SimplifyCraftingTier.L1.getPanelAtlas("") != null) {
+            helper.fail("a name we do not have was answered with something, and eco would draw that instead"
+                    + " of its own sheet");
+            return;
+        }
+        helper.succeed();
+    }
+
     /** PNG header width and height, big-endian at byte 16 - no image library needed for a size check. */
     @javax.annotation.Nullable
     private static int[] pngDimensions(String path) {
         try (var in = NeoECOPrototype.class.getResourceAsStream("/" + path)) {
-            if (in == null) {
-                return null;
-            }
-            var head = in.readNBytes(24);
-            if (head.length < 24) {
-                return null;
-            }
-            return new int[]{(head[16] & 0xFF) << 24 | (head[17] & 0xFF) << 16 | (head[18] & 0xFF) << 8
-                            | (head[19] & 0xFF),
-                    (head[20] & 0xFF) << 24 | (head[21] & 0xFF) << 16 | (head[22] & 0xFF) << 8
-                            | (head[23] & 0xFF)};
+            return readPngSize(in);
         } catch (java.io.IOException failure) {
             return null;
         }
+    }
+
+    /**
+     * The same header read out of another mod's jar. {@code getResourceAsStream} cannot see it - NeoForge
+     * mounts mod files through its own filesystem, not the classloader - which is what a first draft of
+     * {@link #panelAtlasesMatchTheSheetsTheyReplace} measured the hard way.
+     */
+    @javax.annotation.Nullable
+    private static int[] pngDimensionsFromMod(String modId, String... segments) {
+        var owner = net.neoforged.fml.ModList.get().getModFileById(modId);
+        if (owner == null) {
+            return null;
+        }
+        try (var in = java.nio.file.Files.newInputStream(owner.getFile().findResource(segments))) {
+            return readPngSize(in);
+        } catch (Exception failure) {
+            return null;
+        }
+    }
+
+    @javax.annotation.Nullable
+    private static int[] readPngSize(java.io.InputStream in) throws java.io.IOException {
+        if (in == null) {
+            return null;
+        }
+        var head = in.readNBytes(24);
+        if (head.length < 24) {
+            return null;
+        }
+        return new int[]{(head[16] & 0xFF) << 24 | (head[17] & 0xFF) << 16 | (head[18] & 0xFF) << 8
+                        | (head[19] & 0xFF),
+                (head[20] & 0xFF) << 24 | (head[21] & 0xFF) << 16 | (head[22] & 0xFF) << 8
+                        | (head[23] & 0xFF)};
     }
 
     /**

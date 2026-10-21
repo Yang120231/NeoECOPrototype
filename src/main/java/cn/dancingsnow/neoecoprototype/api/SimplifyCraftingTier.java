@@ -87,7 +87,14 @@ public enum SimplifyCraftingTier implements IECOTier {
     /** Same brackets as {@link SimplifyTier#getHostMarkerTexture()}; eco asks each tier separately. */
     @Override
     public net.minecraft.resources.ResourceLocation getHostMarkerTexture() {
-        return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
-                "neoecoprototype", "textures/gui/panel/host_marker.png");
+        return ResourceLocation.fromNamespaceAndPath("neoecoprototype",
+                "textures/gui/panel/host_marker.png");
+    }
+
+    /** Same six sheets as {@link SimplifyTier#getPanelAtlas(String)}; the crafting panel asks its own tier. */
+    @Override
+    @org.jetbrains.annotations.Nullable
+    public ResourceLocation getPanelAtlas(String atlas) {
+        return PanelAtlas.resolve(atlas);
     }
 }
