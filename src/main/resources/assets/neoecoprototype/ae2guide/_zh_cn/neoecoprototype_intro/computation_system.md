@@ -81,11 +81,16 @@ item_ids:
 
 `neoecoprototype-server.toml` 的 `l1_computation` 段只作用于 L1 一档，更高档沿用 eco 自己的数值。
 
-| 配置项 | 默认 | 含义 | 什么时候改 |
-|--------|------|------|------------|
-| `cpu_threads` | 2 | 一台普通 L1 子系统的合成线程数 | 一台主机带不动那么多装配机器时 |
-| `cpu_accelerators` | 24 | 每块普通并行核心提供的并行数 | 想让同样的核心数开更多路合成时 |
-| `cpu_total_bytes` | 1,572,864 | 该档标称的合成存储字节数（1 MiB 的 1.5 倍） | 合成中途报合成存储不够时 |
-| `energized_cell_total_bytes` | 5,242,880 | 每只 ECO - CE1R 闪存晶阵的字节数（4 MiB 加 30%） | 同上，且你用的是盈能强化那一档 |
+| 配置项 | 默认 | 含义 |
+|--------|------|------|
+| `cpu_threads` | 2 | 一台普通 L1 子系统的合成线程数 |
+| `cpu_accelerators` | 24 | 每块普通并行核心提供的并行数 |
+| `cpu_total_bytes` | 1,572,864 | 该档标称的合成存储字节数（1 MiB 的 1.5 倍） |
+| `energized_cell_total_bytes` | 5,242,880 | 每只 ECO - CE1R 闪存晶阵的字节数（4 MiB 加 30%） |
+
+- `cpu_threads`：一台主机带不动那么多装配机器时
+- `cpu_accelerators`：想让同样的核心数开更多路合成时
+- `cpu_total_bytes`：合成中途报合成存储不够时
+- `energized_cell_total_bytes`：同上，且你用的是盈能强化那一档
 
 改完要重进世界。线程在集群构造时分配，所以已经成型的结构要拆掉重新成型才吃到新值。
