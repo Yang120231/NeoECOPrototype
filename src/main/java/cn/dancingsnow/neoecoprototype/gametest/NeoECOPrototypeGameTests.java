@@ -6377,16 +6377,34 @@ public final class NeoECOPrototypeGameTests {
                 }
             }
         }
-        // The lamps are the one cell this deliberately does not answer: the lit eco hands over is its own
-        // predicate (lamp 0 is its endgame figure), not "this host holds an energized parallel core", and the
-        // channel carries art only. Recolouring it would rename a signal the tooltip beside it still
-        // describes differently - so a future change that starts answering it has to go red here first.
-        if (computationHost.getPanelTexture(computationHostState,
-                cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_STATUS,
-                0, true, false) != null) {
-            helper.fail("a computation status lamp was answered with our art while its lit still means eco's"
-                    + " own predicate, so the panel and its tooltip would disagree");
+        // Lamp 0 is the one status cell we answer, and it answers from the placed state rather than from the
+        // lit eco hands over: that predicate is eco's endgame figure and an L1 host can never satisfy it, so
+        // the cell would sit on its default glyph forever. The other five lamps stay eco's, and a change that
+        // starts answering them has to go red here first.
+        var statusPart = cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_STATUS;
+        var computationBlock = ModRegistration.SIMPLIFY_COMPUTATION_SYSTEM_BLOCK.get();
+        var plainHost = computationBlock.defaultBlockState();
+        var energizedHost = plainHost.setValue(
+                cn.dancingsnow.neoecoprototype.block.computation.SimplifyComputationSystemBlock
+                        .ENERGIZED_PARALLEL_CORE, true);
+        if (computationHost.getPanelTexture(plainHost, statusPart, 0, true, false) != null) {
+            helper.fail("lamp 0 was answered on a host with no energized parallel core behind it, so the"
+                    + " panel would claim a core that is not there");
             return;
+        }
+        var energizedLamp = computationHost.getPanelTexture(energizedHost, statusPart, 0, false, false);
+        if (energizedLamp == null || !"neoecoprototype".equals(energizedLamp.getNamespace())
+                || !energizedLamp.getPath().endsWith("computation_status_0_energized.png")) {
+            helper.fail("a host whose placed state carries the energized parallel core should light lamp 0"
+                    + " with our own glyph - eco's lit is its endgame predicate and never fires on L1 - but"
+                    + " it answered " + energizedLamp);
+            return;
+        }
+        for (int index = 1; index < 6; index++) {
+            if (computationHost.getPanelTexture(energizedHost, statusPart, index, true, false) != null) {
+                helper.fail("lamp " + index + " is eco's predicate to light, and we answered it anyway");
+                return;
+            }
         }
         var corePart = cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_CORE;        var plainNamed = threading.getPanelTexture(
                 ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get().defaultBlockState(), corePart);
@@ -6400,12 +6418,13 @@ public final class NeoECOPrototypeGameTests {
             return;
         }
         final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {10, 6}, {13, 18}, {13, 16}, {13, 18}, {13, 18},
-                {13, 16}, {13, 16}, {15, 26}, {15, 26}, {15, 26}, {15, 26}};
+                {13, 16}, {13, 16}, {15, 26}, {15, 26}, {15, 26}, {15, 26}, {12, 12}};
         String[] files = {"computation_upper", "computation_core", "computation_lower",
                 "computation_core_energized", "storage_tier", "storage_marker",
                 "computation_tier", "crafting_tier", "computation_marker", "crafting_marker",
                 "computation_switch_on", "computation_switch_on_hover",
-                "crafting_mode_button_on", "crafting_mode_button_on_hover"};
+                "crafting_mode_button_on", "crafting_mode_button_on_hover",
+                "computation_status_0_energized"};
         for (int i = 0; i < files.length; i++) {
             var size = pngDimensions("assets/" + NeoECOPrototype.MOD_ID + "/textures/gui/panel/"
                     + files[i] + ".png");

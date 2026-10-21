@@ -139,6 +139,7 @@ public class SimplifyComputationSystemBlock extends ECOComputationSystem
     private static final ResourceLocation PANEL_MARKER = panel("computation_marker.png");
     private static final ResourceLocation SWITCH_ON = panel("computation_switch_on.png");
     private static final ResourceLocation SWITCH_ON_HOVER = panel("computation_switch_on_hover.png");
+    private static final ResourceLocation STATUS_0_ENERGIZED = panel("computation_status_0_energized.png");
 
     @Nullable
     private static ResourceLocation panel(String file) {
@@ -158,21 +159,29 @@ public class SimplifyComputationSystemBlock extends ECOComputationSystem
     }
 
     /**
-     * The three switches' tiles. {@code index} is which one eco is dressing - 0 substitutions,
-     * 1 cycle planning, 2 fast planner, read off its own name comparison in {@code createSwitch} - and the
-     * artwork has one green tile for the engaged state, so the answer does not branch on it.
+     * The three switches' tiles, and the first status lamp.
      *
-     * <p>Off is left to eco on purpose: eco's off tile and the artwork sheet's are the same pixels.
-     * {@code COMPUTATION_STATUS} stays unanswered for the same kind of reason in reverse - the {@code lit}
-     * eco hands us is its own predicate (lamp 0 is {@code endgamePink}), not "this host holds an energized
-     * parallel core", and the channel carries art only. Swapping colours there would rename a signal the
-     * tooltip next to it still describes differently.
+     * <p>A switch's {@code index} says which one eco is dressing - 0 substitutions, 1 cycle planning,
+     * 2 fast planner, read off its own name comparison in {@code createSwitch} - and the artwork has one
+     * green tile for the engaged state, so the answer does not branch on it. The idle state is left to eco:
+     * its off tile and the artwork sheet's are the same pixels.
+     *
+     * <p>Lamp 0 is the one cell that ignores {@code lit}, and that is a deliberate disagreement. eco lights
+     * it from its own endgame predicate, which an L1 host can never satisfy, so the cell would sit on its
+     * default glyph forever; the artwork's second row is the same lamp in the energised colour, and the fact
+     * it is there to carry - "the cell behind this host holds an energized parallel core" - is a block
+     * property only the placed state has. Every other lamp keeps eco's predicate untouched.
      */
     @Override
     @Nullable
     public ResourceLocation getPanelTexture(BlockState state,
                                             IHostPanelTextureProvider.Part part,
                                             int index, boolean on, boolean hover) {
+        if (part == IHostPanelTextureProvider.Part.COMPUTATION_STATUS) {
+            return index == 0 && state.hasProperty(ENERGIZED_PARALLEL_CORE)
+                    && state.getValue(ENERGIZED_PARALLEL_CORE)
+                    ? STATUS_0_ENERGIZED : null;
+        }
         if (part != IHostPanelTextureProvider.Part.COMPUTATION_SWITCH || !on) {
             return null;
         }
