@@ -48,6 +48,21 @@ dependencies {
     implementation files("libs/ldlib2-neoforge-1.21.1-2.2.40-all.jar")  // LDLib2 (eco 运行依赖, modId: ldlib2) - eco 21.2.1 raised its floor to [2.2.40,) and 21.2.2 keeps it
     implementation "dev.vfyjxf:taffy:1.1.3"
     implementation "org.appliedenergistics.yoga:yoga:1.0.0"
+// ABI target: eco 21.2.9 (moved 2026-10-21; the previous line of sight was 21.2.7, moved 2026-10-20).
+// Why 21.2.9 and not 21.2.8: the panel channels #125 asked for are not in 21.2.8 - IHostPanelTextureProvider$Part
+// still has 5 members there, and 21.2.9 has 12 (COMPUTATION_TIER / COMPUTATION_MARKER / CRAFTING_TIER /
+// CRAFTING_MARKER / COMPUTATION_STATUS / COMPUTATION_SWITCH / CRAFTING_MODE) plus the
+// getPanelTexture(BlockState, Part, int, boolean, boolean) overload and IECOTier.getPanelAtlas(String).
+// Class-level scan over the 104 neoecoae types our bytecode and imports reference: all 104 resolve in both
+// 21.2.7 and 21.2.9. Entry-level: 1477 -> 1498 classes, +23 / -2, and neither removed class is one we name
+// (the two are ECOComputationCoolingControllerRenderer$1 and a thunderbolt compat inner class). Non-class
+// jar entries: 0 removed, so the resource side is a pure addition this round.
+// Member-level: python tools/audit_eco_abi.py over classes compiled against 21.2.7 reports the same 151-line
+// MISSING list for 21.2.7 (the control), 21.2.8 and 21.2.9 - supertype members, <init> and getClass are
+// javap artefacts, so the reading is the equality, not the length.
+// Not covered by any of the above: six eco ids we resolve through registries (flux, omni, complex_omni,
+// mega_chemical, mega_fluid, mekanism). A jar listing cannot prove a registry entry exists, so those six are
+// suite-and-client readings - which is why AGENTS.md says the symbol face is not a verdict.
 // ABI target: eco 21.2.7 (moved 2026-10-20; the previous line of sight was 21.2.6, moved 2026-10-16).
 // Member-level scan over the 104 neoecoae types we reference: 21.2.6 -> 21.2.7 resolves 104 / 104 in both
 // jars and moves members on 7 of them - every removal is a synthetic lambda$... whose numbering shifted,
@@ -96,7 +111,7 @@ dependencies {
 // GuiTitleProvider (PR #110) and grid.NEMachineLookup (PR #109) are still carried; both are in the 104.
 // A sync is certified by compiling against that jar and running the suite. tools/audit_eco_abi.py is a
 // companion check, not a verdict -- read its docstring before believing its "MISSING" list.
-    implementation files("neoecobeta/neoecoae-21.2.7.jar")
+    implementation files("neoecobeta/neoecoae-21.2.9.jar")
     // MegaCells 4.11.0 is the supported optional integration version.
     implementation files("libs/megacells-4.11.0.jar")
     // Dev-runtime only: keep them off the compile classpath but on the runtime classpath.
