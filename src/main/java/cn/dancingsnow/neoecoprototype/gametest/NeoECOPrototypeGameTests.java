@@ -6313,8 +6313,82 @@ public final class NeoECOPrototypeGameTests {
                 return;
             }
         }
-        var corePart = cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_CORE;
-        var plainNamed = threading.getPanelTexture(
+        // eco 21.2.9 let the computation and crafting hosts into the same protocol one cell deeper: they own
+        // their badge and their bracket, and the switch and mode tiles are now asked per (index, on, hover)
+        // rather than picked from eco's own sheet. So the answers are checked across all the combinations,
+        // not once - the twelve switch asks are 0..2 x on/off x hover, and eco derives those indices from the
+        // widget's own name (substitutions / cycle planning / fast planner, and active cooling = 0 with
+        // overclock = 1), which is the half a pack cannot see.
+        var providerParts = cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.values();
+        var computationHost = (cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider)
+                ModRegistration.SIMPLIFY_COMPUTATION_SYSTEM_BLOCK.get();
+        var craftingHost = (cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider)
+                ModRegistration.SIMPLIFY_CRAFTING_SYSTEM_BLOCK.get();
+        var computationHostState = ModRegistration.SIMPLIFY_COMPUTATION_SYSTEM_BLOCK.get().defaultBlockState();
+        var craftingHostState = ModRegistration.SIMPLIFY_CRAFTING_SYSTEM_BLOCK.get().defaultBlockState();
+        for (var part : providerParts) {
+            boolean ours = part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_TIER
+                    || part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_MARKER;
+            if ((computationHost.getPanelTexture(computationHostState, part) != null) != ours) {
+                helper.fail("the computation host owns its badge and bracket only, and its answer for "
+                        + part + " was " + ours);
+                return;
+            }
+            ours = part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.CRAFTING_TIER
+                    || part == cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.CRAFTING_MARKER;
+            if ((craftingHost.getPanelTexture(craftingHostState, part) != null) != ours) {
+                helper.fail("the crafting host owns its badge and bracket only, and its answer for "
+                        + part + " was " + ours);
+                return;
+            }
+        }
+        // Off stays eco's: its off tile and the artwork sheet's are the same pixels, so answering it would
+        // only move the maintenance of a picture nobody can tell apart onto us.
+        for (int index = 0; index < 3; index++) {
+            for (boolean on : new boolean[]{false, true}) {
+                for (boolean hover : new boolean[]{false, true}) {
+                    var named = computationHost.getPanelTexture(computationHostState,
+                            cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_SWITCH,
+                            index, on, hover);
+                    if ((named != null) != on) {
+                        helper.fail("switch " + index + " with on=" + on + " hover=" + hover + " answered "
+                                + named + " - the engaged state is ours and the idle one is eco's");
+                        return;
+                    }
+                    if (on && named.getPath().endsWith("_hover.png") != hover) {
+                        helper.fail("switch " + index + " hover=" + hover + " named " + named
+                                + ", so hover and rest would draw the same tile");
+                        return;
+                    }
+                }
+            }
+        }
+        for (int index = 0; index < 2; index++) {
+            for (boolean on : new boolean[]{false, true}) {
+                for (boolean hover : new boolean[]{false, true}) {
+                    var named = craftingHost.getPanelTexture(craftingHostState,
+                            cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.CRAFTING_MODE,
+                            index, on, hover);
+                    if ((named != null) != on) {
+                        helper.fail("mode button " + index + " with on=" + on + " hover=" + hover + " answered "
+                                + named);
+                        return;
+                    }
+                }
+            }
+        }
+        // The lamps are the one cell this deliberately does not answer: the lit eco hands over is its own
+        // predicate (lamp 0 is its endgame figure), not "this host holds an energized parallel core", and the
+        // channel carries art only. Recolouring it would rename a signal the tooltip beside it still
+        // describes differently - so a future change that starts answering it has to go red here first.
+        if (computationHost.getPanelTexture(computationHostState,
+                cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_STATUS,
+                0, true, false) != null) {
+            helper.fail("a computation status lamp was answered with our art while its lit still means eco's"
+                    + " own predicate, so the panel and its tooltip would disagree");
+            return;
+        }
+        var corePart = cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider.Part.COMPUTATION_CORE;        var plainNamed = threading.getPanelTexture(
                 ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get().defaultBlockState(), corePart);
         var energized = (cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider)
                 ModRegistration.ENERGIZED_COMPUTATION_THREADING_CORE_BLOCK.get();
@@ -6325,10 +6399,11 @@ public final class NeoECOPrototypeGameTests {
                     + plainNamed + ", so the panel cannot show which core is installed");
             return;
         }
-        final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {10, 6}, {13, 18}, {13, 16},
-                {15, 26}, {15, 26}, {15, 26}, {15, 26}};
+        final int[][] wanted = {{10, 5}, {10, 6}, {10, 6}, {10, 6}, {13, 18}, {13, 16}, {13, 18}, {13, 18},
+                {13, 16}, {13, 16}, {15, 26}, {15, 26}, {15, 26}, {15, 26}};
         String[] files = {"computation_upper", "computation_core", "computation_lower",
                 "computation_core_energized", "storage_tier", "storage_marker",
+                "computation_tier", "crafting_tier", "computation_marker", "crafting_marker",
                 "computation_switch_on", "computation_switch_on_hover",
                 "crafting_mode_button_on", "crafting_mode_button_on_hover"};
         for (int i = 0; i < files.length; i++) {

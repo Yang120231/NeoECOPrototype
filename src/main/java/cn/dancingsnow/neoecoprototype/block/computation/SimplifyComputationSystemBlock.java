@@ -1,9 +1,11 @@
 package cn.dancingsnow.neoecoprototype.block.computation;
 
+import cn.dancingsnow.neoecoae.api.IHostPanelTextureProvider;
 import cn.dancingsnow.neoecoae.blocks.NEBlock;
 import cn.dancingsnow.neoecoae.blocks.computation.ECOComputationSystem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -12,6 +14,7 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.util.RandomSource;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,7 +39,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * was a copy of the plain face and the property only bought a 512-entry blockstate -- that premise is gone
  * now that the sheets differ.
  */
-public class SimplifyComputationSystemBlock extends ECOComputationSystem {
+public class SimplifyComputationSystemBlock extends ECOComputationSystem
+        implements IHostPanelTextureProvider {
     /** True when the interface cell holds {@code simplify_computation_network_interface}, the GUI one. */
     public static final BooleanProperty COMMUNICATION_INTERFACE =
             BooleanProperty.create("communication_interface");
@@ -128,5 +132,50 @@ public class SimplifyComputationSystemBlock extends ECOComputationSystem {
 
     private static BlockState pinned(BlockState state, Property<Boolean> bit) {
         return state.hasProperty(bit) && state.getValue(bit) ? state.setValue(bit, false) : state;
+    }
+
+    /** The L1 badge, cut by eco at 13x18, and the host bracket, read as two 13x8 halves. */
+    private static final ResourceLocation PANEL_TIER = panel("computation_tier.png");
+    private static final ResourceLocation PANEL_MARKER = panel("computation_marker.png");
+    private static final ResourceLocation SWITCH_ON = panel("computation_switch_on.png");
+    private static final ResourceLocation SWITCH_ON_HOVER = panel("computation_switch_on_hover.png");
+
+    @Nullable
+    private static ResourceLocation panel(String file) {
+        return ResourceLocation.fromNamespaceAndPath(
+                cn.dancingsnow.neoecoprototype.NeoECOPrototype.MOD_ID, "textures/gui/panel/" + file);
+    }
+
+    @Override
+    @Nullable
+    public ResourceLocation getPanelTexture(BlockState state,
+                                            IHostPanelTextureProvider.Part part) {
+        return switch (part) {
+            case COMPUTATION_TIER -> PANEL_TIER;
+            case COMPUTATION_MARKER -> PANEL_MARKER;
+            default -> null;
+        };
+    }
+
+    /**
+     * The three switches' tiles. {@code index} is which one eco is dressing - 0 substitutions,
+     * 1 cycle planning, 2 fast planner, read off its own name comparison in {@code createSwitch} - and the
+     * artwork has one green tile for the engaged state, so the answer does not branch on it.
+     *
+     * <p>Off is left to eco on purpose: eco's off tile and the artwork sheet's are the same pixels.
+     * {@code COMPUTATION_STATUS} stays unanswered for the same kind of reason in reverse - the {@code lit}
+     * eco hands us is its own predicate (lamp 0 is {@code endgamePink}), not "this host holds an energized
+     * parallel core", and the channel carries art only. Swapping colours there would rename a signal the
+     * tooltip next to it still describes differently.
+     */
+    @Override
+    @Nullable
+    public ResourceLocation getPanelTexture(BlockState state,
+                                            IHostPanelTextureProvider.Part part,
+                                            int index, boolean on, boolean hover) {
+        if (part != IHostPanelTextureProvider.Part.COMPUTATION_SWITCH || !on) {
+            return null;
+        }
+        return hover ? SWITCH_ON_HOVER : SWITCH_ON;
     }
 }
