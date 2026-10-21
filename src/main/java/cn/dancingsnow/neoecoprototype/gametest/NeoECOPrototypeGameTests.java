@@ -10495,4 +10495,63 @@ public final class NeoECOPrototypeGameTests {
                     helper.succeed();
                 });
     }
+
+    /**
+     * The lit-pass wrapper our client installs for the cooling controller is keyed on one string - this
+     * blockstate file's name - and the coupling fails in silence: rename the file and the block still draws,
+     * just unlit, with nothing to point at. So the guard reads the file under that same name and checks the
+     * shape the wrapper assumes, which is eight formed variants (four facings, each with both mirror
+     * settings) pointing at the two composite models the wrapper re-lights. Composite is the part that keeps
+     * the two passes from doubling up: the wrapper hands the terrain layer nothing, so the geometry has to
+     * exist behind a child model rather than on the blockstate model itself.
+     */
+    @GameTest(template = "empty", batch = "cooling_controller_art", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void coolingControllerFormedVariantsAreWhatTheWrapperMatches(GameTestHelper helper) {
+        String states = readResource(
+                "/assets/neoecoprototype/blockstates/simplify_computation_cooling_controller.json", helper);
+        if (states == null) {
+            return;
+        }
+        var variants = com.google.gson.JsonParser.parseString(states).getAsJsonObject()
+                .getAsJsonObject("variants");
+        if (variants.size() == 0) {
+            helper.fail("the cooling controller blockstate carries no variants, so this guard would pass on"
+                    + " an empty scan");
+            return;
+        }
+        int formed = 0;
+        for (var entry : variants.entrySet()) {
+            if (!java.util.List.of(entry.getKey().split(",")).contains("formed=true")) {
+                continue;
+            }
+            formed++;
+            var model = entry.getValue().getAsJsonObject().get("model").getAsString();
+            if (!model.endsWith("computation_cooling_controller/controller_l1_formed")
+                    && !model.endsWith("computation_cooling_controller/controller_l1_formed_mirrored")) {
+                helper.fail("variant " + entry.getKey() + " draws " + model + ", which the wrapper does not"
+                        + " recognise as a formed cooling controller");
+                return;
+            }
+        }
+        if (formed != 8) {
+            helper.fail("the blockstate carries " + formed + " formed variant(s); the wrapper was measured"
+                    + " against 8, which is four facings times both mirror settings");
+            return;
+        }
+        for (var file : java.util.List.of("controller_l1_formed", "controller_l1_formed_mirrored")) {
+            String json = readResource("/assets/neoecoprototype/models/block/computation_cooling_controller/"
+                    + file + ".json", helper);
+            if (json == null) {
+                return;
+            }
+            var root = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+            if (!root.has("loader") || !"neoforge:composite".equals(root.get("loader").getAsString())) {
+                helper.fail(file + " is not a neoforge:composite model, so the terrain layer would draw it"
+                        + " as well and the lit pass would double it up");
+                return;
+            }
+        }
+        helper.succeed();
+    }
 }

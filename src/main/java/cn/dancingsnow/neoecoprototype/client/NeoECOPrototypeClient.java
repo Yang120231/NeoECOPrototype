@@ -11,10 +11,12 @@ import cn.dancingsnow.neoecoae.api.ECOComputationModels;
 import cn.dancingsnow.neoecoae.client.rendering.FixedBlockEntityRenderers;
 import cn.dancingsnow.neoecoprototype.integration.kubejs.InfiniteMatrixClientModels;
 import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
+import cn.dancingsnow.neoecoprototype.client.model.SimplifyCoolingControllerBakedModel;
 import cn.dancingsnow.neoecoprototype.client.render.FumoItemRenderer;
 import cn.dancingsnow.neoecoprototype.client.render.FumoModel;
 import cn.dancingsnow.neoecoprototype.client.render.FumoRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyComputationDriveRenderer;
+import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyCoolingControllerRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyDriveRenderer;
 import cn.dancingsnow.neoecoprototype.menu.ProcessorAssemblerMenu;
 import cn.dancingsnow.neoecoprototype.registration.ModRegistration;
@@ -221,6 +223,11 @@ public final class NeoECOPrototypeClient {
                 new SimplifyDriveRenderer());
         FixedBlockEntityRenderers.register(ModRegistration.SIMPLIFY_COMPUTATION_DRIVE_BE.get(),
                 new SimplifyComputationDriveRenderer());
+        // eco's own lighting pass covers COMPUTATION_DRIVE, ECO_DRIVE and its three cooling controller tiers,
+        // and its model selector matches "neoecoae" plus three literal paths - so our controller joins by
+        // registering here and wrapping its own models below, not by waiting for that list to open.
+        FixedBlockEntityRenderers.register(ModRegistration.SIMPLIFY_COMPUTATION_COOLING_CONTROLLER_BE.get(),
+                new SimplifyCoolingControllerRenderer());
         // Same hook AE2's StyleManager uses for its style cache: reloads must discard the parsed copy
         // or a resource pack could never override our assembler layout. FumoItemRenderer joins it for
         // the same reason - vanilla rebuilds block entity renderers on reload but not the item one.
@@ -230,6 +237,24 @@ public final class NeoECOPrototypeClient {
                 FumoItemRenderer.forgetCache();
             });
         }
+    }
+
+    /**
+     * Wraps our formed cooling controller so its geometry is drawn only through the lit pass. eco does the
+     * same for its three tiers, but its selector is a namespace test plus three literal paths, so nothing we
+     * ship can join it and the wrapper has to come from our side.
+     *
+     * <p>The match is a string comparison against our blockstate file name, which is why
+     * {@code coolingControllerFormedVariantsAreWhatTheWrapperMatches} reads that same file: renaming it would
+     * otherwise cost a lit face and leave nothing but a dark block to explain.
+     */
+    @SubscribeEvent
+    public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
+        event.getModels().replaceAll((location, model) ->
+                NeoECOPrototype.MOD_ID.equals(location.id().getNamespace())
+                        && "simplify_computation_cooling_controller".equals(location.id().getPath())
+                        && java.util.List.of(location.variant().split(",")).contains("formed=true")
+                        ? new SimplifyCoolingControllerBakedModel(model) : model);
     }
 
     @SubscribeEvent
