@@ -102,8 +102,8 @@ StartupEvents.registry('item', event => {
     .grows(128, 600)
     .displayName('熔岩自产矩阵 | 每 600 刻 128')
 
-  // 不写数量档位：bytes(...) / totalTypes(...) / size(...) / cellModel(...) 一律会被拒绝，
-  // 它没有字节预算可描述，也不进矩阵注册表。
+  // 不写数量档位：bytes(...) / totalTypes(...) / size(...) 会被拒绝，它没有字节预算可描述。
+  // 外观默认走无限家族（银灰混凝土外壳 + 无限那枚驱动器芯片），要换用 material(...)。
   event.create('hydrogen_grower', 'neoecoprototype:storage_matrix')
     .chemicalType('mekanism:hydrogen')
     .grows(1, 1200)

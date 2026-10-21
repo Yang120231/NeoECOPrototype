@@ -247,6 +247,7 @@ StartupEvents.registry('item', event => {
 | fluid 流体 | `item/simplify_fluid_storage_cell_1k` | `block/cell/storage_cell_l1_fluid` | 流体外壳 |
 | chemical 化学品 | `item/simplify_chemical_storage_cell_1k` | `block/cell/storage_cell_l1_chemical` | 化学品外壳 |
 | infinite 无限 | `item/simplify_concrete_storage_cell` | `block/cell/storage_cell_l1_concrete` | 无限银灰 |
+| grows 自产（不写 material 时） | `item/simplify_concrete_storage_cell` | `block/cell/storage_cell_l1_concrete` | 无限银灰（它属于无限家族，不跟随绑定的媒介） |
 | other 其他 | `item/simplify_default_storage_cell` | `block/cell/storage_cell_l1_custom` | 原量子外壳 / 驱动器棕色 |
 
 固定物品家族的材质（同样由 `MatrixMaterials` 记录，供对照）：
@@ -319,16 +320,17 @@ StartupEvents.registry('item', event => {
 - 往它推任何东西都是 0，只出不进。
 - 插进驱动器、被网络问过库存才开始计时；**放在身上不算**（和奇点仓同一条规则）。
 - 库存没有上限，长到 `long` 顶就饱和、不回绕；已经被取走的部分不会自己回来。
-- 它不进 `StorageMatrixRegistry`，所以 `cellModel(...)` 会被拒绝（那张注册表正是驱动器格子模型的来源）；`bytes(...)`、`totalTypes(...)`、`size(...)` 同样拒绝 —— 它没有字节预算可描述。
+- 它属于**无限家族**：不写 `.material(...)` 时戴银灰混凝土外壳（和 `infinite` 档那几只同款），不跟随绑定的媒介 —— 一只没有字节预算的仓套上流体外壳会说法不一致。`.material('other')` 一类的显式指定照旧听脚本的。
+- 它也进 `StorageMatrixRegistry`（按 `infinite` 定义），为的是驱动器那一格有模型可读；所以 `cellModel(...)` 可以用。`bytes(...)`、`totalTypes(...)`、`size(...)` 仍然拒绝 —— 它没有字节预算可描述。
 - 不能借 `universal` / `quantum` 家族：那两个后端存的是网络推进来的东西。
 - 待机耗电固定 1.0，与奇点仓一致；物品堆叠上限 1。
 - 主机面板上它和奇点仓一样不占存储那一族的行；数量写在它自己的 tooltip 与玉的驱动器提示里，那一行会带上内容名。
-- 脚本造的这一只在驱动器格子里长什么样**没有眼验过**：我们只给注册的那只奇点仓登记过格子模型，所以这一格要开一次客户端确认。
 - 注册表冻结之后不能再造物品，所以这类脚本只在启动脚本里跑，改完要重启游戏。
 
 **这条的套件面只断在算法上**：注册表冻结后连一个没注册的 `Item` 都造不出来，
-gameTest 恰好跑在冻结之后，所以断言落在 `SimplifySingularityCellItem.Growth` 这份记录上；
-`grows(...)` 接到真物品、真驱动器的那一段，只能开一次客户端配一份脚本来读。
+gameTest 恰好跑在冻结之后，所以断言落在 `SimplifySingularityCellItem.Growth` 这个对象上；
+`grows(...)` 接到真物品那一段已在客户端实测注册通过（化学那只会把密钥留到第一次运行期才解，
+见上），驱动器格子里的外观与产量跳变还要开一次存档眼验。
 
 ### 新矩阵注册 API（Java）
 

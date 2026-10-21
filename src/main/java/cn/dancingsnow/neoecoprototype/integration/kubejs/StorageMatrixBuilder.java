@@ -64,9 +64,18 @@ public final class StorageMatrixBuilder extends ItemBuilder {
         return this;
     }
 
-    /** The matrix's material: an explicit override, else the palette of its kind. */
+    /**
+     * The matrix's material: an explicit override, else the palette of its kind.
+     *
+     * <p>A growing cell is the exception, and it is the infinite family's rather than its medium's: a fluid
+     * housing would describe a byte budget it has not got, while the endless members of this family already
+     * wear the silver concrete shell and share the in-drive chip.
+     */
     public MatrixMaterials.Kind resolvedMaterial() {
-        return material != null ? material : MatrixMaterials.of(type, size);
+        if (material != null) {
+            return material;
+        }
+        return growing ? MatrixMaterials.Kind.INFINITE : MatrixMaterials.of(type, size);
     }
 
     private ResourceLocation inventoryModelOrDefault() {
@@ -264,8 +273,8 @@ public final class StorageMatrixBuilder extends ItemBuilder {
                             .formatted(id));
         }
         if (growing) {
-            // A growing cell is its own item class and answers for itself: it is deliberately not put in the
-            // matrix registry, whose whole job is describing capacity, and whose model pass assumes that.
+            // It answers for itself where its stock is concerned; it still joins the matrix registry, because
+            // that is the list the in-drive model pass reads, and a script-made item is only reachable there.
             if (key == null) {
                 throw new IllegalStateException("Growing matrix '" + id
                         + "' must bind what it grows with itemType(...), fluidType(...) or chemicalType(...)");
@@ -283,21 +292,20 @@ public final class StorageMatrixBuilder extends ItemBuilder {
                 throw new IllegalStateException("Growing matrix '" + id
                         + "' cannot set size(...) - it has no byte budget to size");
             }
-            if (driveModel != null) {
-                throw new IllegalStateException("Growing matrix '" + id
-                        + "' cannot set cellModel(...): a growing cell never joins the matrix registry"
-                        + " that feeds the in-drive model");
-            }
             // Resolve what we can while the script is still running, so a wrong item or fluid id is a startup
             // sentence naming the id rather than a crash the first time somebody mounts the cell. The chemical
             // registry is the one that cannot be read yet at this moment (see ChemicalMatrixSupport), so a
             // chemical growth stays a supplier and resolves on the cell's first runtime read.
             appeng.api.stacks.AEKey eagerContent =
                     type == StorageMatrixDefinition.MatrixType.CHEMICAL ? null : key.get();
-            return new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem(
+            var grown = new cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem(
                     createItemProperties().stacksTo(1),
                     eagerContent != null ? () -> eagerContent : key,
                     growPerBatch, growTicksPerBatch);
+            StorageMatrixRegistry.register(StorageMatrixDefinition.infinite(id, type, SimplifyTier.L1,
+                    cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.IDLE_DRAIN,
+                    inventoryModelOrDefault(), driveModelOrDefault()), grown);
+            return grown;
         }
 
         long bytes = customBytes != null ? customBytes : size.bytes();
