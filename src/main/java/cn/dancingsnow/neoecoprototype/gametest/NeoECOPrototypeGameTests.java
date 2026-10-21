@@ -6696,10 +6696,11 @@ public final class NeoECOPrototypeGameTests {
     /**
      * eco spells a tier with its own number, and our tier index is 0 - so if the override in
      * {@link SimplifyTier} goes away, the host panel starts calling every L1 cell "L0", a tier that exists
-     * nowhere in the ecosystem. eco only began reading the hook on the panel path in 21.2.7, which is why
-     * this asserts the value rather than a drawn panel: on the floor we ship there is no caller to observe
-     * yet. The second half is the load-bearing one: tier index 0 is what makes an L1 host refuse a
-     * higher-tier cell, so if that number ever moves, the label is the least of what changed.
+     * nowhere in the ecosystem. The panel now does read the hook - but only through the tier the host hands
+     * with each row, which is the half {@code panelRowsFollowTheMachineShape} checks against a formed host;
+     * this one checks the enum itself, including the number. That number is the load-bearing part: tier
+     * index 0 is what makes an L1 host refuse a higher-tier cell, so if it ever moves, the label is the
+     * least of what changed.
      */
     @GameTest(template = "empty", batch = "storage_panel_rows", timeoutTicks = 100,
             templateNamespace = NeoECOPrototype.MOD_ID)
@@ -6870,6 +6871,25 @@ public final class NeoECOPrototypeGameTests {
                             helper.fail("a panel row reached eco with position=" + entry.position()
                                     + " and interactionId=" + entry.interactionId()
                                     + ", so its grid refuses every click on that row");
+                            return;
+                        }
+                    }
+                    // The label eco actually has to hand out: a row that does not name its tier is spelled
+                    // from the entry's tier *number*, and ours is 0 - so the panel would print "L0", a tier
+                    // that exists nowhere. This is the half the enum-side test cannot see.
+                    for (var entry : entries) {
+                        if (entry.stack().isEmpty()) {
+                            continue;
+                        }
+                        var label = entry.panelTierName();
+                        if (label == null) {
+                            helper.fail("a mounted L1 matrix reached eco with no tier name, so the panel"
+                                    + " spells it from the tier number and reads L" + entry.tier());
+                            return;
+                        }
+                        if (!"L1".equals(label.getString())) {
+                            helper.fail("a mounted L1 matrix reached eco labelled \"" + label.getString()
+                                    + "\", expected L1");
                             return;
                         }
                     }
@@ -10389,5 +10409,90 @@ public final class NeoECOPrototypeGameTests {
             return;
         }
         helper.succeed();
+    }
+
+    /**
+     * The brackets the crafting panel's queue strip hangs above and below every working core. eco numbers
+     * those slots with the core's own tier index, and uses that very same number - 0 - for "no core stands
+     * here", so an addon tier indexed 0 loses the brackets outright: the artwork returns for anything
+     * outside 1..3. That is what an F1 host looked like until
+     * {@code SimplifyCraftingSystemBlockEntity#getCraftingControllerPanelState()} started rebuilding them.
+     *
+     * <p>Deliberately order-free. Which slot a worker lands in is decided by a sort eco does privately, so
+     * this counts how many slots light up and compares that with how many workers the cluster really has a
+     * core over - a wrong slot order would still pass here, and that half is the eye check on a standing
+     * machine. What this does catch is the strip coming back empty, a bracket sitting where no core is, and
+     * a core landing in some other tier's column.
+     */
+    @GameTest(template = "l1_room", batch = "crafting_panel_brackets", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void craftingCoresLightTheirOwnBracketSlots(GameTestHelper helper) {
+        buildL1Room(helper, new BlockPos(6, 3, 6),
+                ModRegistration.SIMPLIFY_CRAFTING_SYSTEM_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_INTERFACE_BLOCK.get(), host -> {
+                    if (!(host instanceof cn.dancingsnow.neoecoprototype.blockentity.crafting
+                            .SimplifyCraftingSystemBlockEntity f1)) {
+                        helper.fail("the F1 host is not our block entity: " + host.getClass());
+                        return;
+                    }
+                    var cluster = f1.getCluster();
+                    if (cluster == null || cluster.getWorkers().isEmpty()) {
+                        helper.fail("the formed F1 host reports no workers, so this scan proves nothing");
+                        return;
+                    }
+                    int slots = cn.dancingsnow.neoecoae.gui.crafting.CraftingControllerPanelState.SLOT_COUNT;
+                    if (cluster.getWorkers().size() > slots) {
+                        helper.fail("the shape stands " + cluster.getWorkers().size()
+                                + " workers but eco's strip only carries " + slots
+                                + ", so the counts below are not comparable");
+                        return;
+                    }
+                    var corePositions = cluster.getParallelCores().stream()
+                            .map(net.minecraft.world.level.block.entity.BlockEntity::getBlockPos)
+                            .collect(java.util.stream.Collectors.toSet());
+                    if (corePositions.isEmpty()) {
+                        helper.fail("the F1 build plan stands no parallel core, so the strip has nothing"
+                                + " to draw and this check would be vacuous");
+                        return;
+                    }
+                    var up = appeng.api.orientation.OrientationStrategies.horizontalFacing()
+                            .getSide(f1.getBlockState(), appeng.api.orientation.RelativeSide.TOP);
+                    int withCoreAbove = 0;
+                    int withCoreBelow = 0;
+                    for (var worker : cluster.getWorkers()) {
+                        if (corePositions.contains(worker.getBlockPos().relative(up))) {
+                            withCoreAbove++;
+                        }
+                        if (corePositions.contains(worker.getBlockPos().relative(up.getOpposite()))) {
+                            withCoreBelow++;
+                        }
+                    }
+                    var state = f1.getCraftingControllerPanelState();
+                    int litAbove = 0;
+                    int litBelow = 0;
+                    for (int slot = 0; slot < slots; slot++) {
+                        var upper = state.upperTier(slot);
+                        var lower = state.lowerTier(slot);
+                        if (upper != 0) {
+                            litAbove++;
+                        }
+                        if (lower != 0) {
+                            litBelow++;
+                        }
+                        if (upper != 0 && upper != 1 || lower != 0 && lower != 1) {
+                            helper.fail("slot " + slot + " reads upper=" + upper + " lower=" + lower
+                                    + "; an F1 core has to land in column 1, the one the artwork paints green");
+                            return;
+                        }
+                    }
+                    if (litAbove != withCoreAbove || litBelow != withCoreBelow) {
+                        helper.fail("the strip lights " + litAbove + " upper and " + litBelow
+                                + " lower bracket slot(s) for a cluster with " + withCoreAbove
+                                + " worker(s) under a core and " + withCoreBelow + " above one");
+                        return;
+                    }
+                    helper.succeed();
+                });
     }
 }

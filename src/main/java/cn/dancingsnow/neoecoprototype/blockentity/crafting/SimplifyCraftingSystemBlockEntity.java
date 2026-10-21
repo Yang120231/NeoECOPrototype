@@ -1,7 +1,9 @@
 package cn.dancingsnow.neoecoprototype.blockentity.crafting;
 
 import cn.dancingsnow.neoecoae.api.IECOTier;
+import cn.dancingsnow.neoecoae.blocks.crafting.ECOCraftingSystem;
 import cn.dancingsnow.neoecoae.blocks.entity.crafting.ECOCraftingSystemBlockEntity;
+import cn.dancingsnow.neoecoae.gui.crafting.CraftingControllerPanelState;
 import cn.dancingsnow.neoecoae.multiblock.definition.MultiBlockDefinition;
 import cn.dancingsnow.neoecoprototype.api.MachineMood;
 import cn.dancingsnow.neoecoprototype.api.SimplifyPowerProfile;
@@ -44,6 +46,9 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
     /** How often a minded host re-reads its own situation. One second is plenty for a mood. */
     private static final int MOOD_SAMPLE_TICKS = 20;
 
+    /** The core column the crafting artwork numbers 1 - see {@link #getCraftingControllerPanelState()}. */
+    private static final int CORE_ART_COLUMN = 1;
+
     private boolean communicationInterface;
     private boolean appearancePending;
     private boolean hasMind;
@@ -63,6 +68,51 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
     @Override
     public MultiBlockDefinition getBuildDefinition() {
         return SimplifyCraftingDefinition.L1;
+    }
+
+    /**
+     * The brackets above and below each working core on the crafting panel's queue strip.
+     *
+     * <p>eco writes one 2-bit number per slot out of the core's own tier index, and the same number - 0 -
+     * means "no core stands here". An addon tier whose index is 0 is therefore indistinguishable from an
+     * empty slot, and {@code CraftingControllerArtwork.drawPlus} returns for anything outside 1..3, so an
+     * F1 host draws no brackets at all. Rebuilding the two lists from our own cluster is what separates
+     * those two zeros: a slot gets {@link #CORE_ART_COLUMN} only where a core really sits above or below
+     * that worker, and stays 0 where none does.
+     *
+     * <p>Everything else is handed back as super built it, and the slot order and the mirrored flip are
+     * eco's own rule (workers sorted by distance to the controller, cut at {@code SLOT_COUNT}) - so a sync
+     * that changes the coolant, switch, queue or energy halves needs no edit here. The column is 1 because
+     * the artwork's leftmost column is already painted green: this costs no new art.
+     */
+    @Override
+    public CraftingControllerPanelState getCraftingControllerPanelState() {
+        var base = super.getCraftingControllerPanelState();
+        var cluster = getCluster();
+        if (!base.formed() || cluster == null) {
+            return base;
+        }
+        var coresByPos = new java.util.HashMap<BlockPos, Integer>();
+        for (var core : cluster.getParallelCores()) {
+            int index = core.getTier().getTier();
+            coresByPos.put(core.getBlockPos(), index >= 1 ? index : CORE_ART_COLUMN);
+        }
+        var up = appeng.api.orientation.OrientationStrategies.horizontalFacing()
+                .getSide(getBlockState(), appeng.api.orientation.RelativeSide.TOP);
+        var workers = cluster.getWorkers().stream()
+                .sorted(java.util.Comparator.comparingDouble(
+                        worker -> worker.getBlockPos().distSqr(getBlockPos())))
+                .limit(CraftingControllerPanelState.SLOT_COUNT)
+                .toList();
+        var upper = new java.util.ArrayList<Integer>(workers.size());
+        var lower = new java.util.ArrayList<Integer>(workers.size());
+        for (var worker : workers) {
+            upper.add(coresByPos.getOrDefault(worker.getBlockPos().relative(up), 0));
+            lower.add(coresByPos.getOrDefault(worker.getBlockPos().relative(up.getOpposite()), 0));
+        }
+        return CraftingControllerPanelState.of(base.hostTier(), upper, lower, workers.size(),
+                getBlockState().getValue(ECOCraftingSystem.MIRRORED), base.coolantOverlay(),
+                base.switchOverlay(), base.queuePermille(), base.energyPermille());
     }
 
     @Override

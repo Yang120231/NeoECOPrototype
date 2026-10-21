@@ -752,7 +752,7 @@ public class SimplifyStorageHostBlockEntity
                 // while the stack, position and interaction id make the slot draw and clickable - without it
                 // the panel cannot take the cell back out.
                 entries.add(StorageHostUI.CellEntry.EMPTY.atDrive(drive.getBlockPos(), drive.getCellStack(),
-                        null, drive.panelInteractionId()));
+                        null, drive.panelInteractionId()).withPanelTier(cell.getTier()));
                 continue;
             }
             entries.add(new StorageHostUI.CellEntry(
@@ -778,7 +778,13 @@ public class SimplifyStorageHostBlockEntity
                     // before this line existed. The id is the other half of that line: without one, the
                     // grid's mouse handler returns before it sends the extraction RPC, so a row that looks
                     // perfectly drawn refuses every click and says nothing about why.
-                    .atDrive(drive.getBlockPos(), drive.getCellStack(), null, drive.panelInteractionId()));
+                    .atDrive(drive.getBlockPos(), drive.getCellStack(), null, drive.panelInteractionId())
+                    // Without this the panel reads every one of our cells as "L0". eco's grid asks the entry
+                    // for its tier name and, when that field is null, falls back to labelling the entry's
+                    // tier *number* - and ours is 0 by design (it is also the sort key and the mount gate),
+                    // so the fallback prints "L0" where SimplifyTier itself says "L1". Handing over the tier
+                    // object is what routes the label through getPanelTierName() instead.
+                    .withPanelTier(cell.getTier()));
         }
         return entries;
     }
