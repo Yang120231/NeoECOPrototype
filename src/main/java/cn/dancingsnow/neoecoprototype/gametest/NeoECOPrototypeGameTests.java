@@ -30,7 +30,6 @@ import cn.dancingsnow.neoecoae.blocks.entity.NEBlockEntity;
 import cn.dancingsnow.neoecoae.blocks.entity.computation.ECOComputationSystemBlockEntity;
 import cn.dancingsnow.neoecoae.api.storage.ECOStorageCells;
 import cn.dancingsnow.neoecoae.gui.GuiTitleProvider;
-import cn.dancingsnow.neoecoae.integration.megacells.backend.ECOMegaLongBulkStorageCell;
 import cn.dancingsnow.neoecoae.multiblock.cluster.NEComputationCluster;
 import cn.dancingsnow.neoecoae.multiblock.definition.MultiBlockDefinition;
 import cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementPlan;
@@ -195,20 +194,102 @@ public final class NeoECOPrototypeGameTests {
         helper.succeed();
     }
 
-    /** The small-bulk item cell mounts through eco's MEGA long-bulk backend (chain behavior). */
-    @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, required = false)
-    public static void smallBulkUsesMegaLongBulkBackend(GameTestHelper helper) {
+    /**
+     * The small-bulk item cell mounts through eco's standard engine, and its type ceiling is the item's
+     * own slot count.
+     *
+     * <p>Both halves are the cut being guarded. eco's MEGA long-bulk backend is what used to answer here,
+     * and it hard-coded 25 reachable types (50 with its upgrade card) without ever reading the item - so
+     * a cell with 3 or 10 filter slots reported a ceiling it could not reach, and the panel, the tooltip
+     * and Jade each carried a workaround to undo that. Re-adding the backend, or letting the ceiling come
+     * from anywhere but the item, turns this red.</p>
+     */
+    @GameTest(template = "empty", batch = "small_bulk_engine", timeoutTicks = 100, required = false,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void smallBulkCellMountsThroughTheStandardEngine(GameTestHelper helper) {
         if (ModRegistration.SIMPLIFY_SMALL_BULK_CELL == null) {
             helper.succeed(); // MegaCells absent: the small bulk family is not registered.
             return;
         }
         var stack = new ItemStack(ModRegistration.SIMPLIFY_SMALL_BULK_CELL.get());
         var cell = ECOStorageCells.getCellInventory(stack, (ISaveProvider) null);
-        helper.assertTrue(
-                cell instanceof ECOMegaLongBulkStorageCell,
-                "small bulk cell must mount through the MEGA long-bulk backend");
+        if (cell == null) {
+            helper.fail("the small bulk cell got no storage inventory, so it cannot mount in a drive");
+            return;
+        }
+        if (cell.getClass() != cn.dancingsnow.neoecoae.impl.storage.ECOStorageCell.class) {
+            helper.fail("the small bulk cell mounted through " + cell.getClass().getSimpleName()
+                    + " instead of eco's standard storage engine");
+            return;
+        }
+        int slots = ((cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem)
+                ModRegistration.SIMPLIFY_SMALL_BULK_CELL.get()).getTotalTypes();
+        if (cell.getTotalItemTypes() != slots) {
+            helper.fail("the mounted cell reports " + cell.getTotalItemTypes() + " reachable types while"
+                    + " the item says " + slots + ", so a backend ceiling is back");
+            return;
+        }
         helper.succeed();
     }
+
+    /**
+     * Contents written by the old MEGA long-bulk backend move into the component the standard engine reads.
+     *
+     * <p>The two backends never shared a place to keep items: the old one wrote a unit map under
+     * {@code CUSTOM_DATA -> neoecoae_mega_long_bulk}, the standard one reads
+     * {@code AEComponents.STORAGE_CELL_INV}. Without the move, every small bulk cell in an upgraded world
+     * reads as empty - the items are still on the stack, but nothing looks there - which is the one
+     * failure this family is not allowed to have.</p>
+     */
+    @GameTest(template = "empty", batch = "small_bulk_migration", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void longBulkContentsMoveIntoTheStandardComponent(GameTestHelper helper) {
+        var stack = new ItemStack(ModRegistration.SIMPLIFY_SMALL_BULK_CELL.get());
+        var entry = new net.minecraft.nbt.CompoundTag();
+        entry.putString("item", "minecraft:stone");
+        entry.put("components", new net.minecraft.nbt.CompoundTag());
+        entry.putLong("units", 1234L);
+        var entries = new net.minecraft.nbt.ListTag();
+        entries.add(entry);
+        var payload = new net.minecraft.nbt.CompoundTag();
+        payload.put("entries", entries);
+        var root = new net.minecraft.nbt.CompoundTag();
+        root.put("neoecoae_mega_long_bulk", payload);
+        stack.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                net.minecraft.world.item.component.CustomData.of(root));
+
+        var cell = ECOStorageCells.getCellInventory(stack, (ISaveProvider) null);
+        if (cell == null) {
+            helper.fail("the migrated cell produced no inventory, so nothing read it back");
+            return;
+        }
+        java.util.List<appeng.api.stacks.GenericStack> stored =
+                stack.getOrDefault(appeng.api.ids.AEComponents.STORAGE_CELL_INV, java.util.List.of());
+        long stone = 0L;
+        for (var held : stored) {
+            if (held != null && held.what() instanceof appeng.api.stacks.AEItemKey key
+                    && key.getId().getPath().equals("stone")) {
+                stone = held.amount();
+            }
+        }
+        if (stone != 1234L) {
+            helper.fail("the old long-bulk payload left " + stored.size() + " entries and the stone count"
+                    + " reads " + stone + ", expected 1234");
+            return;
+        }
+        if (cell.getStoredItemTypes() != 1L) {
+            helper.fail("the mounted engine sees " + cell.getStoredItemTypes() + " stored types, expected 1");
+            return;
+        }
+        var leftovers = stack.getOrDefault(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                net.minecraft.world.item.component.CustomData.EMPTY).copyTag();
+        if (leftovers.contains("neoecoae_mega_long_bulk")) {
+            helper.fail("the old payload survived the move, so the next load would add these items again");
+            return;
+        }
+        helper.succeed();
+    }
+
 
     /** Fixed infinite sources keep a null config so the cell workbench refuses them (AE2 NPE guard). */
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, required = false)
@@ -7273,279 +7354,6 @@ public final class NeoECOPrototypeGameTests {
         return rows.stream().anyMatch(entry -> pos.equals(entry.position()));
     }
 
-    /**
-     * The one-click marking, end to end: a built and formed L1 storage host, one drive holding a source cell
-     * with more of a compressible item than the threshold, one drive holding a small-bulk cell.
-     *
-     * <p>Two passes are the point. The first must mark something; the second must mark nothing again and
-     * report it as already marked - which is what proves the comparison is eco's chain rule rather than item
-     * equality, and that the per-drive inventory reads hoisted out of the target loop still see every
-     * source. The rule itself is asserted first, because a fixture that cannot gather a same-chain pair says
-     * nothing either way.
-     */
-    @GameTest(template = "l1_room", batch = "small_bulk_auto_mark", timeoutTicks = 400, required = false,
-            templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void autoMarkFollowsEcosChainRule(GameTestHelper helper) {
-        if (!net.neoforged.fml.ModList.get().isLoaded("megacells")) {
-            helper.succeed();
-            return;
-        }
-        var sample = SmallBulkTestProbe.findSamples();
-        if (!sample.isComplete()) {
-            helper.fail("megacells is installed but this fixture could not gather a same-chain pair, a"
-                    + " cross-chain pair and two plain items, so it cannot say anything about the rule: "
-                    + sample);
-            return;
-        }
-        if (!SimplifyStorageHostBlockEntity.sameMarkerChain(sample.sameLeft(), sample.sameRight())) {
-            helper.fail("two members of one compression chain no longer read as the same marker - either eco"
-                    + " changed its rule or we stopped calling it");
-            return;
-        }
-        if (SimplifyStorageHostBlockEntity.sameMarkerChain(sample.otherLeft(), sample.otherRight())) {
-            helper.fail("two different chains read as the same marker, so a second chain could never be marked");
-            return;
-        }
-        if (SimplifyStorageHostBlockEntity.sameMarkerChain(sample.plainLeft(), sample.plainRight())) {
-            helper.fail("two non-compressible items read as the same marker - an empty chain must never match");
-            return;
-        }
-        // The display patch: a small bulk cell must report its own ceiling everywhere, and the hover is the
-        // one place we do not own - eco writes that line from a final backend class that hard-codes 25.
-        var bulkStack = new ItemStack(ModRegistration.SIMPLIFY_SMALL_BULK_CELL.get());
-        var bulkInventory = cn.dancingsnow.neoecoae.api.storage.ECOStorageCells
-                .getCellInventory(bulkStack, null);
-        if (bulkInventory == null
-                || cn.dancingsnow.neoecoprototype.items.SmallBulkTypeCap.of(bulkStack, bulkInventory) != 3L) {
-            helper.fail("the panel's ceiling helper does not report 3 for a base small bulk cell: "
-                    + (bulkInventory == null ? "no cell inventory" : bulkInventory.getTotalItemTypes()));
-            return;
-        }
-        var hover = new java.util.ArrayList<net.minecraft.network.chat.Component>();
-        bulkStack.getItem().appendHoverText(bulkStack, net.minecraft.world.item.Item.TooltipContext.EMPTY,
-                hover, net.minecraft.world.item.TooltipFlag.Default.NORMAL);
-        // Compared as rendered text: AE2 builds this sentence as seven appended pieces, so two identical
-        // lines are never the same object and equals() would report a mismatch that isn't one.
-        var ours = appeng.core.localization.Tooltips.typesUsed(0L, 3L).getString();
-        var ecos = appeng.core.localization.Tooltips.typesUsed(0L, 25L).getString();
-        if (hover.stream().noneMatch(line -> line.getString().equals(ours))) {
-            helper.fail("the small bulk cell's hover does not carry its own 3-type ceiling, so the swap"
-                    + " stopped matching eco's line: " + hover
-                    + " [looking for \"" + ours + "\", eco's line reads \"" + ecos + "\"]");
-            return;
-        }
-        if (hover.stream().anyMatch(line -> line.getString().equals(ecos))) {
-            helper.fail("eco's unreachable 25-type backend ceiling still shows in the hover");
-            return;
-        }
-        // The fluid variant runs on eco's standard engine, so it may already report the item's own slot
-        // count. Measured rather than assumed: both routes have to land on the same sentence.
-        var fluidStack = new ItemStack(ModRegistration.SIMPLIFY_SMALL_BULK_FLUID_CELL.get());
-        var fluidHover = new java.util.ArrayList<net.minecraft.network.chat.Component>();
-        fluidStack.getItem().appendHoverText(fluidStack, net.minecraft.world.item.Item.TooltipContext.EMPTY,
-                fluidHover, net.minecraft.world.item.TooltipFlag.Default.NORMAL);
-        if (fluidHover.stream().noneMatch(line -> line.getString().equals(ours))
-                || fluidHover.stream().anyMatch(line -> line.getString().equals(ecos))) {
-            helper.fail("the fluid small bulk cell's hover does not read the same 3-type ceiling: " + fluidHover);
-            return;
-        }
-        buildL1Room(helper, new BlockPos(6, 3, 6),
-                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
-                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
-                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
-                host -> {
-                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
-                        helper.fail("the L1 storage controller is not our host block entity: " + host);
-                        return;
-                    }
-                    var cluster = storageHost.getCluster();
-                    var drives = cluster == null
-                            ? java.util.List.<cn.dancingsnow.neoecoprototype.blockentity.storage
-                                    .SimplifyDriveBlockEntity>of()
-                            : cluster.getDrives();
-                    if (drives.size() < 2) {
-                        helper.fail("the built room gave us " + drives.size() + " drive(s); this fixture"
-                                + " needs one for the source and one for the small-bulk cell");
-                        return;
-                    }
-                    var sourceCell = new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_4M.get());
-                    var sourceInventory = cn.dancingsnow.neoecoae.api.storage.ECOStorageCells
-                            .getCellInventory(sourceCell, null);
-                    if (sourceInventory == null) {
-                        helper.fail("no eco cell handler claims our own 4M item cell");
-                        return;
-                    }
-                    long want = cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
-                            .MEGA_BULK_AUTO_MARK_THRESHOLD.get() + 1L;
-                    long put = sourceInventory.insert(sample.sameLeft(), want, Actionable.MODULATE, null);
-                    if (put < want) {
-                        helper.fail("the source cell took only " + put + " of " + want
-                                + ", and the marking threshold is " + want);
-                        return;
-                    }
-                    if (!drives.get(0).insertCell(sourceCell)) {
-                        helper.fail("the drive refused the source cell");
-                        return;
-                    }
-                    var bulkCell = new ItemStack(ModRegistration.SIMPLIFY_SMALL_BULK_CELL.get());
-                    if (!drives.get(1).insertCell(bulkCell)) {
-                        helper.fail("the drive refused the small-bulk cell");
-                        return;
-                    }
-                    var first = storageHost.runAutoMark();
-                    if (first.added() < 1) {
-                        helper.fail("the first pass marked nothing at all: " + first);
-                        return;
-                    }
-                    var second = storageHost.runAutoMark();
-                    if (second.added() != 0 || second.alreadyMarked() < 1) {
-                        helper.fail("the second pass re-marked: first=" + first + " second=" + second);
-                        return;
-                    }
-                    var mounted = drives.get(1).getCellStack();
-                    if (!(mounted.getItem()
-                            instanceof cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem bulk)) {
-                        helper.fail("the small-bulk cell is not what the drive ended up holding: " + mounted);
-                        return;
-                    }
-                    var config = bulk.getConfigInventory(mounted);
-                    if (!sample.sameLeft().equals(config.getKey(0))) {
-                        helper.fail("the mark in slot 0 is " + config.getKey(0) + ", not the chain item "
-                                + sample.sameLeft() + " that was over the threshold");
-                    }
-                    // A candidate that fits nowhere still has to be said out loud. A second chain goes into
-                    // the source, the two remaining marker slots are filled by hand, and the pass must come
-                    // back reporting what it could not place rather than placing nothing in silence.
-                    // Through the drive's own handler, not the local stack: mounting copied it.
-                    var liveSource = drives.get(0).getCellInventory();
-                    if (liveSource == null) {
-                        helper.fail("the source drive no longer holds a cell to fill");
-                        return;
-                    }
-                    if (liveSource.insert(sample.otherLeft(), want, Actionable.MODULATE, null) < want) {
-                        helper.fail("the source cell took no " + sample.otherLeft()
-                                + " for the overflow pass");
-                        return;
-                    }
-                    config.setStack(1, new appeng.api.stacks.GenericStack(sample.plainLeft(), 0L));
-                    config.setStack(2, new appeng.api.stacks.GenericStack(sample.plainRight(), 0L));
-                    var overflow = storageHost.runAutoMark();
-                    if (overflow.added() != 0 || overflow.noSpace() < 1) {
-                        helper.fail("with every marker slot taken the button reported " + overflow
-                                + " instead of saying a candidate did not fit");
-                    }
-                });
-    }
-
-    /**
-     * Which end of a chain becomes the marker is not cosmetic: the marked form decides the fold factor the
-     * cell then works in, so marking the cheap variant of a chain costs the player more slots-worth of
-     * storage than marking the expensive one. eco fills its slots by amount, largest first; this is our own
-     * pass honouring that order.
-     */
-    @GameTest(template = "l1_room", batch = "small_bulk_marks_bigger_end", timeoutTicks = 400, required = false,
-            templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void autoMarkPrefersTheBiggerEndOfAChain(GameTestHelper helper) {
-        var sample = SmallBulkTestProbe.findSamples();
-        if (!sample.isComplete()) {
-            helper.fail("megacells is installed but the probe gathered no same-chain pair, so this test"
-                    + " cannot say anything about which end gets marked: " + sample);
-            return;
-        }
-        buildL1Room(helper, new BlockPos(6, 3, 6),
-                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
-                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
-                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
-                host -> {
-                    if (!(host instanceof SimplifyStorageHostBlockEntity storageHost)) {
-                        helper.fail("the L1 storage controller is not our host block entity: " + host);
-                        return;
-                    }
-                    var drives = storageHost.getCluster() == null
-                            ? java.util.List.<cn.dancingsnow.neoecoprototype.blockentity.storage
-                                    .SimplifyDriveBlockEntity>of()
-                            : storageHost.getCluster().getDrives();
-                    if (drives.size() < 2) {
-                        helper.fail("this fixture needs two drives and got " + drives.size());
-                        return;
-                    }
-                    long want = cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig
-                            .MEGA_BULK_AUTO_MARK_THRESHOLD.get() + 1L;
-                    var sourceCell = new ItemStack(ModRegistration.SIMPLIFY_ITEM_CELL_4M.get());
-                    var sourceInventory = cn.dancingsnow.neoecoae.api.storage.ECOStorageCells
-                            .getCellInventory(sourceCell, null);
-                    if (sourceInventory == null) {
-                        helper.fail("no eco cell handler claims our own 4M item cell");
-                        return;
-                    }
-                    // Two variants of one chain, both over the threshold, the second one clearly larger.
-                    if (sourceInventory.insert(sample.sameLeft(), want, Actionable.MODULATE, null) < want) {
-                        helper.fail("the source cell took no " + sample.sameLeft());
-                        return;
-                    }
-                    long bigger = want * 4L;
-                    if (sourceInventory.insert(sample.sameRight(), bigger, Actionable.MODULATE, null) < bigger) {
-                        helper.fail("the source cell took no " + sample.sameRight());
-                        return;
-                    }
-                    if (!drives.get(0).insertCell(sourceCell)
-                            || !drives.get(1).insertCell(new ItemStack(ModRegistration.SIMPLIFY_SMALL_BULK_CELL.get()))) {
-                        helper.fail("a drive refused its cell, so the pass has nothing to work on");
-                        return;
-                    }
-                    storageHost.runAutoMark();
-                    var mounted = drives.get(1).getCellStack();
-                    if (!(mounted.getItem() instanceof SimplifySmallBulkStorageCellItem bulk)) {
-                        helper.fail("the small-bulk cell is not what the drive holds: " + mounted);
-                        return;
-                    }
-                    var marked = bulk.getConfigInventory(mounted).getKey(0);
-                    if (!sample.sameRight().equals(marked)) {
-                        helper.fail("the chain was marked at its cheaper end: slot 0 holds " + marked
-                                + ", not " + sample.sameRight() + " which had " + bigger + " stored against"
-                                + " " + want + " of " + sample.sameLeft());
-                    }
-                });
-    }
-
-    /**
-     * A mark is only worth what it folds. Measured against four chains this environment knows: without a
-     * compression card in the cell the borrowed MEGA backend accepts exactly the marked key and refuses the
-     * rest of the chain - eco's own MEGA long bulk cell measures identically, row for row, so the refusal is
-     * the backend's rule rather than something this addon introduced. One card flips it, and our L1 shell
-     * has the slot and keeps the card (both measured here). How the folded amount is then counted is the
-     * backend's business and not asserted: whole units land under the mark, a remainder can stay as itself.
-     */
-    @GameTest(template = "empty", batch = "small_bulk_chain_folding", timeoutTicks = 100, required = false,
-            templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void smallBulkFoldsTheChainItMarks(GameTestHelper helper) {
-        if (!ModList.get().isLoaded("megacells")) {
-            helper.succeed();
-            return;
-        }
-        var pairs = SmallBulkTestProbe.findChainPairs(4);
-        if (pairs.isEmpty()) {
-            helper.fail("no compression chain pair found in this environment");
-            return;
-        }
-        var bulk = ModRegistration.SIMPLIFY_SMALL_BULK_CELL.get();
-        for (var pair : pairs) {
-            var bare = SmallBulkTestProbe.fold(bulk, pair.marked(), pair.offered(), 64L, false);
-            var carded = SmallBulkTestProbe.fold(bulk, pair.marked(), pair.offered(), 64L, true);
-            if (bare.transferred() != 0L) {
-                helper.fail("the cell took " + pair.offered() + " with no compression card, so the mark alone"
-                        + " is no longer the gate: transferred " + bare.transferred() + " while "
-                        + pair.marked() + " was the only mark");
-                return;
-            }
-            if (carded.transferred() <= 0L) {
-                helper.fail("a compression card did not open the chain: marked " + pair.marked()
-                        + ", offered " + pair.offered() + " -> transferred " + carded.transferred());
-                return;
-            }
-        }
-        helper.succeed();
-    }
 
     /**
      * A shape parked for one host must not be readable by whatever stands there later. The handoff table
@@ -8432,6 +8240,226 @@ public final class NeoECOPrototypeGameTests {
      * reading: for each block, what stands in the world plus what the player carries plus what lies on
      * the floor must add up to the same number before and after.
      */
+    // Why there is no mirrored-host fixture: eco writes Host.isMirrorBuild() from the panel toggle only
+    // (no save, no load, no formation), so the card has to read the built hand off the host block's own
+    // "mirrored" state instead - see SimplifyStructureExpansionCardItem.builtMirrored. A fixture cannot
+    // stand in for that check: the one-click builder hands out a plan in raw local coordinates and never
+    // calls MultiBlockRotation.localToWorld, so a room assembled from it is not a mirrored room in the
+    // sense a rotated preview means it. Measured 2026-10-21: a mirrored L1 fixture disagreed with the
+    // card at the cooling-controller cell for every candidate length, which was the fixture lying rather
+    // than the machine. This half is verified on a real mirrored host.
+
+    /**
+     * Pays for the bigger shape, right-clicks the host with the card, and requires the room to have
+     * grown - formed still, and no block invented or lost on the way.
+     *
+     * <p>The growth is the reading, not the action bar: a fixture cannot see which sentence the card
+     * picked, and "it did not grow" and "it grew but lied about why" are different bugs worth telling
+     * apart. {@code payable} and {@code conflicts} go into the failure line so a red here says which
+     * gate it hit rather than only that something stopped.</p>
+     */
+    private static void mustGrowWhenClickedWithCard(GameTestHelper helper,
+                                                    MultiBlockBuildController.Host host, String what) {
+        var player = cardPlayer(helper);
+        player.setShiftKeyDown(true);
+        giveExpansionCard(player);
+        // Two full stacks of each distinct kind, the way the growing fixtures pay: the bill is per
+        // kind once the shape repeats, and a 36-slot inventory fills up if it is handed out per cell.
+        var kinds = new java.util.LinkedHashSet<Item>();
+        for (var state : machineSnapshot(helper).values()) {
+            kinds.add(state.getBlock().asItem());
+        }
+        for (Item kind : kinds) {
+            for (int stack = 0; stack < 2; stack++) {
+                var given = new ItemStack(kind);
+                given.setCount(given.getMaxStackSize());
+                if (!player.getInventory().add(given)) {
+                    helper.fail("the fixture inventory had no room for a stack of " + kind);
+                    return;
+                }
+            }
+        }
+        int standingBefore = machineSnapshot(helper).size();
+        var before = ledger(helper, player);
+        useExpansionCard(helper, player);
+        // Read everything while the machine still stands: the sweep below takes the block entity with
+        // it, and every one of these answers would become a lie.
+        int standingAfter = machineSnapshot(helper).size();
+        boolean formed = host.isFormed();
+        var after = ledger(helper, player);
+        var def = host.getBuildDefinition();
+        BlockPos absoluteHost = helper.absolutePos(CARD_HOST);
+        var big = cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementService
+                .preview(helper.getLevel(), absoluteHost,
+                        helper.getLevel().getBlockState(absoluteHost), def,
+                        def.getExpandMax(), host.isMirrorBuild());
+        clearMachineBox(helper);
+        if (standingAfter <= standingBefore) {
+            helper.fail(what + " did not grow (" + standingBefore + " -> " + standingAfter
+                    + " blocks): formed=" + formed + " expandMin=" + def.getExpandMin()
+                    + " expandMax=" + def.getExpandMax()
+                    + " | at max length: missing=" + big.getMissingBlocks().size()
+                    + " conflicts=" + big.getConflictPositions().size()
+                    + " bill=" + big.getRequiredItems().size()
+                    + " payable=" + cn.dancingsnow.neoecoae.multiblock.placement
+                            .MultiBlockPlacementService.hasRequiredItems(player, big.getRequiredItems())
+                    + " [" + describeBill(player, big) + "] host@" + CARD_HOST);
+            return;
+        }
+        if (!formed) {
+            helper.fail("the card grew " + what + " into a machine that is no longer formed ("
+                    + standingBefore + " -> " + standingAfter + " blocks)");
+            return;
+        }
+        if (!before.equals(after)) {
+            helper.fail("the card invented or lost blocks while growing " + what + "; before " + before
+                    + " after " + after + " | " + describeMissingBill(helper, host));
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Shared body of the off-table fixtures: stand {@code wantedInterface} in the cell whose plan entry
+     * is {@code planInterface}, form the machine, then require the card to grow it.
+     */
+    private static void offTableInterfaceMustNotStopTheCard(GameTestHelper helper, Block hostBlock,
+                                                            Block planInterface, Block wantedInterface) {
+        buildL1Room(helper, CARD_HOST, hostBlock, planInterface, wantedInterface,
+                host -> mustGrowWhenClickedWithCard(helper, host,
+                        "a formed " + name(hostBlock) + " wearing " + name(wantedInterface)));
+    }
+
+    /**
+     * Grows a formed L1 computation host whose interface cell holds the block the plan cannot name.
+     *
+     * <p>The published shape puts the communication interface at its one interface cell, while
+     * {@code SimplifyComputationClusterCalculator.matchedComputationInterface} accepts either interface
+     * kind there. So this room stands formed and running with a block in it that no plan is able to
+     * ask for - and the card measured its length against that plan, which is why it called a working
+     * machine "not formed". Standing the network interface in the plan's communication-interface cell is
+     * exactly what {@code buildL1Room} is for, so nothing here is hand-placed.</p>
+     *
+     * <p>Red until formation stops being read off the definition table: at every candidate length that
+     * one cell is a different block from what the plan wants, and with no ownership map to fall back on
+     * the whole machine scores below {@code expandMin}.</p>
+     */
+    @GameTest(template = "l1_room", batch = "structure_card_offtable", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void expansionCardGrowsAFormedHostWearingAnOffTableInterface(GameTestHelper helper) {
+        offTableInterfaceMustNotStopTheCard(helper,
+                ModRegistration.SIMPLIFY_COMPUTATION_SYSTEM_BLOCK.get(),
+                ModRegistration.SIMPLIFY_COMPUTATION_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_COMPUTATION_NETWORK_INTERFACE_BLOCK.get());
+    }
+
+    /**
+     * A block that belongs to nobody still stops the card, and stays standing when it does.
+     *
+     * <p>The control for the off-table widening: a cell only the *bigger* shape wants is parked full of
+     * cobblestone, so the machine is formed (the stray is not inside its own shape) and the plan cannot
+     * name the intruder as either its wanted block or an alternate this family accepts. If the widening
+     * ever grows past "a member of this formed machine" into "whatever stands there", this is the fixture
+     * that goes red - and the second half of the failure, the block still being there, is the part a
+     * player would lose cells over.</p>
+     */
+    @GameTest(template = "l1_room", batch = "structure_card_foreign_cell", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void expansionCardStillStopsForABlockThatIsNotAMember(GameTestHelper helper) {
+        buildL1Room(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                host -> {
+                    var def = host.getBuildDefinition();
+                    BlockPos absoluteHost = helper.absolutePos(CARD_HOST);
+                    var standing = new java.util.HashSet<BlockPos>(machineSnapshot(helper).keySet());
+                    var big = cn.dancingsnow.neoecoae.multiblock.placement.MultiBlockPlacementService
+                            .preview(helper.getLevel(), absoluteHost,
+                                    helper.getLevel().getBlockState(absoluteHost), def,
+                                    def.getExpandMax(), host.isMirrorBuild());
+                    BlockPos stray = null;
+                    for (var planned : big.getAllBlocks()) {
+                        if (!standing.contains(planned.worldPos())
+                                && helper.getLevel().getBlockState(planned.worldPos()).isAir()) {
+                            stray = planned.worldPos();
+                            break;
+                        }
+                    }
+                    if (stray == null) {
+                        helper.fail("no cell of the bigger shape stands outside the machine that is"
+                                + " already built, so this fixture cannot park an intruder anywhere");
+                        return;
+                    }
+                    helper.getLevel().setBlockAndUpdate(stray, Blocks.COBBLESTONE.defaultBlockState());
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    giveExpansionCard(player);
+                    // Paid in full on purpose: without this the click stops on "you cannot afford it"
+                    // and the assertions below pass while proving nothing about the intruder.
+                    var kinds = new java.util.LinkedHashSet<Item>();
+                    for (var state : machineSnapshot(helper).values()) {
+                        kinds.add(state.getBlock().asItem());
+                    }
+                    for (Item kind : kinds) {
+                        for (int stack = 0; stack < 2; stack++) {
+                            var given = new ItemStack(kind);
+                            given.setCount(given.getMaxStackSize());
+                            if (!player.getInventory().add(given)) {
+                                helper.fail("the fixture inventory had no room for a stack of " + kind);
+                                return;
+                            }
+                        }
+                    }
+                    int before = machineSnapshot(helper).size();
+                    var carriedBefore = carried(player);
+                    useExpansionCard(helper, player);
+                    int after = machineSnapshot(helper).size();
+                    boolean stillStands = helper.getLevel().getBlockState(stray)
+                            .is(Blocks.COBBLESTONE);
+                    boolean formed = host.isFormed();
+                    var carriedAfter = carried(player);
+                    clearMachineBox(helper);
+                    if (after > before) {
+                        helper.fail("the card grew past a cobblestone it does not own (" + before + " -> "
+                                + after + " blocks) at " + stray + ": the off-table widening reaches"
+                                + " beyond this family's members");
+                        return;
+                    }
+                    if (!stillStands) {
+                        helper.fail("the card broke the intruder at " + stray
+                                + " instead of stopping on it: formed=" + formed);
+                        return;
+                    }
+                    if (!carriedBefore.equals(carriedAfter)) {
+                        helper.fail("a refused click still moved blocks into the backpack: was "
+                                + carriedBefore + ", now " + carriedAfter);
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
+    /** The same refusal on the storage side, where the network interface is also accepted off the table. */
+    @GameTest(template = "l1_room", batch = "structure_card_offtable_storage", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void expansionCardGrowsAStorageHostWearingAnOffTableInterface(GameTestHelper helper) {
+        offTableInterfaceMustNotStopTheCard(helper,
+                ModRegistration.SIMPLIFY_STORAGE_CONTROLLER_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_STORAGE_NETWORK_INTERFACE_BLOCK.get());
+    }
+
+    /** ... and on the crafting side, the third family whose calculator takes the other interface. */
+    @GameTest(template = "l1_room", batch = "structure_card_offtable_crafting", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void expansionCardGrowsACraftingHostWearingAnOffTableInterface(GameTestHelper helper) {
+        offTableInterfaceMustNotStopTheCard(helper,
+                ModRegistration.SIMPLIFY_CRAFTING_SYSTEM_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_NETWORK_INTERFACE_BLOCK.get());
+    }
+
     @GameTest(template = "l1_room", batch = "structure_card_grow", timeoutTicks = 600,
             templateNamespace = NeoECOPrototype.MOD_ID)
     public static void expansionCardTradesEveryBlockItMovesOneForOne(GameTestHelper helper) {

@@ -19,6 +19,7 @@ import cn.dancingsnow.neoecoae.multiblock.placement.WorldPlannedBlock;
 import cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig;
 import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyCraftingDefinition;
 import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyStorageDefinition;
+import cn.dancingsnow.neoecoprototype.multiblock.SimplifyOffTableMembers;
 import cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyTrinityDefinition;
 import cn.dancingsnow.neoecoprototype.registration.ModRegistration;
 import net.minecraft.core.BlockPos;
@@ -219,26 +220,34 @@ public class SimplifyStructureExpansionCardItem extends Item {
             return;
         }
         MultiBlockDefinition definition = host.getBuildDefinition();
-        // TEMP PROBE for the "未找到符合要求的已经成型的主机" report: the two refusal keys below now read
-        // differently, but only the log says which authority refused.
-        NeoECOPrototype.LOGGER.info("drive probe: be={} at {} definition={} hand={}",
-                host.getClass().getSimpleName(), pos, definition == null ? "null"
-                        : net.minecraft.core.registries.BuiltInRegistries.BLOCK
-                                .getKey(definition.getOwner().value()),
-                player.getMainHandItem().getItem());
         if (definition == null) {
             say(player, "card.neoecoprototype.expansion.no_definition");
+            return;
+        }
+        // Whether this is a machine at all is the cluster's answer, not the plan's. A definition can name
+        // only one block per cell, while the calculators take either interface kind and the computation
+        // one lets an energized core wear a casing cell - so measuring formation off the table used to
+        // call a running machine unformed. See SimplifyOffTableMembers.
+        if (!host.isFormed()) {
+            say(player, "card.neoecoprototype.expansion.not_formed");
             return;
         }
         int target = definition.getExpandMax();
         // selectedBuildLength is the panel's pending choice, not the size of what stands here - eco
         // initialises it to the ceiling, so reading it made every machine that never had its slider
         // moved look already maxed out. The size has to come off the world.
-        int current = largestSatisfiedLength(host, level, pos, definition, target);
-        NeoECOPrototype.LOGGER.info("drive probe: length from world={} expandMin={} target={} canGrow={}",
-                current, definition.getExpandMin(), target, canGrow());
+        Measured measured = largestSatisfiedLength(host, level, pos, definition, target);
+        int current = measured.length();
         if (current < definition.getExpandMin()) {
-            say(player, "card.neoecoprototype.expansion.not_formed");
+            if (measured.blocked() == null) {
+                // Formed, but the shape needs cells that hold nothing: "build it, or fill the gaps" is
+                // still the truth to tell here.
+                say(player, "card.neoecoprototype.expansion.not_formed");
+                return;
+            }
+            // Formed, yet something that is not a member of this machine stands in a cell the shape
+            // wants, and the coordinates are the only part of that a player can act on.
+            reportBlocked(player, measured.blocked());
             return;
         }
         if (current >= target) {
@@ -376,18 +385,6 @@ public class SimplifyStructureExpansionCardItem extends Item {
                              ServerPlayer player, net.minecraft.world.InteractionHand hand,
                              MultiBlockDefinition current, MultiBlockDefinition target) {
         BlockEntity previous = level.getBlockEntity(pos);
-        // TEMP PROBE: which positions the swap actually moves, and in both directions. The rung price has to
-        // be set against this set, so the counts are measured, not assumed. Remove with the drive probe.
-        Map<String, Integer> replaced = new java.util.TreeMap<>();
-        Map<String, Integer> installed = new java.util.TreeMap<>();
-        for (WorldPlannedBlock moved : swap.moved()) {
-            replaced.merge(blockName(level.getBlockState(moved.worldPos()).getBlock()), 1, Integer::sum);
-            installed.merge(blockName(moved.targetState().getBlock()), 1, Integer::sum);
-        }
-        replaced.merge(blockName(level.getBlockState(pos).getBlock()), 1, Integer::sum);
-        installed.merge(blockName(anchor.getBlock()), 1, Integer::sum);
-        NeoECOPrototype.LOGGER.info("cost probe: drive={} at {} replaced={} installed={}",
-                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(this), pos, replaced, installed);
         Map<BlockPos, List<ItemStack>> contents = new LinkedHashMap<>();
         if (refundsReplacedBlocks()) {
             // Whatever a position holds goes with it: the cell mounted in a drive, the patterns in a bus.
@@ -429,14 +426,9 @@ public class SimplifyStructureExpansionCardItem extends Item {
 
     /**
      * The tier a definition climbs to, read off its own host block id
-     * ({@code neoecoae:storage_system_l6} to {@code L6}). The success line cannot name a tier because
-     * two of the three cards stop short of L9, and a message that lies about what the player just got
-     * is worse than no message.
+     * ({@code neoecoae:storage_system_l6} to {@code L6}). A block id with no such suffix is reported as
+     * its own path rather than guessed at, so a message never invents a tier number.
      */
-    private static String blockName(Block block) {
-        return net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString();
-    }
-
     private static String tierLabel(MultiBlockDefinition definition) {
         String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
                 .getKey(definition.getOwner().value()).getPath();
@@ -455,7 +447,7 @@ public class SimplifyStructureExpansionCardItem extends Item {
     private @Nullable BlockState anchorTarget(MultiBlockBuildController.Host host, Level level,
                                               BlockPos pos, MultiBlockDefinition target) {
         int length = largestSatisfiedLength(host, level, pos, host.getBuildDefinition(),
-                target.getExpandMax());
+                target.getExpandMax()).length();
         if (length < 0 || length != target.getExpandMax()) {
             return null;
         }
@@ -629,29 +621,36 @@ public class SimplifyStructureExpansionCardItem extends Item {
     }
 
     /**
-     * The largest shape length the world already satisfies at this host, or below
-     * {@code expandMin} when none of them fit.
+     * The largest shape length the world already satisfies at this host, and the first position that
+     * stopped it fitting.
      *
      * <p>Read off the world rather than off {@code selectedBuildLength}: a satisfied shape is one
-     * whose plan needs nothing placed and whose only conflicts are positions already holding the
-     * right block. That is the size of the machine standing here, which is what both "grow it" and
-     * "change its tier" have to be measured against.</p>
+     * whose plan needs nothing placed and whose only conflicts are positions already holding a block
+     * this machine accepts. That is the size of the machine standing here, which is what both "grow it"
+     * and "change its tier" have to be measured against.</p>
      */
-    private int largestSatisfiedLength(MultiBlockBuildController.Host host, Level level, BlockPos pos,
-                                        @Nullable MultiBlockDefinition definition, int max) {
+    private Measured largestSatisfiedLength(MultiBlockBuildController.Host host, Level level, BlockPos pos,
+                                            @Nullable MultiBlockDefinition definition, int max) {
         if (definition == null) {
-            return -1;
+            return new Measured(-1, null);
         }
+        BlockPos blocked = null;
         for (int length = max; length >= definition.getExpandMin(); length--) {
             Classified satisfied = classify(preview(host, level, pos, definition, length), Map.of(),
                     level, false);
             if (satisfied.foreign() == null && satisfied.moved().isEmpty()
                     && satisfied.plan().getMissingBlocks().isEmpty()) {
-                return length;
+                return new Measured(length, null);
+            }
+            if (blocked == null) {
+                blocked = satisfied.foreign();
             }
         }
-        return definition.getExpandMin() - 1;
+        return new Measured(definition.getExpandMin() - 1, blocked);
     }
+
+    /** What the world says about this host's size, plus the cell that made the answer "no". */
+    private record Measured(int length, @Nullable BlockPos blocked) { }
 
     /**
      * Moves the positions eco's own formation wrote off the conflict list, splits what is left into
@@ -659,9 +658,11 @@ public class SimplifyStructureExpansionCardItem extends Item {
      *
      * <p>A conflict is ignored when the standing block is the block the target shape wants there - the
      * two then differ at most by properties the cluster sets on itself, which is not a reason to
-     * refuse. Otherwise it is queued to move when the standing block is one this machine claims at its
-     * current size: the outer shell, when growing ({@code tiered} is false and the block has to hold
-     * nothing), or any block the next tier wants in a different shape, when swapping tiers. Anything
+     * refuse - or when it is the other kind this family's calculator accepts in that cell, which the
+     * shape cannot ask for at all (see {@code SimplifyOffTableMembers}). Otherwise it is queued to move
+     * when the standing block is one this machine claims at its current size: the outer shell, when
+     * growing ({@code tiered} is false and the block has to hold nothing), or any block the next tier
+     * wants in a different shape, when swapping tiers. Anything
      * else stops the card - a drive that somehow ended up in the way must never be broken with cells
      * inside it.</p>
      */
@@ -684,13 +685,22 @@ public class SimplifyStructureExpansionCardItem extends Item {
             // shape wants differs at most by what formation writes, and that is no reason to refuse.
             // The caller that measures the machine's current size passes no ownership map at all, so
             // putting this check after the ownership test would make every formed machine look unbuilt.
-            if (standing.getBlock() == want.getBlock()) {
+            // The second half of the test is the same argument for a cell whose two legal kinds a plan
+            // can only name one of; the caller has already heard isFormed() say yes, so nothing here
+            // lets a machine that came apart pass as built.
+            if (standing.getBlock() == want.getBlock()
+                    || SimplifyOffTableMembers.alternatesFor(want.getBlock())
+                            .contains(standing.getBlock())) {
                 reusedAsIs++;
                 settled.add(conflict);
                 continue;
             }
+            // A cell this machine owns can also be worn by a block no plan is able to name there. It is
+            // still ours to move, and the bigger or higher shape wants its own block in that cell, so
+            // this only lets the card pick the member up instead of stopping on it.
             WorldPlannedBlock mine = owned.get(conflict);
-            if (mine == null || mine.targetState().getBlock() != standing.getBlock()) {
+            if (mine == null || !(mine.targetState().getBlock() == standing.getBlock()
+                    || SimplifyOffTableMembers.isOffTableMember(standing.getBlock()))) {
                 return refused(plan, conflict);
             }
             // A shell the bigger shape wants elsewhere, or a block whose tier is written into its id.
@@ -844,7 +854,25 @@ public class SimplifyStructureExpansionCardItem extends Item {
     private MultiBlockPlacementPlan preview(MultiBlockBuildController.Host host, Level level, BlockPos pos,
                                             MultiBlockDefinition definition, int length) {
         return MultiBlockPlacementService.preview(level, pos, level.getBlockState(pos), definition,
-                length, host.isMirrorBuild());
+                length, builtMirrored(level.getBlockState(pos), host.isMirrorBuild()));
+    }
+
+    /**
+     * The hand this machine was actually built in, which is not the question
+     * {@code Host.isMirrorBuild()} answers.
+     *
+     * <p>eco writes that flag from the panel's mirror toggle and nowhere else - no save, no load, no
+     * formation - so a machine built mirrored and later reloaded reports "not mirrored" while standing
+     * mirrored. A plan generated on that answer puts every cell on the wrong side, and the card then
+     * reads the machine's own casing as an intruder. Formation is the one that knows: it stores the
+     * answer in the host block's state, which is what survives a reload. Read by property name because
+     * each family declares its own {@code mirrored} (eco's computation and crafting hosts, our storage
+     * controller), and a block without one falls back to the panel's choice.</p>
+     */
+    private static boolean builtMirrored(BlockState hostState, boolean panelChoice) {
+        var property = hostState.getBlock().getStateDefinition().getProperty("mirrored");
+        return property instanceof net.minecraft.world.level.block.state.properties.BooleanProperty mirrored
+                ? hostState.getValue(mirrored) : panelChoice;
     }
 
     private static Map<BlockPos, WorldPlannedBlock> plannedByPosition(MultiBlockPlacementPlan plan) {

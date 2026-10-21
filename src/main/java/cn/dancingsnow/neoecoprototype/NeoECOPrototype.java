@@ -239,11 +239,6 @@ public class NeoECOPrototype {
             }
             appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.FUZZY_CARD.asItem(), item, 1, storageCellGroup);
             appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.INVERTER_CARD.asItem(), item, 1, storageCellGroup);
-            if (ModList.get().isLoaded("megacells")
-                    && item instanceof cn.dancingsnow.neoecoprototype.items.SimplifySmallBulkStorageCellItem) {
-                appeng.api.upgrades.Upgrades.add(
-                        gripe._90.megacells.definition.MEGAItems.COMPRESSION_CARD.asItem(), item, 1, storageCellGroup);
-            }
         }
         // eco's storage hosts enumerate neoecoae:cell_type, so a failed cross-mod registration would
         // silently hide our matrices' rows on eco's own storage systems.

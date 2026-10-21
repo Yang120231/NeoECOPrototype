@@ -12,7 +12,6 @@ public final class NeoECOPrototypeServerConfig {
      * L1-native cells and this addon's small bulk cells never need to be listed here.
      */
     public static final ModConfigSpec.ConfigValue<List<? extends String>> L1_ADDITIONAL_STORAGE_CELLS;
-    public static final ModConfigSpec.LongValue MEGA_BULK_AUTO_MARK_THRESHOLD;
     /** Whether the processor assembler also accepts recipes derived from AE2's inscriber. */
     public static final ModConfigSpec.BooleanValue DERIVE_PROCESSOR_RECIPES_FROM_INSCRIBER;
     /** Processor outputs the assembler must refuse, from either the JSON recipes or the derivation. */
@@ -81,9 +80,6 @@ public final class NeoECOPrototypeServerConfig {
                 .defineListAllowEmpty("additional_storage_cells", List::of, value -> value instanceof String id
                         && net.minecraft.resources.ResourceLocation.tryParse(id) != null);
         builder.pop();
-        MEGA_BULK_AUTO_MARK_THRESHOLD = builder
-                .comment("Minimum stored item count for automatic MEGA marker selection; compression still requires the MEGA compression upgrade.")
-                .defineInRange("mega_bulk_auto_mark_threshold", 20_000L, 0L, Long.MAX_VALUE);
         FUMO_COMMAND_ENABLED = builder
                 .comment("Enable the /prototypefumo command, which hands out a plushie wearing any player's skin.",
                         "Off by default: the command needs OP level 2 or creative mode as well, and the skin it",

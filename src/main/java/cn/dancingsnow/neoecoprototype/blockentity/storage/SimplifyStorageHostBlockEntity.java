@@ -2,8 +2,6 @@ package cn.dancingsnow.neoecoprototype.blockentity.storage;
 
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.stacks.AEKeyType;
-import appeng.api.stacks.AEItemKey;
-import gripe._90.megacells.misc.CompressionService;
 import appeng.api.storage.IStorageMounts;
 import appeng.api.storage.IStorageProvider;
 import cn.dancingsnow.neoecoae.all.NERegistries;
@@ -239,170 +237,11 @@ public class SimplifyStorageHostBlockEntity
                     }
                 },
                 delta -> changeStoragePriority(holder.player, delta)));
-        // eco 21.2.3 dropped the bulk-marking button from its action bar (the Config lost
-        // bulkMarkingAvailable / bulkMarkingThreshold / autoMarkBulkCells and now calls the service only
-        // from its own mega controller), so autoMarkBulkCells has no caller from this UI any more.
         actionUI.addTo(root);
         return new ModularUI(UI.of(root,
                 java.util.List.of(StylesheetManager.INSTANCE.getStylesheetSafe(NEStyleSheets.ECO))), holder.player);
     }
 
-    private boolean bulkMarkingAvailable() {
-        return !smallBulkDrives().isEmpty();
-    }
-
-    private long bulkMarkingThreshold() {
-        return NeoECOPrototypeServerConfig.MEGA_BULK_AUTO_MARK_THRESHOLD.get();
-    }
-
-    private void autoMarkBulkCells(Player player) {
-        if (!canPlayerInteract(player)) {
-            return;
-        }
-        var counts = runAutoMark();
-        // One line, because the action bar shows one line: a second call would erase the first.
-        var line = Component.translatable("gui.neoecoprototype.storage.bulk_mark.result",
-                counts.added(), counts.alreadyMarked());
-        if (counts.noSpace() > 0) {
-            line = line.append(Component.translatable("gui.neoecoprototype.storage.bulk_mark.no_space",
-                    counts.noSpace()));
-        }
-        player.displayClientMessage(line, true);
-    }
-
-    /**
-     * What one pass of the marking button did.
-     *
-     * @param noSpace candidates that were over the threshold and in a chain nothing marks yet, but found
-     *                no free marker slot - without this the button just reports fewer marks and the
-     *                player cannot tell "nothing was worth marking" from "the cell is full of marks"
-     */
-    public record BulkMarkCounts(int added, int alreadyMarked, int noSpace) {
-    }
-
-    /**
-     * The keys worth marking in this pass, biggest pile first, with one drive left out of the pool.
-     *
-     * <p>Aggregated before anything else: the same key sitting in three source cells is one candidate for
-     * one chain, not three, and ordering means nothing while duplicates are still in the way. The order is
-     * what eco's own pass fills by, and it is not cosmetic - the marked form is what decides the fold
-     * factor the cell then uses, so an unordered pool can mark the cheap end of a chain.</p>
-     */
-    private static List<AEItemKey> markingCandidates(
-            java.util.Map<SimplifyDriveBlockEntity, appeng.api.stacks.KeyCounter> availableByDrive,
-            SimplifyDriveBlockEntity except, long threshold) {
-        java.util.Map<AEItemKey, Long> amounts = new java.util.HashMap<>();
-        for (var source : availableByDrive.entrySet()) {
-            if (source.getKey() == except) {
-                continue;
-            }
-            for (var entry : source.getValue()) {
-                if (!(entry.getKey() instanceof AEItemKey key)
-                        || CompressionService.getChain(key).isEmpty()) {
-                    continue;
-                }
-                amounts.merge(key, entry.getLongValue(), Long::sum);
-            }
-        }
-        return amounts.entrySet().stream()
-                .filter(entry -> entry.getValue() > threshold)
-                .sorted(java.util.Map.Entry.<AEItemKey, Long>comparingByValue().reversed())
-                .map(java.util.Map.Entry::getKey)
-                .toList();
-    }
-
-    /**
-     * One pass of the marking, without a player: the button only adds the interaction check and the chat line,
-     * so this is the half a test can reach.
-     */
-    public BulkMarkCounts runAutoMark() {
-        if (level == null || level.isClientSide) {
-            return new BulkMarkCounts(0, 0, 0);
-        }
-        if (!ModList.get().isLoaded("megacells")) {
-            // The chain lookup further down is MegaCells' own code. Small-bulk cells cannot be
-            // registered without the mod, but a world made while it was installed still carries the
-            // drives, so the button can still be pressed with the mod gone.
-            return new BulkMarkCounts(0, 0, 0);
-        }
-        long threshold = bulkMarkingThreshold();
-        // One inventory read per drive, not one per (target, source) pair: every small-bulk drive in the
-        // cluster is offered the same sources, and getAvailableStacks walks the cell each time it is called.
-        var availableByDrive = new java.util.IdentityHashMap<SimplifyDriveBlockEntity, appeng.api.stacks.KeyCounter>();
-        for (SimplifyDriveBlockEntity source : getCluster().getDrives()) {
-            IECOStorageCell inventory = source.getCellInventory();
-            if (inventory == null) {
-                continue;
-            }
-            appeng.api.stacks.KeyCounter available = new appeng.api.stacks.KeyCounter();
-            inventory.getAvailableStacks(available);
-            availableByDrive.put(source, available);
-        }
-        int added = 0;
-        int alreadyMarked = 0;
-        int noSpace = 0;
-        List<AEItemKey> markedKeys = new ArrayList<>();
-        for (SimplifyDriveBlockEntity target : smallBulkDrives()) {
-            ItemStack targetStack = target.getCellStack();
-            if (!(targetStack.getItem() instanceof SimplifySmallBulkStorageCellItem item)) {
-                continue;
-            }
-            var config = item.getConfigInventory(targetStack);
-            for (AEItemKey key : markingCandidates(availableByDrive, target, threshold)) {
-                boolean exists = markedKeys.stream().anyMatch(existing -> sameMarkerChain(existing, key));
-                if (!exists) {
-                    for (int slot = 0; slot < config.size(); slot++) {
-                        if (config.getKey(slot) instanceof AEItemKey existing
-                                && sameMarkerChain(existing, key)) {
-                            exists = true;
-                            break;
-                        }
-                    }
-                }
-                if (exists) {
-                    alreadyMarked++;
-                    continue;
-                }
-                int free = -1;
-                for (int slot = 0; slot < config.size(); slot++) {
-                    if (config.getKey(slot) == null) {
-                        free = slot;
-                        break;
-                    }
-                }
-                if (free < 0) {
-                    noSpace++;
-                    continue;
-                }
-                config.setStack(free, new appeng.api.stacks.GenericStack(key, 0L));
-                markedKeys.add(key);
-                added++;
-            }
-        }
-        refreshDriveStorageProviders();
-        return new BulkMarkCounts(added, alreadyMarked, noSpace);
-    }
-
-    /**
-     * eco's own rule for "these two markers stand for the same compression chain", so the two hosts cannot
-     * drift apart on what counts as already marked. It treats an empty chain as never matching, which is what
-     * the gate above relies on.
-     */
-    public static boolean sameMarkerChain(AEItemKey left, AEItemKey right) {
-        return cn.dancingsnow.neoecoae.integration.StorageBulkMarkingIntegration
-                .isSameMarkerChain(left.toStack(), right.toStack());
-    }
-
-    public List<SimplifyDriveBlockEntity> smallBulkDrives() {
-        SimplifyStorageCluster cluster = getCluster();
-        if (cluster == null) {
-            return List.of();
-        }
-        return cluster.getDrives().stream()
-                .filter(drive -> drive.getCellStack() != null
-                        && drive.getCellStack().getItem() instanceof SimplifySmallBulkStorageCellItem)
-                .toList();
-    }
 
     /** Public for the same reason {@link #createCellEntries()} is: the suite has to drive the panel through
      * the handles this config hands eco, not through the methods behind it. */
@@ -760,8 +599,7 @@ public class SimplifyStorageHostBlockEntity
                     cell.getTier().getTier(),
                     panelKindOf(typeId),
                     Math.max(0L, cell.getStoredItemTypes()),
-                    Math.max(0L, cn.dancingsnow.neoecoprototype.items.SmallBulkTypeCap
-                            .of(drive.getCellStack(), cell)),
+                    Math.max(0L, cell.getTotalItemTypes()),
                     Math.max(0L, cell.getUsedBytes()),
                     Math.max(0L, cell.getTotalBytes()),
                     // Not cell.hasInfiniteTypeCapacity(). eco reads this per-row flag inside
@@ -804,8 +642,7 @@ public class SimplifyStorageHostBlockEntity
                 continue;
             }
             usedTypes = saturatingAdd(usedTypes, Math.max(0L, cell.getStoredItemTypes()));
-            totalTypes = saturatingAdd(totalTypes, Math.max(0L,
-                    cn.dancingsnow.neoecoprototype.items.SmallBulkTypeCap.of(drive.getCellStack(), cell)));
+            totalTypes = saturatingAdd(totalTypes, Math.max(0L, cell.getTotalItemTypes()));
             usedBytes = saturatingAdd(usedBytes, Math.max(0L, cell.getUsedBytes()));
             totalBytes = saturatingAdd(totalBytes, Math.max(0L, cell.getTotalBytes()));
         }

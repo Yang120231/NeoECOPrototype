@@ -114,7 +114,7 @@ public enum SimplifyDriveProvider implements IBlockComponentProvider, IServerDat
                 tag.putBoolean("infiniteTypes", cell.hasInfiniteTypeCapacity());
                 tag.putLong("storedItemTypes", cell.getStoredItemTypes());
                 if (!cell.hasInfiniteTypeCapacity()) {
-                    tag.putLong("totalItemTypes", markedTypeCap(cellStack, cell));
+                    tag.putLong("totalItemTypes", cell.getTotalItemTypes());
                 }
             }
             // That guard leaves the singularity cell with nothing to say, so its own figure rides here:
@@ -127,16 +127,6 @@ public enum SimplifyDriveProvider implements IBlockComponentProvider, IServerDat
                 }
             }
         }
-    }
-
-    /**
-     * The type count a small bulk cell can actually reach. eco's MEGA bulk backend is a final class and
-     * hard-codes 25 (50 with its own upgrade card) without ever reading the item, but a small bulk cell
-     * holds only what its filter slots mark - 3 or 10 - so the tooltip reports the item's number, which
-     * is the ceiling that is reachable. Every other cell reports what its inventory says.
-     */
-    private static long markedTypeCap(ItemStack stack, IECOStorageCell cell) {
-        return cn.dancingsnow.neoecoprototype.items.SmallBulkTypeCap.of(stack, cell);
     }
 
     /**

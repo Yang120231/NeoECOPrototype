@@ -1,41 +1,59 @@
 package cn.dancingsnow.neoecoprototype.items;
 
 import appeng.api.ids.AEComponents;
+import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.cells.ISaveProvider;
 import appeng.util.ConfigInventory;
 import cn.dancingsnow.neoecoae.api.storage.ECOCellType;
-import cn.dancingsnow.neoecoae.api.storage.IECOBulkMarkableCellItem;
 import cn.dancingsnow.neoecoae.impl.storage.ECOStorageCell;
-import cn.dancingsnow.neoecoae.integration.megacells.backend.ECOMegaLongBulkStorageCell;
 import cn.dancingsnow.neoecoae.items.ECOStorageCellItem;
+import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
 import cn.dancingsnow.neoecoprototype.api.SimplifyTier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.fml.ModList;
+import net.minecraft.world.item.component.CustomData;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * L1 item-only bulk cell reusing eco's MEGA long-bulk storage backend, so marked
- * items behave as compression chains (any chain variant folds into the marked
- * form; requires the MEGA Cells compression card).
+ * L1 item-only bulk cell: an unbounded byte budget with very few filter slots.
  *
- * <p>It intentionally reuses {@link ECOStorageCellItem}: eco continues to own cell persistence,
- * partitioning, migration, upgrades, and AE2 mount behavior. The only L1-specific tuning is the
- * long-capacity byte budget and a deliberately low, fixed type count. Compression remains owned
- * by the MEGA compression upgrade/backend; this item only stores marker configuration.
+ * <p>A mark is a whitelist entry, nothing more. This cell used to borrow eco's MEGA long-bulk backend so
+ * that marking one form of an item folded every form of its compression chain into that single slot, and
+ * that folding asked for the MEGA Cells compression card. The backend is gone by decision: it made this
+ * class fail to load if eco ever removed the bulk API it sat on, which is a worse trade than losing the
+ * folding - and the folding was already not working, since the fixture asserting it stayed red. The
+ * compression card is no longer offered to this cell either.</p>
  *
- * <p>Implementing {@code IECOBulkMarkableCellItem} opts this cell into the storage host's manual
- * marking page (neoecoae beta4+; the class fails to load on beta3 and older). The page edits the
- * same {@link #getConfigInventory} data, so marks are shared with the host-side small bulk panel.
+ * <p>It still reuses {@link ECOStorageCellItem} on purpose. eco owns cell persistence, partitioning,
+ * migration, upgrades and AE2 mount behaviour for every cell in the game, and that is a hard dependency
+ * this addon accepts; only the bulk-specific surface was cut. The one thing that used to come from the
+ * MEGA backend and is now ours to keep is the byte total - {@link #BULK_BYTES} - which is what the family
+ * is actually for.</p>
  */
-public final class SimplifySmallBulkStorageCellItem extends ECOStorageCellItem
-        implements IECOBulkMarkableCellItem {
+public final class SimplifySmallBulkStorageCellItem extends ECOStorageCellItem {
     public static final long BULK_BYTES = Long.MAX_VALUE;
+
+    /** Where eco's MEGA long-bulk backend kept its contents: {@code CUSTOM_DATA}, not {@code STORAGE_CELL_INV}. */
+    private static final String LONG_BULK_TAG = "neoecoae_mega_long_bulk";
+    private static final String ENTRIES_TAG = "entries";
+    private static final String ITEM_TAG = "item";
+    private static final String COMPONENTS_TAG = "components";
+    private static final String UNITS_TAG = "units";
+
     private final int totalTypes;
 
     public SimplifySmallBulkStorageCellItem(Item.Properties properties,
@@ -66,7 +84,7 @@ public final class SimplifySmallBulkStorageCellItem extends ECOStorageCellItem
     }
 
     private static void saveConfigInventory(ItemStack stack, ConfigInventory inventory) {
-        List<GenericStack> values = new java.util.ArrayList<>(
+        List<GenericStack> values = new ArrayList<>(
                 stack.getOrDefault(AEComponents.STORAGE_CELL_CONFIG_INV, List.of()));
         while (values.size() < 10) {
             values.add(null);
@@ -78,17 +96,98 @@ public final class SimplifySmallBulkStorageCellItem extends ECOStorageCellItem
         stack.set(AEComponents.STORAGE_CELL_CONFIG_INV, values);
     }
 
-    // 标准引擎没有压缩链行为（标记=精确白名单，标铁块塞铁锭进不去）。大盘后端
-    // ECOMegaLongBulkStorageCell 实现存储链，并按 beta4 约定从同一份 getConfigInventory
-    // 读取标记。它的 getTotalItemTypes() 是硬编码 25（带 eco 升级卡 50）、不读本物品的
-    // getTotalTypes()，所以驱动器的 tooltip 另走 SimplifyDriveProvider#markedTypeCap。
-    // 切换后标准引擎写入的存量组件不再被读取——更新前先取回盘内内容。
+    /**
+     * Gives the cell to eco's standard engine, after moving anything an older version stored in eco's
+     * MEGA long-bulk payload.
+     *
+     * <p>The two backends do not share a component: the standard one reads {@code STORAGE_CELL_INV},
+     * while the long-bulk one kept its own unit map under {@code CUSTOM_DATA -> neoecoae_mega_long_bulk}.
+     * Without this step every small bulk cell in an upgraded world would read as empty - the contents are
+     * still on the stack, but nothing looks there any more, which is worse than losing them loudly.</p>
+     *
+     * <p>Each old entry is already denominated in its own item form (the backend multiplied by the chain
+     * factor on the way in), so this is a copy rather than a conversion: no compression-chain lookup, and
+     * no MegaCells or eco class touched. Entries whose item is no longer registered cannot be recovered
+     * by anyone, so they are counted and reported, and the payload is dropped either way - leaving it
+     * would only make every later load retry a parse that can never succeed.</p>
+     */
     @Override
     protected ECOStorageCell createCellInventory(ItemStack stack, ISaveProvider saveProvider) {
-        if (ModList.get().isLoaded("megacells")) {
-            return new ECOMegaLongBulkStorageCell(stack, saveProvider);
-        }
+        migrateLongBulkContents(stack);
         return super.createCellInventory(stack, saveProvider);
+    }
+
+    private static void migrateLongBulkContents(ItemStack stack) {
+        if (!(stack.get(DataComponents.CUSTOM_DATA) instanceof CustomData held)) {
+            return;
+        }
+        CompoundTag root = held.copyTag();
+        CompoundTag payload = root.getCompound(LONG_BULK_TAG);
+        if (payload.isEmpty()) {
+            return;
+        }
+        ListTag entries = payload.getList(ENTRIES_TAG, Tag.TAG_COMPOUND);
+        List<GenericStack> moved = new ArrayList<>(entries.size());
+        int lost = 0;
+        for (int i = 0; i < entries.size(); i++) {
+            CompoundTag entry = entries.getCompound(i);
+            AEItemKey key = readEntryKey(entry);
+            long units = entry.getLong(UNITS_TAG);
+            if (key == null || units <= 0L) {
+                lost++;
+                continue;
+            }
+            moved.add(new GenericStack(key, units));
+        }
+        if (!moved.isEmpty()) {
+            mergeInto(stack, moved);
+        }
+        if (lost > 0) {
+            NeoECOPrototype.LOGGER.warn("small bulk cell: {} long-bulk entries could not be moved because"
+                    + " their item is no longer registered", lost);
+        }
+        root.remove(LONG_BULK_TAG);
+        if (root.isEmpty()) {
+            stack.remove(DataComponents.CUSTOM_DATA);
+        } else {
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
+        }
+    }
+
+    /** Adds {@code moved} to whatever the standard component already holds, one entry per item. */
+    private static void mergeInto(ItemStack stack, List<GenericStack> moved) {
+        List<GenericStack> stored = new ArrayList<>(
+                stack.getOrDefault(AEComponents.STORAGE_CELL_INV, List.of()));
+        for (GenericStack incoming : moved) {
+            boolean merged = false;
+            for (int i = 0; i < stored.size(); i++) {
+                GenericStack here = stored.get(i);
+                if (here != null && here.what().equals(incoming.what())) {
+                    stored.set(i, new GenericStack(here.what(), here.amount() + incoming.amount()));
+                    merged = true;
+                    break;
+                }
+            }
+            if (!merged) {
+                stored.add(incoming);
+            }
+        }
+        stack.set(AEComponents.STORAGE_CELL_INV, stored);
+    }
+
+    private static AEItemKey readEntryKey(CompoundTag entry) {
+        ResourceLocation id = ResourceLocation.tryParse(entry.getString(ITEM_TAG));
+        if (id == null) {
+            return null;
+        }
+        var item = BuiltInRegistries.ITEM.getHolder(id).orElse(null);
+        if (item == null) {
+            return null;
+        }
+        var patch = DataComponentPatch.CODEC
+                .parse(NbtOps.INSTANCE, entry.getCompound(COMPONENTS_TAG))
+                .result().orElse(DataComponentPatch.EMPTY);
+        return AEItemKey.of(new ItemStack(item, 1, patch));
     }
 
     @Override
@@ -104,18 +203,5 @@ public final class SimplifySmallBulkStorageCellItem extends ECOStorageCellItem
     @Override
     public int getTotalTypes() {
         return totalTypes;
-    }
-
-    /**
-     * eco's line would say 25 (50 with its upgrade card) - a ceiling this cell cannot reach because it only
-     * has {@code totalTypes} filter slots. See {@link SmallBulkTypeCap}.
-     */
-    @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context,
-                                java.util.List<net.minecraft.network.chat.Component> tooltip,
-                                net.minecraft.world.item.TooltipFlag flag) {
-        int beforeEcoWrote = tooltip.size();
-        super.appendHoverText(stack, context, tooltip, flag);
-        SmallBulkTypeCap.swapTooltipLine(tooltip, beforeEcoWrote, getCellInventory(stack), totalTypes);
     }
 }
