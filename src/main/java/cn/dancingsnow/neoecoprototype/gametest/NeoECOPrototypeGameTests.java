@@ -10732,4 +10732,205 @@ public final class NeoECOPrototypeGameTests {
         }
         helper.succeed();
     }
+
+    /** Every node our own advancement tree ships, named by file so a deleted node fails loudly. */
+    private static final String[] ADVANCEMENT_NODES = {
+            "root", "storage_controller", "drive_mounted", "first_l1_cell", "assembler_built",
+            "energized_cell", "powered_interface", "computation_host", "crafting_host",
+            "pattern_provider", "small_bulk", "fe_matrix", "chemical_matrix",
+            "mind", "migration_drive", "tix_doll"};
+
+    /** The one criterion string the two easter-egg awards in Java pass to {@code award}. */
+    private static final String EASTER_EGG_CRITERION = "easter_egg";
+
+    /** Storage matrices that are registered whatever is installed, so the tag must always list them. */
+    private static final String[] ALWAYS_REGISTERED_MATRICES = {
+            "simplify_item_storage_cell_1k", "simplify_item_storage_cell_16k", "simplify_item_storage_cell_64k",
+            "simplify_item_storage_cell_1m", "simplify_item_storage_cell_4m",
+            "simplify_fluid_storage_cell_1k", "simplify_fluid_storage_cell_16k", "simplify_fluid_storage_cell_64k",
+            "simplify_fluid_storage_cell_1m", "simplify_fluid_storage_cell_4m",
+            "simplify_concrete_storage_cell", "pigmee_storage_cell", "simplify_singularity_cell"};
+
+    private static boolean itemRegistered(String id) {
+        return BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse(id));
+    }
+
+    /** Whether a texture reference of the {@code namespace:path.png} form ships in this jar. */
+    private static boolean textureExists(String reference) {
+        ResourceLocation id = ResourceLocation.parse(reference);
+        return NeoECOPrototype.class.getResource(
+                "/assets/" + id.getNamespace() + "/" + id.getPath()) != null;
+    }
+
+    /**
+     * Pins the L1 advancement tree on the four ways it can silently break.
+     *
+     * <p>An advancement whose criteria names an unregistered item is dropped by NeoForge with a logged
+     * ERROR naming our file, and one whose parent was dropped by a condition ends up off the tree - so the
+     * load check and the item check are the same failure seen from two sides. The language check exists
+     * because the JSON carries {@code translate} components: a missing key shows the raw key to the player.
+     * And the criterion name for the two {@code minecraft:impossible} nodes is only matched to the Java by
+     * agreement, so it is asserted here instead of trusted.
+     */
+    @GameTest(template = "empty", batch = "advancement_tree", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void advancementTreeLoadsAndNamesRealItems(GameTestHelper helper) {
+        // The instrument first: a resolver that cannot answer "no" would make every check below vacuous.
+        if (itemRegistered("neoecoprototype:definitely_not_an_item")) {
+            helper.fail("the item resolver says a made-up id is registered - it cannot reject, so nothing"
+                    + " below it can be trusted");
+            return;
+        }
+        if (!itemRegistered("neoecoprototype:simplify_green_crystal_matrix")) {
+            helper.fail("the item resolver rejects an item that is registered - the resolver is broken");
+            return;
+        }
+
+        var advancements = ((ServerLevel) helper.getLevel()).getServer().getAdvancements();
+        var titleKeys = new java.util.LinkedHashSet<String>();
+        for (String name : ADVANCEMENT_NODES) {
+            String json = readResource("/data/neoecoprototype/advancement/" + name + ".json", helper);
+            if (json == null) {
+                return;
+            }
+            com.google.gson.JsonObject node;
+            try {
+                node = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+            } catch (com.google.gson.JsonParseException | IllegalStateException failure) {
+                helper.fail(name + ".json did not parse: " + failure);
+                return;
+            }
+
+            String icon = node.getAsJsonObject("display").getAsJsonObject("icon").get("id").getAsString();
+            if (!itemRegistered(icon)) {
+                helper.fail(name + " shows " + icon + " as its icon, and that item is not registered");
+                return;
+            }
+            if ("root".equals(name)) {
+                // A tab without a background paints the missing-texture checker across the whole panel.
+                // Nothing in the log says so - only eyes catch it - so it is asserted here instead.
+                if (!node.getAsJsonObject("display").has("background")) {
+                    helper.fail("root has no display.background, so the tab draws a missing-texture grid"
+                            + " behind every node");
+                    return;
+                }
+                String background = node.getAsJsonObject("display").get("background").getAsString();
+                if (!textureExists(background)) {
+                    helper.fail("root's background " + background + " is not a texture in this jar");
+                    return;
+                }
+            }
+
+            var criteria = node.getAsJsonObject("criteria");
+            if (criteria.size() != 1) {
+                helper.fail(name + " has " + criteria.size() + " criteria; the tree expects exactly one");
+                return;
+            }
+            for (var entry : criteria.entrySet()) {
+                var criterion = entry.getValue().getAsJsonObject();
+                String trigger = criterion.get("trigger").getAsString();
+                if (!"minecraft:inventory_changed".equals(trigger)) {
+                    if (!EASTER_EGG_CRITERION.equals(entry.getKey())) {
+                        helper.fail(name + " is awarded by code but names its criterion \""
+                                + entry.getKey() + "\", while the Java passes \""
+                                + EASTER_EGG_CRITERION + "\"");
+                        return;
+                    }
+                    continue;
+                }
+                for (var group : criterion.getAsJsonObject("conditions").getAsJsonArray("items")) {
+                    var groupObject = group.getAsJsonObject();
+                    if (groupObject.has("tag")) {
+                        // A tag whose every entry is optional can quietly end up empty, so the families
+                        // that are always registered are asserted by name rather than by count.
+                        String tagId = groupObject.get("tag").getAsString();
+                        ResourceLocation tagKey = ResourceLocation.parse(tagId);
+                        String tagJson = readResource("/data/" + tagKey.getNamespace()
+                                + "/tags/item/" + tagKey.getPath() + ".json", helper);
+                        if (tagJson == null) {
+                            return;
+                        }
+                        var values = com.google.gson.JsonParser.parseString(tagJson).getAsJsonObject()
+                                .getAsJsonArray("values");
+                        var listed = new java.util.HashSet<String>();
+                        int registered = 0;
+                        for (var tagEntry : values) {
+                            String id = tagEntry.getAsJsonObject().get("id").getAsString();
+                            listed.add(id);
+                            if (itemRegistered(id)) {
+                                registered++;
+                            }
+                        }
+                        if (registered < 13) {
+                            helper.fail(tagId + " resolves to only " + registered
+                                    + " registered items; the 13 always-registered matrices should all be in it");
+                            return;
+                        }
+                        for (String always : ALWAYS_REGISTERED_MATRICES) {
+                            if (!listed.contains("neoecoprototype:" + always)) {
+                                helper.fail(tagId + " no longer lists " + always
+                                        + ", so that family stopped counting for the cell achievement");
+                                return;
+                            }
+                        }
+                        continue;
+                    }
+                    for (var item : groupObject.getAsJsonArray("items")) {
+                        if (!itemRegistered(item.getAsString())) {
+                            helper.fail(name + " waits on " + item.getAsString() + " in criterion \""
+                                    + entry.getKey() + "\", which is not registered - NeoForge drops this"
+                                    + " file with a logged ERROR");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            boolean loaded = advancements.get(ResourceLocation.fromNamespaceAndPath(
+                    NeoECOPrototype.MOD_ID, name)) != null;
+            if (node.has("neoforge:conditions")) {
+                var condition = node.getAsJsonArray("neoforge:conditions").get(0).getAsJsonObject();
+                String gate = condition.get("item").getAsString();
+                if (!gate.equals(icon)) {
+                    helper.fail(name + " is gated on " + gate + " but shows " + icon
+                            + " - one of the two will not follow the other when the family moves");
+                    return;
+                }
+                if (loaded != itemRegistered(gate)) {
+                    helper.fail(name + " loaded=" + loaded + " while its gate item " + gate
+                            + " is registered=" + itemRegistered(gate));
+                    return;
+                }
+            } else if (!loaded) {
+                helper.fail(name + " carries no condition yet the server did not load it - its parent is"
+                        + " missing or the file was rejected");
+                return;
+            }
+
+            titleKeys.add("advancement.neoecoprototype." + name + ".title");
+            titleKeys.add("advancement.neoecoprototype." + name + ".description");
+        }
+
+        for (String lang : new String[]{"en_us", "zh_cn"}) {
+            String json = readResource("/assets/neoecoprototype/lang/" + lang + ".json", helper);
+            if (json == null) {
+                return;
+            }
+            com.google.gson.JsonObject keys;
+            try {
+                keys = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+            } catch (com.google.gson.JsonParseException | IllegalStateException failure) {
+                helper.fail("lang/" + lang + ".json did not parse: " + failure);
+                return;
+            }
+            for (String key : titleKeys) {
+                if (!keys.has(key) || keys.get(key).getAsString().isBlank()) {
+                    helper.fail("lang/" + lang + ".json has no " + key
+                            + ", so that node shows the raw key in the tree");
+                    return;
+                }
+            }
+        }
+        helper.succeed();
+    }
 }
