@@ -21,6 +21,8 @@ Neo ECO Prototype is an addon. No dependency JAR is included in this repository 
 
 Development JARs are resolved from local files, so a fresh clone cannot compile until they are placed; the build then stops with the exact missing paths instead of failing later as unresolved symbols. The `21.2.9` build of Neo ECO AE Extension used as the baseline was handed over by its author and has no public download page yet - a packaging note, not a stability one.
 
+The upstream mod's own metadata lists its authors as DancingSnow, ZhuRuoLing and Yang120231. Special thanks to `Yang120` for substantial help from the original Neo ECO AE Extension team.
+
 One model, not a texture, is copied rather than referenced: `models/block/simplify_casing.json` carries the 13-element geometry of upstream `assets/neoecoae/models/block/casing_base.json` with its own texture slots. It is inlined on purpose - this addon's CI rejects any asset that points into the `neoecoae` namespace, because an upstream rename would otherwise turn our casing into a silent missing model. Geometry only; the surface artwork is our own.
 
 ## Artwork and model assets
