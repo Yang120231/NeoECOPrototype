@@ -78,7 +78,7 @@ Copyright (C) 2026 reliqwq.
 
 ## Credits
 
-reliqwq wrote and maintains this addon. Neo-TiX is the original lead artist and artwork contributor, and 寒冰 also contributed artwork; both attributions are retained with permission. DancingSnow is the author of Neo ECO AE Extension, the upstream mod this addon requires, and Yang120 of the same team helped a great deal.
+reliqwq wrote and maintains this addon. Neo-TiX is the original lead artist and artwork contributor, and kyln默寒寒冰 also contributed artwork; both attributions are retained with permission. DancingSnow is the author of Neo ECO AE Extension, the upstream mod this addon requires, and Yang120 of the same team helped a great deal.
 
 ## Disclaimer
 

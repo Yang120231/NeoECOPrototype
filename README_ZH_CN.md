@@ -78,7 +78,7 @@ KubeJS 是可选的。脚本在启动事件与配方事件里注册存储矩阵�
 
 ## 鸣谢
 
-reliqwq 编写并维护本模组。Neo-TiX 是原主美与美术贡献者，寒冰亦贡献了美术内容，两处的署名均已获许可保留。DancingSnow 是本模组必需的前置 Neo ECO AE Extension 的作者，同团队的 Yang120 提供了大量帮助。
+reliqwq 编写并维护本模组。Neo-TiX 是原主美与美术贡献者，kyln默寒寒冰亦贡献了美术内容，两处的署名均已获许可保留。DancingSnow 是本模组必需的前置 Neo ECO AE Extension 的作者，同团队的 Yang120 提供了大量帮助。
 
 ## 免责声明
 

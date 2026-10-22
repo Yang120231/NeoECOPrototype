@@ -1,112 +1,47 @@
 # Third-Party Notices
 
-Neo ECO Prototype is an addon. It does not include the dependency JARs in this repository or in the source release. The following components are required for development or runtime and remain the property of their respective authors.
+Neo ECO Prototype is an addon. No dependency JAR is included in this repository or in the source release; each project below stays the property of its authors, and users are pointed at the official download pages.
 
-## Neo ECO AE Extension
+## Dependencies
 
-- Mod ID: `neoecoae`
-- Current development compatibility baseline: `21.2.9` (the upstream release jar `neoecoae-21.2.9.jar`), which declares its own version as `21.2.9`
-- Moved off `21.2.1-beta2` on 2026-10-08. The release also raised upstream's own LDLib2 floor from `[2.2.8,)` to `[2.2.40,)`: with the older LDLib2 the loader refuses upstream, and this addon is what reports it, as `NoClassDefFoundError: cn/dancingsnow/neoecoae/gui/GuiTitleProvider` - a downstream symptom. The interface is in the jar, and the six members our mixins inject into match beta2 one for one.
-- Declared compatibility floor: `[21.2.9,)`, raised to sit equal to the compile baseline above rather than below it. Its predecessor was `[21.2.1-beta2,)`, raised from `21.2.0` in `3.0.0-beta1` because addon blocks implement upstream's `gui.GuiTitleProvider`. That floor named a prerelease on purpose: `21.2.1-beta1` declared itself as plain `21.2.1` so `[21.2.1,)` accepted it, but `beta2` declares its real version and a prerelease compares *below* the release, so the loader refused to start with "requires neoecoae 21.2.1 or above"
-- Earlier baselines this addon was built against: `21.2.0-beta2`, `21.2.0-beta4` (first build exposing `IECOBulkMarkableCellItem`), `21.2.0-beta6`, `21.2.0`, `21.2.1-beta1`, `21.2.1-beta2`
-- License declared by the upstream mod: GNU GPLv3
-- Upstream authors listed by the upstream metadata: DancingSnow, ZhuRuoLing, and Yang120231
+| Component | Mod ID | Version this addon builds against | License as published upstream |
+|---|---|---|---|
+| Neo ECO AE Extension | `neoecoae` | `21.2.9` (also the declared floor) | GNU GPL-3.0 |
+| Applied Energistics 2 | `ae2` | `19.2.17` | LGPL v3 / GPL v3 for code; **textures and models CC BY-NC-SA 3.0** |
+| GuideME | `guideme` | `21.1.1` | see upstream |
+| LDLib2 | `ldlib2` | `2.2.40` (hard dependency, inherited from upstream's floor) | LGPL-3.0 per mod metadata |
+| Mega Cells | `megacells` | `4.11.0` (optional) | LGPL-3.0 per mod metadata |
+| Extended AE | `extendedae` | `1.21-2.2.28` (compile-time reference only) | GNU LGPLv3 |
+| AE2 OmniCells | `ae2omnicells` | `1.1.6` (optional) | see upstream |
+| AppliedFlux | `appflux` | `1.21-2.1.5` (optional) | see upstream |
+| Beyond Dimensions | `beyonddimensions` | `0.7.30` (optional) | see upstream |
+| Just Enough Items | `jei` | `19.57.0.445` (compile-time only) | MIT |
+| Jade | `jade` | Curse file `7428884` (compile-time only) | CC-BY-NC-SA-4.0 per mod metadata |
+| Mekanism / Applied Mekanistics / AE2-JEI-Integration | — | local runtime only, never bundled | see upstream |
 
-The `21.2.1` JAR used for this baseline came from the upstream author on 2026-10-08, over the same channel as `21.2.1-beta1` and `beta2`. This repository has not verified a public download page for it, so a fresh clone still cannot fetch it and has to ask upstream for the file - which is a packaging note, not a stability one: `3.1.0` is published as a stable addon release on this baseline, and the earlier `beta` label was about upstream's own version string being unavailable, not about our readiness.
+Development JARs are resolved from local files, so a fresh clone cannot compile until they are placed; the build then stops with the exact missing paths instead of failing later as unresolved symbols. The `21.2.9` build of Neo ECO AE Extension used as the baseline was handed over by its author and has no public download page yet - a packaging note, not a stability one.
 
-Neo ECO Prototype is an independent addon and is not the Neo ECO AE Extension project. The local development JAR used during testing is intentionally not redistributed by this repository.
+One model, not a texture, is copied rather than referenced: `models/block/simplify_casing.json` carries the 13-element geometry of upstream `assets/neoecoae/models/block/casing_base.json` with its own texture slots. It is inlined on purpose - this addon's CI rejects any asset that points into the `neoecoae` namespace, because an upstream rename would otherwise turn our casing into a silent missing model. Geometry only; the surface artwork is our own.
 
-One model is copied rather than referenced: `src/main/resources/assets/neoecoprototype/models/block/simplify_casing.json` carries the 13-element geometry of upstream `assets/neoecoae/models/block/casing_base.json` verbatim, with its own texture slots. It is inlined on purpose - this addon's CI rejects any asset that points into the `neoecoae` namespace, because an upstream rename would turn our casing into a missing model with nothing to warn us. It is geometry only; the surface artwork is our own.
+## Artwork and model assets
 
-Twelve of the 321 PNGs we ship are byte-identical copies of an upstream PNG rather than namespace references, counted on 2026-10-22 by comparing file *content* against the upstream release jar `neoecoae-21.2.6.jar` (md5 `d567b9ed9bb0ac8174abbeba3566eb91`, 698 upstream PNGs indexed) over `src/main/resources/assets/neoecoprototype/**/*.png` - the `legacy_art/` fallback pack is not in that count. All twelve sit in the cell-art family under `textures/block/storage_recolor/` and `textures/item/storage_recolor/`, and seven of the twelve are shipped under a name of our own, so a name-for-name comparison misses them.
-The previous version of this sentence read "twenty of the 319 PNGs" (measured 2026-10-19, eighteen in the same family, twelve under our own names). 319 is a narrower scope than the one above and did not reproduce: the same tree counted **341** PNGs on 2026-10-22, before that day's removal of twenty unreferenced files. An even earlier count ("eleven of thirty-six", taken against `neoecoae-21.2.1-beta2` on 2026-10-07) was name-keyed, which is why it read low. What left the pack on 2026-10-22: twenty PNGs plus the three `.mcmeta` files that belonged to them, none of which was referenced by any model, by Java, or by our own docs - eight of the twenty were upstream-identical, so this count came down from 20 to 12 with them. They are kept on the author's disk and are not redistributed. They are copies for the same reason the casing is inlined, and each one is a file the artists can redraw in place without touching a model. Added on 2026-10-19: `textures/item/storage_recolor/eco_spent_waste_cell_layer.png` and its `.mcmeta`, both carried byte for byte from upstream `textures/item/eco_cell_compat/spent_neuclear_waste_cell_layer.png`, so the spent-waste matrix gets the animated core layer its quantum sibling already had. Added on 2026-10-07: `textures/item/storage_recolor/eco_fe_cell_housing.png`, copied from upstream `textures/item/eco_cell_compat/energy_cell_housing.png` (which is the same file as their `item/eco_fe_cell_housing.png`), so the flux cells stopped wearing the item-cell shell; upstream ships no `.mcmeta` beside it, so none was carried. Taken out on 2026-10-22, because the 2026-10-19 move to the lower-row boards superseded it: `models/block/cell/storage_cell_l1_fe.json` and `models/block/cell/storage_cell_l1r_fe.json` both resolve `base` and `particle` to `block/storage_recolor/drive/cell_housing_lower`, so nothing referenced the 10-07 copy any more. The animated `eco_spent_waste_cell_layer.png` mentioned above is untouched - it is the *housing*, not the layer, that left.
+- `Neo-TiX` - original lead artist and artwork contributor; attribution retained with permission.
+- `kyln默寒寒冰` - original artwork contributor; attribution retained with permission.
 
-Special thanks to `Yang120` for substantial help from the original Neo ECO AE Extension team.
+Of the 320 PNGs this addon ships, in three groups:
 
-## MegaCells (optional runtime compatibility)
+1. **262 original** - drawn by the artists above. **All Rights Reserved (ARR)**: not to be extracted, reused or redistributed separately without permission. Permission to use the artwork as part of NeoECOPrototype does not transfer ownership or grant a separate redistribution license.
+2. **50 adapted from Neo ECO AE Extension** - 9 byte-for-byte copies of cell-art textures and 41 that keep upstream's pixel layout with a different palette. Upstream publishes under GPL-3.0 with no separate asset clause, so these carry upstream's licensing and attribution requirements and are not relicensed by this addon.
+3. **8 adapted from Applied Energistics 2** - four pattern-provider faces, one interface face and three part backs, each keeping AE2's pixel layout with a different palette. AE2's asset notice reads, verbatim: *"Textures and Models (c) 2020, Ridanisaurus Rid, (c) 2013 - 2020 AlgorithmX2 et al / License: CC BY-NC-SA 3.0"*. That license requires attribution, carries a non-commercial term, and requires derivatives to be shared under the same terms. **This addon makes no ARR claim over those eight files**, and anyone reusing them follows AE2's terms rather than ours.
 
-- Mod ID: `megacells`
-- Verified development baseline: `4.11.0` for NeoForge 1.21.1
-- Required by Neo ECO AE Extension beta4 only when its MegaCells integration is used; it is not bundled or required by this addon.
-- License declared by the MegaCells metadata: LGPLv3.0.
-
-## Advanced AE / GeckoLib (local development runtime only)
-
-- Mod IDs: `advanced_ae`, `geckolib`
-- Present in the local development runtime because the upstream compat mixins expect them at runtime; not compile dependencies of this addon and never redistributed.
-- Advanced AE 1.6.9 by pedroksl; GeckoLib 4.8.3 by BernieL.
-
-## Extended AE (optional compile-time reference only)
-
-- Mod ID: `extendedae`
-- Version: `1.21-2.2.28` (compile-time reference dependency, `compileOnly`); the addon builds and runs without it and never redistributes it.
-- ExtendedAE by GlodBlock, GNU LGPLv3.
+The counts above were produced by comparing file content, not file names, against whole-jar indexes of `neoecoae-21.2.9.jar` (md5 `d4b17512930fef8020bfe42bf5e79dc6`, 755 PNGs) and `ae2-19.2.17.jar` (md5 `1d9768edc90fb50f065949f2628ea991`, 655 PNGs). "Same layout, different palette" means the per-pixel colour-equality sequence matches at equal size with at least three distinct colours, so flat glow sheets cannot match by accident; the palettes themselves were chosen file by file, and the 25 distinct colour maps found across those files are the record of that. The project code remains GPL-3.0-only, and GPL does not apply to the ARR artwork in group 1.
 
 ## Player skins bundled for the named dolls
 
-`src/main/resources/assets/neoecoprototype/textures/block/fumo/skins/{reliqwq,yang120,kouooki,tedxenon}.png` are the actual player skins of four named people, shipped inside this GPL-3 jar so their dolls show the right face without reaching the session service.
-
-- reliqwq, yang120, kouooki: collected locally on 2026-09-19/2026-09-20 into `fumo_skins/` (not redistributed by this file) and copied byte-for-byte into the jar on 2026-09-30.
-- tedxenon: fetched on 2026-09-30 from Mojang's public texture CDN for profile `82af1b07-f745-4c9e-8a1f-8836e084980f`. That profile publishes only a classic `SKIN` (no `SLIM`), which is why the file is named without the `_slim` suffix.
-- A player skin is that player's own content and Mojang's usage terms do not license us to redistribute it, so each file here stands on the person's own say-so, recorded on 2026-09-30 by this addon's maintainer. Adding another doll's face requires asking first - not fetching.
-- Arm width is decided by the file name, not by the profile: `<name>.png` is 4-pixel wrists, `<name>_slim.png` is 3-pixel. `FumoRenderer#skinOf` explains why the profile's uuid cannot answer that for a bundled skin.
-
-## Artwork and model assets
-- `Neo-TiX`: original lead artist and artwork contributor; attribution retained with permission.
-- `寒冰`: original artwork contributor; attribution retained with permission.
-
-Textures and models belonging to this project are **All Rights Reserved (ARR)** unless a specific upstream license is stated alongside the asset. They may not be extracted, reused, or redistributed separately without permission. Permission to use the artwork as part of NeoECOPrototype does not transfer ownership or grant a separate redistribution license.
-
-Some visual resources are adapted from Neo ECO AE Extension assets. Those assets retain the upstream project's licensing and attribution requirements and are not relicensed by Neo ECO Prototype. The project code remains GPL-3.0-only; the GPL license does not apply to ARR artwork assets.
-
-## Applied Energistics 2
-
-- Mod ID: `ae2`
-- Version compiled and tested against: `19.2.17`, the same version the shipped floor names (`19.2.18` was the compile target while upstream Neo ECO AE Extension `21.2.1-beta1` demanded it from its own side; `21.2.1-beta2` dropped that back to `19.2.17`). `19.2.18` players are not left behind: the only AE2 class that differs between the two jars is `core.localization.Tooltips`, and what `19.2.18` removed from it are fields this addon never names.
-- License: see the upstream project and the `NOTICE` file distributed with AE2
-- Project: <https://github.com/AppliedEnergistics/Applied-Energistics-2>
-
-## GuideME
-
-- Mod ID: `guideme`
-- Version tested: `21.1.1`
-- License: see the upstream project and the license information distributed with GuideME
-- Project: <https://github.com/AppliedEnergistics/GuideME>
-
-## LowDragLib2
-
-- Mod ID: `ldlib2`
-- Version tested: `2.2.8`
-- License declared by the mod metadata: LGPL-3.0
-- Project: <https://github.com/Low-Drag-MC/LDLib2>
-
-## Just Enough Items
-
-- Mod ID: `jei`
-- Version tested: `19.27.0.340`
-- License declared by the mod metadata: MIT
-- Project: <https://github.com/mezz/JustEnoughItems>
-
-## Jade
-
-- Mod ID: `jade`
-- Version tested: `15.10.4`
-- License declared by the mod metadata: CC-BY-NC-SA-4.0
-- Project: <https://github.com/Snownee/Jade>
-
-## Minecraft and NeoForge
-
-Minecraft, Minecraft Forge/NeoForge, and their names and trademarks belong to their respective owners. Neo ECO Prototype is an unofficial community mod and is not endorsed by Mojang or Microsoft.
-
-- NeoForge: <https://neoforged.net/>
-- Minecraft usage guidelines: <https://www.minecraft.net/en-us/usage-guidelines>
-
-## Local development JARs (not redistributed)
-
-`build.gradle` resolves every dependency from local files under `libs/` and `neoecobeta/` so a build needs no network, and this repository intentionally contains none of them. A fresh clone therefore cannot compile until those files are placed, and the build says so explicitly: any Gradle task stops with the exact missing paths instead of failing later as unresolved symbols. The list itself is not copied into this file on purpose - the declarations in `build.gradle` are the only version of it, and a duplicate here would drift.
-
-Where each one comes from is the section above named for that mod. Two exceptions are worth stating: the `neoecoae` baseline this addon compiles against is a build the upstream author handed over directly and is not downloadable anywhere yet, and the Mekanism / Applied Mekanistics / AE2-JEI-Integration jars are in the local runtime only so the client can be inspected with them - they are not compile dependencies of this addon.
+`textures/block/fumo/skins/{reliqwq,yang120,kouooki,tedxenon}.png` are the actual player skins of four named people, shipped so their dolls show the right face without reaching the session service. A player skin is that player's own content, and Mojang's usage terms do not license us to redistribute it, so each of these four files stands on that person's own say-so. **Adding another doll's face requires asking first, not fetching.**
 
 ## Distribution rule
 
 Do not copy dependency JARs into this repository or bundle them into a release without checking each upstream project's current redistribution terms. Link users to the official project pages instead.
+
+Upstream projects: <https://github.com/DancingSnow0517/NeoECOAEExtension> · <https://github.com/AppliedEnergistics/Applied-Energistics-2> · <https://github.com/AppliedEnergistics/GuideME> · <https://github.com/Low-Drag-MC/LDLib2> · <https://github.com/mezz/JustEnoughItems> · <https://github.com/Snownee/Jade>
