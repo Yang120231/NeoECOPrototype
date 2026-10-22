@@ -1,9 +1,9 @@
 package cn.dancingsnow.neoecoprototype.mixin;
 
 /*
- * Version lock: NeoForge 21.1.251, Eco 21.2.1. Checked against that jar: NEBlockEntity declares
- * public void onReady(), which is what the require below binds to - if it disappears this does not go
- * quiet, it fails at class transformation.
+ * Version lock: NeoForge 21.1.251, Eco 21.2.9. Checked against that jar on 2026-10-22: NEBlockEntity
+ * declares public void onReady(), which is what the require below binds to - if it disappears this does not
+ * go quiet, it fails at class transformation. (First written against 21.2.1.)
  */
 
 import cn.dancingsnow.neoecoae.blocks.entity.NEBlockEntity;

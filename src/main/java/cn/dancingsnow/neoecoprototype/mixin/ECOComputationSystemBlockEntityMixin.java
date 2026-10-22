@@ -1,9 +1,9 @@
 package cn.dancingsnow.neoecoprototype.mixin;
 
 /*
- * Version lock: NeoForge 21.1.251, AE2 19.2.17, Eco 21.2.1. That host class still declares
- * public MultiBlockDefinition getBuildDefinition() and no longer overrides onReady(), so the definition
- * is the only thing taken from it.
+ * Version lock: NeoForge 21.1.251, AE2 19.2.17, Eco 21.2.9. Re-checked against that jar on 2026-10-22:
+ * that host class still declares public MultiBlockDefinition getBuildDefinition() and still does not
+ * declare onReady(), so the definition is the only thing taken from it. (First written against 21.2.1.)
  */
 
 import cn.dancingsnow.neoecoae.api.IECOTier;
