@@ -6,7 +6,7 @@ Neo ECO Prototype 是 Neo ECO AE Extension 与 Applied Energistics 2 的非官�
 
 ## 提供什么
 
-存储侧从 L1 起：驱动器、能量单元与小宗存储矩阵。小宗矩阵默认标记 3 种资源，在工作台上用扩展卡升到 10 种；容量按 long 计数，字节上限就是 `Long.MAX_VALUE`。整个家族需要 MegaCells；物品变体沿用 eco 的 MEGA 长储后端，所以被标记的物品按压缩链存储。
+存储侧从 L1 起：驱动器、能量单元与小宗存储矩阵。小宗矩阵默认标记 3 种资源，在工作台上用扩展卡升到 10 种；容量按 long 计数，字节上限就是 `Long.MAX_VALUE`。整个家族需要 MegaCells，化学品那两只另需 Mekanism 与它的 AE2 桥接模组 Applied Mekanistics。这些仓**不走 eco 的大宗标记后端**，被标记的物品不会被折成压缩链；扩展版没有拆解配方，装卡前先想清楚。
 
 L1 驱动器默认只挂载本家 L1 单元与小宗单元。别的元件要服务端管理员显式放行才会挂载。
 
@@ -25,7 +25,8 @@ Trinity 多方块（三合一联合体）把存储、配置与合成收进同一
 | Minecraft | 1.21.1 |
 | NeoForge | 21.1.251 或兼容的 21.1.x |
 | Applied Energistics 2 | 19.2.17 或兼容的 19.2.x |
-| Neo ECO AE Extension | 21.2.1-beta2 或更高的兼容版本（正式版 21.2.1 另需 LDLib2 2.2.40 或更新） |
+| Neo ECO AE Extension | 21.2.9 或更高的兼容版本 |
+| LDLib2 | 2.2.40 或更新 —— 本模组与 Neo ECO AE Extension 都要求它 |
 | Java | 21 |
 | MegaCells | 可选；启用小宗存储矩阵时必需 |
 | Mekanism 与 Applied Mekanistics | 可选；启用化学品单元与化学品矩阵时必需 |
@@ -56,13 +57,20 @@ KubeJS 是可选的。脚本在启动事件与配方事件里注册存储矩阵�
 
 按 `build.gradle` 列出的清单，把合规获取的、版本完全对应的依赖放进 `libs/`，然后执行：
 
-```powershell
+```bash
+# Windows（仓库根目录）
+gradlew.bat build --offline
+
+# PowerShell / CMD（不在仓库根时）
 .\gradlew.bat build --offline
+
+# macOS 与 Linux
+./gradlew build --offline
 ```
 
-从全新克隆直接构建会停下来，报它缺的是哪几个 JAR——本仓库不转发任何依赖。产物是 `build/libs/neoecoprototype-1.3.1.jar`。`libs/`、`run/`、`build/`、参考检出与本地世界数据都不要提交进仓库。
+从全新克隆直接构建会停下来，报它缺的是哪几个 JAR——本仓库不转发任何依赖。产物是 `build/libs/neoecoprototype-<version>.jar`，`<version>` 就是写在 `build.gradle` 里的那个字面量。`libs/`、`run/`、`build/`、参考检出与本地世界数据都不要提交进仓库。
 
-依赖下限为什么这么写、eco 那条为什么要带预发布版本号，记在 [docs/ae2-extension-playbook.md](docs/ae2-extension-playbook.md)。一次发布要带什么、怎么发，记在 [docs/publishing.md](docs/publishing.md)。
+依赖下限为什么这么写、eco 那条下限是怎么从带预发布号一路抬到 `21.2.9` 的，记在 [docs/ae2-extension-playbook.md](docs/ae2-extension-playbook.md)。一次发布要带什么、怎么发，记在 [docs/publishing.md](docs/publishing.md)。
 
 ## 参与
 

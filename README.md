@@ -6,7 +6,7 @@ An unofficial addon for Neo ECO AE Extension and Applied Energistics 2, for Mine
 
 ## What it offers
 
-Storage starts at L1 with drives, energy cells and the small bulk matrices. A small bulk matrix marks three resources and upgrades to ten on a crafting table; its capacity is counted as a long, and the byte ceiling is `Long.MAX_VALUE`. The family needs MegaCells; its item variant reuses eco's MEGA long-bulk backend, so marked items store as compression chains.
+Storage starts at L1 with drives, energy cells and the small bulk matrices. A small bulk matrix marks three resources and upgrades to ten on a crafting table; its capacity is counted as a long, and the byte ceiling is `Long.MAX_VALUE`. The family needs MegaCells, and the chemical variants also need Mekanism with Applied Mekanistics. Nothing is folded into a compression chain - these cells do not use eco's bulk-marking backend - and the expanded cells have no disassembly recipe, so decide before you spend the card.
 
 An L1 drive mounts native L1 cells and small bulk cells. It mounts anything else only when a server administrator has named it.
 
@@ -25,7 +25,8 @@ The Trinity system folds storage, configuration and crafting into one structure.
 | Minecraft | 1.21.1 |
 | NeoForge | 21.1.251 or a compatible 21.1.x release |
 | Applied Energistics 2 | 19.2.17 or a compatible 19.2.x release |
-| Neo ECO AE Extension | 21.2.1-beta2 or a compatible later release (the 21.2.1 release also asks for LDLib2 2.2.40 or newer) |
+| Neo ECO AE Extension | 21.2.9 or a compatible later release |
+| LDLib2 | 2.2.40 or newer - required by this addon and by Neo ECO AE Extension itself |
 | Java | 21 |
 | MegaCells | optional; required when the small bulk matrices are used |
 | Mekanism and Applied Mekanistics | optional; required when chemical cells and chemical matrices are used |
@@ -56,13 +57,20 @@ KubeJS is optional. Scripts register storage matrices and recipes through startu
 
 Place lawful copies of the exact compatible dependencies in `libs/`, as listed in `build.gradle`, then run:
 
-```powershell
+```bash
+# Windows
+gradlew.bat build --offline
+
+# PowerShell / CMD in a directory other than the repository root
 .\gradlew.bat build --offline
+
+# macOS and Linux
+./gradlew build --offline
 ```
 
-A build from a fresh clone stops with the names of the jars it is missing, because none of them are redistributed here. The output is `build/libs/neoecoprototype-1.3.1.jar`. Keep `libs/`, `run/`, `build/`, reference checkouts and local world data out of the repository.
+A build from a fresh clone stops with the names of the jars it is missing, because none of them are redistributed here. The output is `build/libs/neoecoprototype-<version>.jar`, where `<version>` is the literal written in `build.gradle`. Keep `libs/`, `run/`, `build/`, reference checkouts and local world data out of the repository.
 
-Why the dependency floors are written the way they are, including the prerelease range for eco, is recorded in [docs/ae2-extension-playbook.md](docs/ae2-extension-playbook.md). What ships with a release, and how it is published, is in [docs/publishing.md](docs/publishing.md).
+Why the dependency floors are written the way they are, including how the Neo ECO AE Extension floor moved from a prerelease range up to `21.2.9`, is recorded in [docs/ae2-extension-playbook.md](docs/ae2-extension-playbook.md). What ships with a release, and how it is published, is in [docs/publishing.md](docs/publishing.md).
 
 ## Contributing
 
