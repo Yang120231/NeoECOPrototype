@@ -1,0 +1,33 @@
+{
+  "parent": "neoecoprototype:storage_controller",
+  "display": {
+    "icon": {
+      "id": "neoecoprototype:energized_energy_cell_512g"
+    },
+    "title": {
+      "translate": "advancement.neoecoprototype.energized_cell.title"
+    },
+    "description": {
+      "translate": "advancement.neoecoprototype.energized_cell.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "obtained": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "neoecoprototype:energized_energy_cell_16g",
+              "neoecoprototype:energized_energy_cell_512g"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "parent": "neoecoprototype:root",
+  "display": {
+    "icon": {
+      "id": "neoecoprototype:simplify_computation_system"
+    },
+    "title": {
+      "translate": "advancement.neoecoprototype.computation_host.title"
+    },
+    "description": {
+      "translate": "advancement.neoecoprototype.computation_host.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "obtained": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "neoecoprototype:simplify_computation_system"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

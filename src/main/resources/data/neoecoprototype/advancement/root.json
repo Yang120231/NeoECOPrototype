@@ -1,0 +1,32 @@
+{
+  "display": {
+    "icon": {
+      "id": "neoecoprototype:simplify_green_crystal_matrix"
+    },
+    "title": {
+      "translate": "advancement.neoecoprototype.root.title"
+    },
+    "description": {
+      "translate": "advancement.neoecoprototype.root.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false,
+    "background": "neoecoprototype:textures/block/computation_recolor/casing.png"
+  },
+  "criteria": {
+    "obtained": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "neoecoprototype:simplify_green_crystal_matrix"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

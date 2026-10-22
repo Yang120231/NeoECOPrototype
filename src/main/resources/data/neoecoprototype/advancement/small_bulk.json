@@ -1,0 +1,38 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:item_exists",
+      "item": "neoecoprototype:simplify_small_bulk_storage_cell"
+    }
+  ],
+  "parent": "neoecoprototype:root",
+  "display": {
+    "icon": {
+      "id": "neoecoprototype:simplify_small_bulk_storage_cell"
+    },
+    "title": {
+      "translate": "advancement.neoecoprototype.small_bulk.title"
+    },
+    "description": {
+      "translate": "advancement.neoecoprototype.small_bulk.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "obtained": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "neoecoprototype:simplify_small_bulk_storage_cell"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -46,6 +46,12 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
     /** How often a minded host re-reads its own situation. One second is plenty for a mood. */
     private static final int MOOD_SAMPLE_TICKS = 20;
 
+    /** The face is a one-in-sixteen roll per host, so noticing it is worth an advancement. 8 blocks. */
+    private static final double MIND_AWARD_RANGE_SQR = 64.0D;
+    private static final net.minecraft.resources.ResourceLocation MIND_ADVANCEMENT =
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                    cn.dancingsnow.neoecoprototype.NeoECOPrototype.MOD_ID, "mind");
+
     /** The core column the crafting artwork numbers 1 - see {@link #getCraftingControllerPanelState()}. */
     private static final int CORE_ART_COLUMN = 1;
 
@@ -53,6 +59,7 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
     private boolean appearancePending;
     private boolean hasMind;
     private boolean mindRolled;
+    private boolean mindAwarded;
     private int moodCountdown = MOOD_SAMPLE_TICKS;
     /** The idle draw the node currently carries, so a sample that changed nothing pushes nothing. */
     private double idlePowerPushed = -1.0D;
@@ -141,6 +148,38 @@ public class SimplifyCraftingSystemBlockEntity extends ECOCraftingSystemBlockEnt
         if (!level.isClientSide && --moodCountdown <= 0) {
             moodCountdown = MOOD_SAMPLE_TICKS;
             applyMindMood();
+            if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                awardMindAdvancement(serverLevel);
+            }
+        }
+    }
+
+    /**
+     * Tells the closest player within reach of the panel that this host grew a face. It is not persisted:
+     * {@code hasMind} is, so a world that reloaded before anyone came close asks again on the next sample,
+     * and an advancement can be awarded repeatedly without harm.
+     */
+    private void awardMindAdvancement(net.minecraft.server.level.ServerLevel level) {
+        if (mindAwarded || !hasMind || !isFormed()) {
+            return;
+        }
+        net.minecraft.server.level.ServerPlayer nearest = null;
+        double nearestDistance = MIND_AWARD_RANGE_SQR;
+        for (net.minecraft.server.level.ServerPlayer player : level.getPlayers(p -> true)) {
+            double distance = player.distanceToSqr(worldPosition.getX() + 0.5D,
+                    worldPosition.getY() + 0.5D, worldPosition.getZ() + 0.5D);
+            if (distance <= nearestDistance) {
+                nearestDistance = distance;
+                nearest = player;
+            }
+        }
+        if (nearest == null) {
+            return;
+        }
+        mindAwarded = true;
+        var holder = level.getServer().getAdvancements().get(MIND_ADVANCEMENT);
+        if (holder != null) {
+            nearest.getAdvancements().award(holder, "easter_egg");
         }
     }
 
