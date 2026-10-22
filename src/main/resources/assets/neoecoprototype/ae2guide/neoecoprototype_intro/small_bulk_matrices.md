@@ -41,17 +41,19 @@ The fluid and chemical base cells can be disassembled into their housing plus on
 > **Warning:** **the item base cell and all three expanded cells have no disassembly recipe.** An expanded cell cannot be taken back apart, so decide before you spend the card.
 
 
-<ItemGrid>
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_cell" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_cell_expanded" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_cell" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_cell_expanded" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_cell" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_cell_expanded" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_expansion_card" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_matrix_housing" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_matrix_housing" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_matrix_housing" />
-</ItemGrid>
+## What belongs to this family
 
-<RecipeFor id="neoecoprototype:simplify_small_bulk_expansion_card" />
+> These items **only exist when MEGA Cells is installed** (the two chemical ones additionally need Mekanism and its AE2 bridge, Applied Mekanistics). Without it they are never registered, so this page lists names instead of icons: an icon tag that cannot resolve an item does not render blank, it writes a line of red text onto the page. With MEGA Cells installed, the icons and recipes of this family are all in JEI.
+
+| Name | Which one it is |
+| --- | --- |
+| ECO - L1 Small Bulk Storage Cell (3 Types) | item cell, base |
+| ECO - L1 Small Bulk Storage Cell (10 Types) | item cell, the card's result |
+| ECO - L1 Small Bulk Fluid Storage Matrix (3 Types) | fluid cell, base |
+| ECO - L1 Small Bulk Fluid Storage Matrix (10 Types) | fluid cell, the card's result |
+| ECO - L1 Small Bulk Chemical Storage Matrix (3 Types) | chemical cell, base |
+| ECO - L1 Small Bulk Chemical Storage Matrix (10 Types) | chemical cell, the card's result |
+| L1 Small Bulk Expansion Card | takes 3 types to 10; recipe in the section above |
+| ECO - Small Bulk Storage Matrix Housing | housing of the item cell |
+| ECO - L1 Small Bulk Fluid Storage Matrix Housing | housing of the fluid cell |
+| ECO - L1 Small Bulk Chemical Storage Matrix Housing | housing of the chemical cell |

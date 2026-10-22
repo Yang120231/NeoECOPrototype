@@ -41,17 +41,19 @@ item_ids:
 > **注意**：**物品那只基础盘与三只扩展版都没有拆解配方**。扩展版一旦做出来就拆不回外壳与元件，装卡前先想清楚。
 
 
-<ItemGrid>
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_cell" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_cell_expanded" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_cell" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_cell_expanded" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_cell" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_cell_expanded" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_expansion_card" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_storage_matrix_housing" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_fluid_storage_matrix_housing" />
-  <ItemIcon id="neoecoprototype:simplify_small_bulk_chemical_storage_matrix_housing" />
-</ItemGrid>
+## 这一族包含
 
-<RecipeFor id="neoecoprototype:simplify_small_bulk_expansion_card" />
+> 下面这些物品**只有装了 MEGA Cells 才会注册**（化学品那两只另需 Mekanism 与它的 AE2 桥接模组 Applied Mekanistics）。没装的时候它们根本不存在，所以这一页只列名字不放图标：图标标签解析不到物品时不会留白，而是往页面上写一串红字。装了 MEGA Cells 的整合包里，这一族的图标与配方都能在 JEI 查到。
+
+| 名字 | 是哪一类 |
+| --- | --- |
+| ECO - L1 小宗存储矩阵（3种类型） | 物品盘，基础 |
+| ECO - L1 小宗扩展存储矩阵（10种类型） | 物品盘，装卡后的产物 |
+| ECO - L1 小宗流体存储矩阵（3种类型） | 流体盘，基础 |
+| ECO - L1 小宗流体扩展存储矩阵（10种类型） | 流体盘，装卡后的产物 |
+| ECO - L1 小宗化学品存储矩阵（3种类型） | 化学品盘，基础 |
+| ECO - L1 小宗化学品扩展存储矩阵（10种类型） | 化学品盘，装卡后的产物 |
+| L1 小宗扩展卡 | 3 种升到 10 种用的卡，配方见上一节 |
+| ECO - L1 小宗存储矩阵外壳 | 物品盘的外壳 |
+| ECO - L1 小宗流体存储矩阵外壳 | 流体盘的外壳 |
+| ECO - L1 小宗化学品存储矩阵外壳 | 化学品盘的外壳 |

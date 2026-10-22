@@ -21,21 +21,20 @@ Capacity is counted in **bytes** - AE2's storage allowance per cell, not the 8-b
 
 | Matrix | Bytes | At the default rate |
 | --- | --- | --- |
-| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1k" /> | 1,024 | about 1.07 billion FE |
-| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1m" /> | 1,048,576 | about 1.1 trillion FE |
-| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_4m" /> | 4,194,304 | about 4.4 trillion FE |
+| ECO - L1 1K Storage Matrix (FE) | 1,024 | about 1.07 billion FE |
+| ECO - L1 1M Storage Matrix (FE) | 1,048,576 | about 1.1 trillion FE |
+| ECO - L1 4M Storage Matrix (FE) | 4,194,304 | about 4.4 trillion FE |
 
 Raising `flux_cell.amount` scales every FE cell in the game up in proportion, ours included, and costs no materials.
 
 ## Recipe
 
-<RecipeFor id="neoecoprototype:simplify_fe_cell_housing" />
+> This family **is only registered when AppliedFlux is installed**, so this page carries neither icons nor recipe boxes for it: a tag that cannot resolve an item does not leave a gap, it writes a line of red text onto the page. With AppliedFlux installed all four are in JEI.
 
-<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1k" />
-
-<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1m" />
-
-<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_4m" />
+- **ECO - L1 Storage Matrix Housing (FE)**: shaped `ABA / B B / CCC` - 2 Green Crystal Matrix + 3 Redstone + 3 `appflux:harden_insulating_resin`.
+- **ECO - L1 1K Storage Matrix (FE)**: the housing plus AE2's 1k component, shapeless.
+- **ECO - L1 1M Storage Matrix (FE)**: the housing plus an ECO - L1 Storage Component, shapeless.
+- **ECO - L1 4M Storage Matrix (FE)**: the housing plus an ECO - L4 Storage Component, shapeless.
 
 A disassembly recipe gives the housing and the component back.
 

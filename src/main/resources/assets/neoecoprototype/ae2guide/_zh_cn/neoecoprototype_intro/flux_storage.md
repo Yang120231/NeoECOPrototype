@@ -21,21 +21,20 @@ FE 存储矩阵是把 **Forge Energy（FE）当成一种资源存进 ME 网络**
 
 | 矩阵 | 字节 | 默认换算 |
 | --- | --- | --- |
-| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1k" /> | 1,024 | 约 10.7 亿 FE |
-| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_1m" /> | 1,048,576 | 约 1.1 万亿 FE |
-| <ItemLink id="neoecoprototype:simplify_fe_storage_cell_4m" /> | 4,194,304 | 约 4.4 万亿 FE |
+| ECO - L1 1K FE存储矩阵 | 1,024 | 约 10.7 亿 FE |
+| ECO - L1 1M FE存储矩阵 | 1,048,576 | 约 1.1 万亿 FE |
+| ECO - L1 4M FE存储矩阵 | 4,194,304 | 约 4.4 万亿 FE |
 
 调大 `flux_cell.amount`，游戏里每一只 FE 仓（包括这三只）的容量按比例变大，材料不变。
 
 ## 配方
 
-<RecipeFor id="neoecoprototype:simplify_fe_cell_housing" />
+> 这一族**只有装了 AppliedFlux 才会注册**。所以这里不放图标、也不放配方框：标签解析不到物品时不会留白，而是往页面上写一串红字。装了 AppliedFlux 时，下面四条都能在 JEI 里查到。
 
-<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1k" />
-
-<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_1m" />
-
-<RecipeFor id="neoecoprototype:simplify_fe_storage_cell_4m" />
+- **ECO - L1 FE存储矩阵外壳**：合成台 `ABA / B B / CCC` —— 2 个绿晶晶格 + 3 个红石 + 3 个 `appflux:harden_insulating_resin`。
+- **ECO - L1 1K FE存储矩阵**：外壳 + AE2 的 1K 元件，无序。
+- **ECO - L1 1M FE存储矩阵**：外壳 + ECO - L1 存储组件，无序。
+- **ECO - L1 4M FE存储矩阵**：外壳 + ECO - L4 存储组件，无序。
 
 装回原样也有一条配方，把外壳与成分还给你。
 
