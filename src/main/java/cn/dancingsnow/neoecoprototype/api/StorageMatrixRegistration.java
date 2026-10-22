@@ -8,7 +8,15 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
 
-/** Factory entry point for new finite matrices; legacy registrations intentionally do not use it. */
+/**
+ * Factory entry point for new finite matrices; legacy registrations intentionally do not use it.
+ *
+ * <p>It lives in {@code api/} and names {@link SimplifyStorageCellItem} on purpose: this is the layer
+ * rule's one documented exception (AGENTS.md §3), because the method is advertised to script authors in
+ * {@code docs/kubejs.md} and a factory has to name the concrete item it builds. The CI carve-out is
+ * scoped to this file and to the items layer only - depending on {@code blockentity/}, {@code block/} or
+ * {@code integration/} from here would still fail the build gate.
+ */
 public final class StorageMatrixRegistration {
     private StorageMatrixRegistration() {
     }
@@ -22,7 +30,9 @@ public final class StorageMatrixRegistration {
         if (definition.infinite()) {
             throw new IllegalArgumentException("Use registerInfinite for an infinite matrix");
         }
-        if (!definition.id().getNamespace().equals(items.getRegistryKey().location().getNamespace())
+        // getNamespace() is the DeferredRegister's own mod namespace. getRegistryKey().location() would be
+        // the registry's - minecraft:item - which no matrix id can ever match.
+        if (!definition.id().getNamespace().equals(items.getNamespace())
                 || !definition.id().getPath().equals(registryName)) {
             throw new IllegalArgumentException("Matrix definition id does not match item registration: "
                     + definition.id() + " vs " + registryName);

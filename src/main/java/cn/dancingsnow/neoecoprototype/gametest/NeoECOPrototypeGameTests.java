@@ -374,6 +374,74 @@ public final class NeoECOPrototypeGameTests {
     private static final java.util.Map<Item, String> OBTAINABLE_WITHOUT_CRAFTING = java.util.Map.of();
 
     /** Fixed infinite sources keep a null config so the cell workbench refuses them (AE2 NPE guard). */
+    /**
+     * The matrix registration factory is advertised to script authors in docs/kubejs.md, and until now it
+     * had zero callers and zero runs. What is reachable from a gameTest is the pair of guards in front of
+     * the registration step, so that is what this pins - including the guard that used to compare the
+     * matrix id against the registry's own namespace (minecraft), which rejected every legal input.
+     */
+    @GameTest(template = "empty", batch = "matrix_registration_api", timeoutTicks = 100)
+    public static void matrixRegistrationFactoryGuardsRejectAndAccept(GameTestHelper helper) {
+        var items = net.neoforged.neoforge.registries.DeferredRegister.create(
+                net.minecraft.core.registries.Registries.ITEM, NeoECOPrototype.MOD_ID);
+        var id = NeoECOPrototype.id("gametest_matrix_registration_guard");
+        var definition = cn.dancingsnow.neoecoprototype.api.StorageMatrixDefinition.finite(
+                id, cn.dancingsnow.neoecoprototype.api.StorageMatrixDefinition.MatrixType.ITEM,
+                cn.dancingsnow.neoecoprototype.api.StorageMatrixDefinition.MatrixSize.K4,
+                4096L, 1024, 4, cn.dancingsnow.neoecoprototype.api.SimplifyTier.L1, null, null);
+        java.util.function.Supplier<cn.dancingsnow.neoecoae.api.storage.ECOCellType> cellType =
+                cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem::getItemCellType;
+
+        var infinite = cn.dancingsnow.neoecoprototype.api.StorageMatrixDefinition.infinite(
+                NeoECOPrototype.id("gametest_matrix_registration_guard_infinite"),
+                cn.dancingsnow.neoecoprototype.api.StorageMatrixDefinition.MatrixType.ITEM,
+                cn.dancingsnow.neoecoprototype.api.SimplifyTier.L1, 1.0D, null, null);
+        var refusedInfinite = failureOf(() -> cn.dancingsnow.neoecoprototype.api.StorageMatrixRegistration
+                .registerFinite(items, "gametest_matrix_registration_guard_infinite", infinite,
+                        appeng.api.stacks.AEKeyType.items(), cellType));
+        if (!"IllegalArgumentException".equals(refusedInfinite)) {
+            helper.fail("an infinite matrix must be refused with IllegalArgumentException, got "
+                    + refusedInfinite);
+            return;
+        }
+
+        var refusedName = failureOf(() -> cn.dancingsnow.neoecoprototype.api.StorageMatrixRegistration
+                .registerFinite(items, "a_different_name", definition,
+                        appeng.api.stacks.AEKeyType.items(), cellType));
+        if (!"IllegalArgumentException".equals(refusedName)) {
+            helper.fail("a registration name that does not match the definition id (" + id
+                    + ") must be refused with IllegalArgumentException, got " + refusedName);
+            return;
+        }
+
+        // The matching pair has to get past both guards and hand back a holder. items.register() only
+        // queues, so this works at any time; resolving it does not - new Item(...) reaches
+        // BuiltInRegistries.ITEM.createIntrusiveHolder, and that registry is frozen after registration,
+        // so nothing here calls holder.get(). Before the namespace fix this call threw
+        // IllegalArgumentException, which is exactly the regression this assertion catches.
+        var accepted = failureOf(() -> cn.dancingsnow.neoecoprototype.api.StorageMatrixRegistration
+                .registerFinite(items, id.getPath(), definition,
+                        appeng.api.stacks.AEKeyType.items(), cellType));
+        if (!"nothing".equals(accepted)) {
+            helper.fail("a matching name and definition id must pass both guards and queue, got "
+                    + accepted + " for " + id + " / " + id.getPath());
+            return;
+        }
+
+        helper.succeed();
+    }
+
+    /** The simple name of what a call throws, or "nothing" when it returns normally. */
+    private static String failureOf(Runnable call) {
+        try {
+            call.run();
+            return "nothing";
+        } catch (RuntimeException thrown) {
+            return thrown.getClass().getSimpleName();
+        }
+    }
+
+
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, required = false)
     public static void infiniteConcreteCellIsNotWorkbenchEditable(GameTestHelper helper) {
         var item = ModRegistration.SIMPLIFY_CONCRETE_STORAGE_CELL.get();
