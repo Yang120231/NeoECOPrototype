@@ -31,3 +31,27 @@ jobs:
             echo 'Addon-owned assets must not reference the neoecoae resource namespace.' >&2
             exit 1
           fi
+          # Layer rule (AGENTS.md §3): api/ must not depend on the runtime layers.
+          # One documented exemption: StorageMatrixRegistration is a registration factory, and a factory
+          # has to name the concrete item class it builds. It is advertised to script authors in
+          # docs/kubejs.md and ships in released jars, so moving or renaming it would break a published
+          # entry point. The exemption is deliberately narrow - that one file, that one layer only:
+          # blockentity/, block/ and integration/ stay banned inside api/ including in that file.
+          for source in $(git ls-files 'src/main/java/cn/dancingsnow/neoecoprototype/api/*.java'); do
+            if [[ "$(basename "$source")" == "StorageMatrixRegistration.java" ]]; then
+              pattern='^import cn\.dancingsnow\.neoecoprototype\.(blockentity|block|integration)\.'
+            else
+              pattern='^import cn\.dancingsnow\.neoecoprototype\.(blockentity|items|block|integration)\.'
+            fi
+            if grep -qE "$pattern" "$source"; then
+              echo "api/ must not depend on the runtime layers: $source" >&2
+              exit 1
+            fi
+          done
+          # An empty scan is not a pass: if the folder is renamed the loop above simply does not run.
+          api_count=$(git ls-files 'src/main/java/cn/dancingsnow/neoecoprototype/api/*.java' | wc -l)
+          if [[ "$api_count" -eq 0 ]]; then
+            echo 'Layer gate scanned zero api/ sources - the package moved or the filter is wrong.' >&2
+            exit 1
+          fi
+          echo "Layer gate checked $api_count api/ sources."
