@@ -291,6 +291,88 @@ public final class NeoECOPrototypeGameTests {
     }
 
 
+    /**
+     * Every item our own crafting recipes ask from another mod is still obtainable in this pack.
+     *
+     * <p>Why this exists: eco's author says he retires content by deleting recipes rather than code. A
+     * deleted recipe is silent for an addon - the item class stays, our recipe still loads, JEI still
+     * shows our page, and the only symptom is a player who can never gather the ingredient. A class
+     * removal at least crashes. This is the check that turns the silent case into a red test.</p>
+     *
+     * <p>Scope, stated so nobody reads more out of it than it does: vanilla crafting recipes only, and
+     * only each recipe's <em>primary</em> output - {@code getAllResults()} is not on the compile-time
+     * {@code Recipe} here, so an item that only ever comes out as a secondary result would have to be
+     * allow-listed with that reason written down. "No recipe yields it" is not yet "unobtainable" either:
+     * a mined block or a smelted output needs no crafting recipe - which is why every entry in
+     * {@link #OBTAINABLE_WITHOUT_CRAFTING} carries the reason that was checked for it rather than just
+     * an id.</p>
+     */
+    @GameTest(template = "empty", batch = "recipe_inputs_obtainable", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void everyForeignRecipeInputStillHasAWayToObtainIt(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var manager = level.getRecipeManager();
+
+        java.util.Set<Item> craftedBySomething = new java.util.HashSet<>();
+        for (var holder : manager.getRecipes()) {
+            craftedBySomething.add(holder.value().getResultItem(level.registryAccess()).getItem());
+        }
+        // The ruler has to be able to say no: if this set were accidentally universal, every assertion
+        // below would pass forever. An unobtainable-by-anything block is the control sample.
+        if (craftedBySomething.contains(Items.BEDROCK)) {
+            helper.fail("the produced-item set contains bedrock, so it is not a real set of recipe"
+                    + " outputs and every check below would pass vacuously");
+            return;
+        }
+
+        var missing = new java.util.LinkedHashSet<String>();
+        var checked = new java.util.LinkedHashSet<Item>();
+        for (var holder : manager.getAllRecipesFor(net.minecraft.world.item.crafting.RecipeType.CRAFTING)) {
+            var key = holder.id();
+            if (!NeoECOPrototype.MOD_ID.equals(key.getNamespace())) {
+                continue;
+            }
+            for (var ingredient : holder.value().getIngredients()) {
+                for (var stack : ingredient.getItems()) {
+                    var item = stack.getItem();
+                    var namespace = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item)
+                            .getNamespace();
+                    if (namespace.equals(NeoECOPrototype.MOD_ID) || namespace.equals("minecraft")
+                            || OBTAINABLE_WITHOUT_CRAFTING.containsKey(item)) {
+                        continue;
+                    }
+                    // Distinct items, not ingredient slots: one shaped recipe can ask for the same
+                    // housing three times, and reporting that as "three problems" is how a count
+                    // starts lying about the thing it is counting.
+                    checked.add(item);
+                    if (!craftedBySomething.contains(item)) {
+                        missing.add(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item)
+                                + " (asked for by " + key.getPath() + ")");
+                    }
+                }
+            }
+        }
+        if (checked.isEmpty()) {
+            helper.fail("not one foreign item is consumed by our crafting recipes, so this scan"
+                    + " measured nothing - the recipes moved, the namespace filter broke, or the"
+                    + " ingredient walk stopped reaching nested values");
+            return;
+        }
+        if (!missing.isEmpty()) {
+            helper.fail(missing.size() + " distinct foreign ingredient(s) our recipes consume have no"
+                    + " recipe behind them in this pack: " + String.join(", ", missing));
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Items that legitimately have no crafting recipe, each with the way it is actually obtained.
+     * Anything added here needs that reason checked, not guessed - an entry with a wrong reason is how
+     * this guard stops meaning anything.
+     */
+    private static final java.util.Map<Item, String> OBTAINABLE_WITHOUT_CRAFTING = java.util.Map.of();
+
     /** Fixed infinite sources keep a null config so the cell workbench refuses them (AE2 NPE guard). */
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID, required = false)
     public static void infiniteConcreteCellIsNotWorkbenchEditable(GameTestHelper helper) {
