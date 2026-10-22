@@ -170,7 +170,7 @@ CHANGELOG 现在只写玩家看得见的结果。这一节收着那些"以后改
 
 AE2 的下限从始至终是 `[19.2.17,)`，现在也是编译所依据的版本。上游自己在 `21.2.1-beta1` 把它的 AE2 下限抬到 `19.2.18`、在 `beta2` 又退回 `19.2.17`，所以从 `beta2` 起，对 AE2 唯一的闸就是我们这一条声明。依据是对两个 jar 的逐类比对：本模组点名的 AE2 类里只有一个在两者之间发生变化——`core.localization.Tooltips`——而 `19.2.18` 从它里面去掉的是三个我们从未点名的字段，所以 `19.2.18` 的玩家同样被覆盖。**作者自己那份 `21.2.1` 发布说明写的是同一句话（"AE2 最低版本为 19.2.17，兼容 19.2.17 / 19.2.18"），而那份 jar 的 `META-INF/neoforge.mods.toml` 里 `ae2` 就是 `[19.2.17,)`、`ldlib2` 就是 `[2.2.40,)` —— 与我们声明的完全同一档。**
 
-**`1.3.1` 起，我们那份 `[[dependencies.neoecoprototype]]` 按 eco 21.2.1 的表逐条对齐。** 上游那张表是现量出来的，不是抄文档：`neoecobeta/neoecoae-21.2.1.jar` 里 `META-INF/neoforge.mods.toml` 一共 14 条 —— required 四条（`neoforge [21.1.0,)`、`minecraft [1.21.1, 1.22)`、`ae2 [19.2.17,)`、`ldlib2 [2.2.40,)`），optional 十条（`megacells [4.11.0,)`、`ae2omnicells [1.1.6,)`、`ae2_pattern_disk [0,)`、`extendedae [0,)`、`ae2lt [1.1.3,)`、`appliedenhancements [1.0.9,)`、`molecularmanipulator [2.0.5,),[2.0.5-fix]`、`useless_mod [1.21.1-2.3.7.2,)`、`jade [0,)`、`jei [0,)`）。
+**`1.3.1` 起，我们那份 `[[dependencies.neoecoprototype]]` 按 eco 21.2.1 的表逐条对齐。** 上游那张表是现量出来的，不是抄文档：eco 21.2.1 那颗发布 jar（`neoecoae-21.2.1.jar`）里 `META-INF/neoforge.mods.toml` 一共 14 条 —— required 四条（`neoforge [21.1.0,)`、`minecraft [1.21.1, 1.22)`、`ae2 [19.2.17,)`、`ldlib2 [2.2.40,)`），optional 十条（`megacells [4.11.0,)`、`ae2omnicells [1.1.6,)`、`ae2_pattern_disk [0,)`、`extendedae [0,)`、`ae2lt [1.1.3,)`、`appliedenhancements [1.0.9,)`、`molecularmanipulator [2.0.5,),[2.0.5-fix]`、`useless_mod [1.21.1-2.3.7.2,)`、`jade [0,)`、`jei [0,)`）。
 
 我们这一侧落成的样子与理由：
 
@@ -195,7 +195,7 @@ AE2 的下限从始至终是 `[19.2.17,)`，现在也是编译所依据的版本
 
 口径：装配室与工作站产出的东西，原料写在正文里，格子交给 JEI；`<RecipeFor>` 只用在原版合成台能做出的物品上。真要让指南画装配室的配方，就得实现 guideme 的 `RecipeTypeMappingSupplier` 扩展点并用 `LytStandardRecipeBox.Builder` 把我们的配方摊开——那时 `build.gradle:45` 的 `implementation files("libs/guideme-21.1.1.jar")` 才第一次真正参与编译（现在它只是给 dev 启动摆着，因为 AE2 把 guideme 声明成 `REQUIRED`）。
 
-`C:/tmp/guide_recipefor_check.py` 是这一条的守卫：它把指南里每条 `<RecipeFor>` 的 id 对回我们自己配方的产出。**它看不见本节说的这个坑**——盒子有内容但内容不是正文说的那张配方，只有把正文句子与配方类型一起读才看得出来。
+`tools/guide_recipefor_check.py` 是这一条的守卫，在仓库根跑 `python tools/guide_recipefor_check.py`（现量：它检查 24 个 `<RecipeFor>`，对回我们自己 103 条配方的产出，rc=0）。它把指南里每条 `<RecipeFor>` 的 id 对回我们自己配方的产出。**它看不见本节说的这个坑**——盒子有内容但内容不是正文说的那张配方，只有把正文句子与配方类型一起读才看得出来。
 
 ## 多方块朝向与镜像
 
