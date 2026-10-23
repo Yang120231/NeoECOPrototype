@@ -4172,6 +4172,71 @@ public final class NeoECOPrototypeGameTests {
                 });
     }
 
+    /**
+     * {@code validateInterfaceFace} is the one part of the L1 computation geometry a subclass may answer
+     * for itself. Over one standing machine: the plain calculator accepts it; a subclass refusing the
+     * face is asked once per hand and the machine fails; a subclass answering with a block of its own
+     * passes, without the network interface's face. {@code validateStructure} reads the world only, so
+     * all three ask the same machine.
+     */
+    @GameTest(template = "l1_room", batch = "l1_interface_face_hook", timeoutTicks = 220,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void computationInterfaceFaceIsOverridable(GameTestHelper helper) {
+        var hostPos = new BlockPos(13, 3, 4);
+        buildComputationStructureKept(helper, hostPos,
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get(), 0, false, 1,
+                (controller, finish) -> {
+                    var cluster = controller.getCluster();
+                    if (cluster == null || !controller.isFormed()) {
+                        finish.run();
+                        helper.fail("the L1 machine did not form, so it has no cluster bounds");
+                        return;
+                    }
+                    BlockPos min = cluster.getBoundsMin();
+                    BlockPos max = cluster.getBoundsMax();
+                    var level = helper.getLevel();
+                    var plain = new SimplifyComputationClusterCalculator(controller).validateStructure(level, min, max);
+                    int[] asked = {0};
+                    var refused = new SimplifyComputationClusterCalculator(controller) {
+                        @Override
+                        protected java.util.Optional<Block> validateInterfaceFace(
+                                net.minecraft.server.level.ServerLevel level, BlockPos controllerPos,
+                                Direction back, Direction top, Direction down, Direction interfaceSide,
+                                BlockPos energizedCorePos) {
+                            asked[0]++;
+                            return java.util.Optional.empty();
+                        }
+                    }.validateStructure(level, min, max);
+                    var own = new SimplifyComputationClusterCalculator(controller) {
+                        @Override
+                        protected java.util.Optional<Block> validateInterfaceFace(
+                                net.minecraft.server.level.ServerLevel level, BlockPos controllerPos,
+                                Direction back, Direction top, Direction down, Direction interfaceSide,
+                                BlockPos energizedCorePos) {
+                            return java.util.Optional.of(Blocks.COBBLESTONE);
+                        }
+                    }.validateStructure(level, min, max);
+                    finish.run();
+                    if (!plain.valid()) {
+                        helper.fail("the plain calculator rejected the L1 layout over " + min + "..." + max);
+                        return;
+                    }
+                    if (refused.valid() || asked[0] != 2) {
+                        helper.fail("a refused interface face should fail both hands, but the machine was "
+                                + (refused.valid() ? "accepted" : "rejected") + " after " + asked[0] + " asks");
+                        return;
+                    }
+                    if (!own.valid() || own.communicationInterface()) {
+                        helper.fail("an interface face of the subclass's own should form without the network"
+                                + " interface's face, but valid=" + own.valid()
+                                + " communicationInterface=" + own.communicationInterface());
+                        return;
+                    }
+                    helper.succeed();
+                });
+    }
+
     /** The first computation casing standing anywhere inside this test room. */
     private static BlockPos firstComputationCasing(GameTestHelper helper) {
         BlockPos origin = helper.absolutePos(BlockPos.ZERO);
