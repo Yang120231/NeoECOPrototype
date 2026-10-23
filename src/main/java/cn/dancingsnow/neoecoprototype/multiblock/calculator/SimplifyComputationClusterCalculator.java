@@ -130,17 +130,13 @@ public class SimplifyComputationClusterCalculator extends NEComputationClusterCa
                                                 Direction front, Direction back, Direction top, Direction down,
                                                 Direction interfaceSide, Direction expandSide,
                                                 BlockPos energizedCorePos, BlockPos min, BlockPos max) {
-        if (!validateShell(level, controllerPos, top, down, interfaceSide, energizedCorePos)
+        Optional<Block> matchedInterface = validateInterfaceFace(
+                level, controllerPos, back, top, down, interfaceSide, energizedCorePos);
+        if (matchedInterface.isEmpty()
                 || !validateShell(level, controllerPos, top, down, expandSide, energizedCorePos)
                 || !validateShell(level, controllerPos, top, down, back, energizedCorePos)
                 || !validateShell(level, controllerPos.relative(back).relative(expandSide), top, down,
                         energizedCorePos)) {
-            return Optional.empty();
-        }
-
-        BlockPos interfacePos = controllerPos.relative(back).relative(interfaceSide);
-        Optional<Block> matchedInterface = matchedComputationInterface(level, interfacePos, top, down);
-        if (matchedInterface.isEmpty()) {
             return Optional.empty();
         }
         boolean communicationInterface = matchedInterface.get()
@@ -228,6 +224,26 @@ public class SimplifyComputationClusterCalculator extends NEComputationClusterCa
         boolean energizedParallelCore = level.getBlockState(energizedCorePos)
                 .is(holder(ModRegistration.ENERGIZED_COMPUTATION_CORE_BLOCK.get()));
         return Optional.of(new Formed(coolerPos, communicationInterface, energizedParallelCore));
+    }
+
+    /**
+     * The face on the interface side: the shell column beside the host and, behind it, the interface
+     * column, whose middle cell holds the interface. Gives back the interface block standing there, or
+     * empty when the face does not check out.
+     *
+     * <p>Overridable so a subclass can build another machine on this geometry with a face of its own -
+     * a different interface, or interfaces in other cells of these two columns - while every other line
+     * of the structure keeps being checked here. {@code verifyStructure} calls it once per hand; the
+     * host shows its communication-interface face only when the block given back is the network
+     * interface, so a subclass that answers with its own block gets the plain face.</p>
+     */
+    protected Optional<Block> validateInterfaceFace(ServerLevel level, BlockPos controllerPos, Direction back,
+                                                    Direction top, Direction down, Direction interfaceSide,
+                                                    BlockPos energizedCorePos) {
+        if (!validateShell(level, controllerPos, top, down, interfaceSide, energizedCorePos)) {
+            return Optional.empty();
+        }
+        return matchedComputationInterface(level, controllerPos.relative(back).relative(interfaceSide), top, down);
     }
 
     /**
