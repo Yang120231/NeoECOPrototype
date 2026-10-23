@@ -50,9 +50,7 @@ import cn.dancingsnow.neoecoprototype.block.energy.EnergizedEnergyCellBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingVentBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingWorkerBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyStonecuttingAssemblerBlock;
-import cn.dancingsnow.neoecoprototype.block.decoration.FumoBlock;
 import cn.dancingsnow.neoecoprototype.block.decoration.NamedDollBlock;
-import cn.dancingsnow.neoecoprototype.blockentity.decoration.FumoBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.decoration.NamedDollBlockEntity;
 import cn.dancingsnow.neoecoprototype.item.decoration.FumoItem;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyPatternProviderBlock;
@@ -111,7 +109,6 @@ import cn.dancingsnow.neoecoprototype.part.PoweredInterfacePart;
 import cn.dancingsnow.neoecoprototype.part.SuperconductiveInterfacePart;
 import cn.dancingsnow.neoecoprototype.part.SimplifyPatternProviderPart;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.component.ResolvableProfile;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -184,12 +181,8 @@ public class ModRegistration {
 
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, NeoECOPrototype.MOD_ID);
-    /** The plushie stores whose skin to wear, exactly like a vanilla player head does. */
     public static final DeferredRegister<DataComponentType<?>> DATA_COMPONENTS =
             DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, NeoECOPrototype.MOD_ID);
-    public static final Supplier<DataComponentType<ResolvableProfile>> FUMO_OWNER =
-            DATA_COMPONENTS.register("fumo_owner", () -> DataComponentType.<ResolvableProfile>builder()
-                    .persistent(ResolvableProfile.CODEC).networkSynchronized(ResolvableProfile.STREAM_CODEC).build());
     /** The singularity cell's whole state: the tick it started growing from, and what has been drawn. */
     public static final Supplier<DataComponentType<cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.Bank>>
             SINGULARITY_CELL_BANK = DATA_COMPONENTS.register("singularity_cell_bank",
@@ -868,26 +861,13 @@ public class ModRegistration {
     }
 
     /**
-     * reliqwq's fumo plushie, textured after the owner's player skin.
+     * What the four dolls are made of. Their face is in their texture, so nothing resolves a skin and no
+     * client renderer is involved - only the shared {@link NamedDollBlockEntity}, which exists to sweep
+     * for creepers.
      *
-     * <p>The light level is deliberate rather than a leftover - 11e4d69 introduced it on purpose
-     * ("the block lights its cell at level 15"). No reason was recorded beyond that, so treat the value
-     * as a design choice, not as a fact this file can justify.
-     */
-    public static final Supplier<FumoBlock> FUMO_BLOCK =
-            BLOCKS.register("fumo_reliqwq", () -> new FumoBlock(net.minecraft.world.level.block.state.BlockBehaviour.Properties
-                    .of().strength(0.8f).sound(net.minecraft.world.level.block.SoundType.WOOL).noOcclusion()
-                    .lightLevel(state -> 15)));
-    public static final Supplier<FumoItem> FUMO_RELIQWQ_ITEM =
-            ITEMS.register("fumo_reliqwq", () -> new FumoItem(FUMO_BLOCK.get(), new Item.Properties().stacksTo(1)));
-    public static final Supplier<BlockEntityType<FumoBlockEntity>> FUMO_BE =
-            BLOCK_ENTITIES.register("fumo_reliqwq", () -> BlockEntityType.Builder
-                    .of(FumoBlockEntity::new, FUMO_BLOCK.get()).build(null));
-
-    /**
-     * The four dolls of honoured players, one block and one item each, drawn from the art each of them
-     * posed with ({@code models/block/dolls}). They share the custom-skin doll's physical properties but
-     * carry no block entity: their face is in their texture, so nothing has to resolve a skin.
+     * <p>The light level is deliberate rather than a leftover: 11e4d69 put it on the plushie on purpose
+     * ("the block lights its cell at level 15") and the four inherited it. No reason beyond that was
+     * recorded, so treat the value as a design choice, not as a fact this file can justify.
      */
     private static net.minecraft.world.level.block.state.BlockBehaviour.Properties dollProperties() {
         return net.minecraft.world.level.block.state.BlockBehaviour.Properties.of().strength(0.8f)

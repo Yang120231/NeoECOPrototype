@@ -16,8 +16,6 @@ public final class NeoECOPrototypeServerConfig {
     public static final ModConfigSpec.BooleanValue DERIVE_PROCESSOR_RECIPES_FROM_INSCRIBER;
     /** Processor outputs the assembler must refuse, from either the JSON recipes or the derivation. */
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DISABLED_PROCESSOR_RECIPES;
-    /** Only the /prototypefumo hand-out; the dolls themselves ship switched on. */
-    public static final ModConfigSpec.BooleanValue FUMO_COMMAND_ENABLED;
     /** Kept as a plain constant so a test can pin the shipped default without loading a config file. */
     public static final boolean STRUCTURE_CARD_CONSUMES_ITEMS_DEFAULT = true;
     public static final ModConfigSpec.BooleanValue STRUCTURE_CARD_CONSUMES_ITEMS;
@@ -80,13 +78,6 @@ public final class NeoECOPrototypeServerConfig {
                 .defineListAllowEmpty("additional_storage_cells", List::of, value -> value instanceof String id
                         && net.minecraft.resources.ResourceLocation.tryParse(id) != null);
         builder.pop();
-        FUMO_COMMAND_ENABLED = builder
-                .comment("Enable the /prototypefumo command, which hands out a plushie wearing any player's skin.",
-                        "Off by default: the command needs OP level 2 or creative mode as well, and the skin it",
-                        "copies belongs to a named player. Turn this on and it answers again.",
-                        "The dolls themselves are not switched off here: their worn effects, their creative tab",
-                        "entries and the creepers that keep their distance from a placed one all ship on.")
-                .define("fumo_command_enabled", false);
         STRUCTURE_CARD_CONSUMES_ITEMS = builder
                 .comment("Whether the structure expansion card eats the ticket it works from: one paper to",
                         "write a shortfall note, and one blank AE2 pattern to write an exchange pattern.",

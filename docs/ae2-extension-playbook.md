@@ -161,8 +161,6 @@ CHANGELOG 现在只写玩家看得见的结果。这一节收着那些"以后改
 - **小宗手动过滤器面板的删除范围**：`SimplifyStorageMegaPanelUI` 一个类、主机侧 7 个方法 + 2 个 `@Persisted` 字段（选中的驱动器 / 页码）、驱动器侧 3 个方法（含 `setSmallBulkFilter` 那条 `@RPCMethod`）。标记能力没少——AE2 自己的盘配置界面和主机"一键标记"写的是**同一份 `getConfigInventory`**，路径不经过被删掉的那些方法；旧存档里那两个 `@Persisted` 字段被直接忽略，不报错、不炸档。
 - **驱动器 tooltip 那行图标的形状**：先 `IElementHelper.smallItem(stack)`，再用 `append` 接一条"数量 × 名字"的 Component。`ITooltip.add` 会**另起一行**，所以名字必须走 `append`；`ItemStackElement.text` 只喂 `renderGuiItemDecorations`（数字角标），永远画不出名字。
 - **`getCloneItemStack` 不会去问方块实体要组件**：原版那个方法只复制方块物品，只有蜂箱/潜影盒那几个自己额外做了这件事。所以任何"放下时带了数据、拿回来必须还带着"的方块，两个入口都得自己写：生存挖掘走战利品表里的 `copy_components`（`source = block_entity`），创造中键走覆写 `getCloneItemStack`——少后者就是"放下是好的、拿回来才坏"。（我们那四只具名玩偶现在什么都不存，所以两条都没挂；这条留给以后要挂的方块。）
-- **玩偶掉落的两个入口**：生存挖掘靠战利品表里的 `copy_components`（`source = block_entity`），创造中键靠覆写 `getCloneItemStack`。原版那个方法不会去问方块实体要组件，只有蜂箱/潜影盒那几个自己做了这件事——所以"放下是好的、拿回来才坏"。
-- **创造栏玩偶的默认皮肤**：profile 只带名字、id 为空时，原版会把四个名字解析成**同一张**兜底皮肤。现在按 `OfflinePlayer:<名字>` 生成离线 UUID（与单机离线玩家同一算法）。真人皮肤仍然只走 `/prototypefumo`——那条走原版 session 解析、会联网，建创造标签页时不能阻塞在上面。
 - **JEI 转移按钮必须自己写**：`ae2jeiintegration` 给样板编码终端注册的是一个**通用**处理器，认不出我们自定义的配方类型；而能把终端填进去的只有 AE2 内部的 `EncodingHelper`。
 
 ## 版本下限怎么定

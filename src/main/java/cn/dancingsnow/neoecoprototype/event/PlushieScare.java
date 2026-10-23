@@ -12,9 +12,9 @@ import net.minecraft.world.phys.Vec3;
  * Creepers keep their distance from a plushie, the way vanilla keeps them away from cats: a plushie is a
  * stuffed cat, and the cat answer is the one the creeper already knows how to execute.
  *
- * <p>Two things can be that plushie - a named doll placed on a shelf, and a named doll worn on someone's
- * head - and both pay for it the same way: whoever carries the doll looks for creepers around itself, on
- * its own schedule. The other shape, a goal on every creeper asking whether a plushie is near, would cost
+ * <p>Two things can be that plushie - a doll placed on a shelf, and a doll worn on someone's head - and
+ * both pay for it the same way: whoever carries the doll looks for creepers around itself, on its own
+ * schedule. The other shape, a goal on every creeper asking whether a plushie is near, would cost
  * the same as the two vanilla goals a creeper is already running against cats and ocelots, but it would
  * scale with how many creepers the loader happens to have awake. This scales with dolls, which is the
  * number the player can see.
@@ -37,9 +37,9 @@ public final class PlushieScare {
         return gameTime % SWEEP_TICKS == 0;
     }
 
-    /** True while a named doll occupies this entity's head. */
-    public static boolean wearsNamedDoll(LivingEntity entity) {
-        return FumoItem.isNamedDoll(entity.getItemBySlot(EquipmentSlot.HEAD));
+    /** True while one of the dolls occupies this entity's head. */
+    public static boolean wearsPlushie(LivingEntity entity) {
+        return FumoItem.statsOf(entity.getItemBySlot(EquipmentSlot.HEAD)) != null;
     }
 
     /**

@@ -12,9 +12,6 @@ import cn.dancingsnow.neoecoae.client.rendering.FixedBlockEntityRenderers;
 import cn.dancingsnow.neoecoprototype.integration.kubejs.InfiniteMatrixClientModels;
 import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
 import cn.dancingsnow.neoecoprototype.client.model.SimplifyCoolingControllerBakedModel;
-import cn.dancingsnow.neoecoprototype.client.render.FumoItemRenderer;
-import cn.dancingsnow.neoecoprototype.client.render.FumoModel;
-import cn.dancingsnow.neoecoprototype.client.render.FumoRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyComputationDriveRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyCoolingControllerRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyDriveRenderer;
@@ -229,12 +226,10 @@ public final class NeoECOPrototypeClient {
         FixedBlockEntityRenderers.register(ModRegistration.SIMPLIFY_COMPUTATION_COOLING_CONTROLLER_BE.get(),
                 new SimplifyCoolingControllerRenderer());
         // Same hook AE2's StyleManager uses for its style cache: reloads must discard the parsed copy
-        // or a resource pack could never override our assembler layout. FumoItemRenderer joins it for
-        // the same reason - vanilla rebuilds block entity renderers on reload but not the item one.
+        // or a resource pack could never override our assembler layout.
         if (Minecraft.getInstance().getResourceManager() instanceof ReloadableResourceManager resourceManager) {
             resourceManager.registerReloadListener((ResourceManagerReloadListener) manager -> {
                 ProcessorAssemblerScreen.forgetStyle();
-                FumoItemRenderer.forgetCache();
             });
         }
     }
@@ -306,13 +301,6 @@ public final class NeoECOPrototypeClient {
         event.registerBlockEntityRenderer(ModRegistration.SIMPLIFY_COMPUTATION_DRIVE_BE.get(), SimplifyComputationDriveRenderer::new);
         event.registerBlockEntityRenderer(ModRegistration.SIMPLIFY_STONECUTTING_ASSEMBLER_BE.get(),
                 MolecularAssemblerRenderer::new);
-        event.registerBlockEntityRenderer(ModRegistration.FUMO_BE.get(), FumoRenderer::new);
-    }
-
-    @SubscribeEvent
-    public static void onRegisterLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
-        event.registerLayerDefinition(FumoModel.LAYER_LOCATION, FumoModel::createBodyLayer);
-        event.registerLayerDefinition(FumoModel.SLIM_LAYER_LOCATION, FumoModel::createSlimBodyLayer);
     }
 
     /** These two names only resolve because blocks.json stitches them; see the guard in the suite. */
@@ -321,28 +309,8 @@ public final class NeoECOPrototypeClient {
     private static final ResourceLocation DISSOLUTION_FLOWING =
             ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "block/dissolution_solution_flow");
 
-    /**
-     * Break particles come from the block atlas, and only the bundled skin is stitched into it, so a
-     * downloaded player skin has no sprite there and every doll would crumble into Mita confetti.
-     * Suppressing them is honest; the block still breaks with its sound and drops the right doll.
-     */
     @SubscribeEvent
     public static void onRegisterClientExtensions(RegisterClientExtensionsEvent event) {
-        event.registerBlock(new IClientBlockExtensions() {
-            @Override
-            public boolean addDestroyEffects(BlockState state, Level level, BlockPos pos,
-                                             net.minecraft.client.particle.ParticleEngine engine) {
-                return true;
-            }
-
-            @Override
-            public boolean addHitEffects(BlockState state, Level level,
-                                         net.minecraft.world.phys.HitResult target,
-                                         net.minecraft.client.particle.ParticleEngine engine) {
-                return true;
-            }
-        }, ModRegistration.FUMO_BLOCK.get());
-
         // eco gets this for free from Registrate; our fluid is hand-registered, so the two sprite names
         // have to be handed over here. IClientFluidTypeExtensions.getStillTexture defaults to null and
         // the bucket model bakes that straight into the block atlas lookup -- a null key is an NPE, not
