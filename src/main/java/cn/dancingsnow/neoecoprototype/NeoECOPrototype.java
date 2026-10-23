@@ -165,6 +165,26 @@ public class NeoECOPrototype {
         event.registerBlockEntity(Capabilities.FluidHandler.BLOCK,
                 ModRegistration.METEORITE_DISSOCIATOR_BE.get(),
                 (blockEntity, side) -> blockEntity.getFluidInterface());
+        // A Mekanism transporter asks Capabilities.ItemHandler.BLOCK and references nothing in appeng, so
+        // it can only reach an interface through AE2's generic-adapter hook - which wraps whichever blocks
+        // answer GENERIC_INTERNAL_INV, keyed on the block entity type. Both of our interfaces carry their
+        // own type, so until this pair is posted a pipe standing next to one finds nothing at all.
+        registerInterface(event, ModRegistration.SIMPLIFY_POWERED_ME_INTERFACE_BE.get());
+        registerInterface(event, ModRegistration.SUPERCONDUCTIVE_INTERFACE_BE.get());
+    }
+
+    /**
+     * The same two values AE2 posts for its own interface ({@code InitCapabilityProviders.initInterface}),
+     * for a block entity type of ours: the interface buffer as the generic internal inventory, which is
+     * what an outside pipe pushes into and pulls back out of, and the network side as {@code ME_STORAGE}.
+     */
+    private static <T extends appeng.blockentity.misc.InterfaceBlockEntity> void registerInterface(
+            RegisterCapabilitiesEvent event,
+            net.minecraft.world.level.block.entity.BlockEntityType<T> type) {
+        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
+                (blockEntity, unused) -> blockEntity.getInterfaceLogic().getStorage());
+        event.registerBlockEntity(AECapabilities.ME_STORAGE, type,
+                (blockEntity, unused) -> blockEntity.getInterfaceLogic().getInventory());
     }
 
     private static <T extends net.minecraft.world.level.block.entity.BlockEntity> void registerNodeHost(
