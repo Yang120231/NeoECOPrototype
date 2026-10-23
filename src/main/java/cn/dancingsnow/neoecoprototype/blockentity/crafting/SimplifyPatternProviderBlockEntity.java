@@ -9,7 +9,16 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** AE2 pattern provider behavior under the addon's green visual variant. */
+/**
+ * AE2 pattern provider behavior under the addon's green visual variant.
+ *
+ * <p>Staying a subclass of AE2's provider is what keeps the pattern-disk mod's linkage working: the
+ * integration in {@code neoecoae} collects hosts by {@code instanceof PatternProviderLogicHost} and hands
+ * each one its own pattern inventory, so this machine shows up in the disk terminals without our code
+ * mentioning either mod. Re-parenting this block entity to an eco class, or AE2 moving that interface,
+ * silently drops it - and {@code provider_eject}'s cast of a placed instance to
+ * {@code PatternProviderLogicHost} is the assertion that goes red when that happens.
+ */
 public class SimplifyPatternProviderBlockEntity extends PatternProviderBlockEntity {
     /**
      * Three rows of nine: {@code l1_pattern_provider.png} draws exactly this many pattern slots, and the

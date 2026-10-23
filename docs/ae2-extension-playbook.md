@@ -160,6 +160,7 @@ CHANGELOG 现在只写玩家看得见的结果。这一节收着那些"以后改
 
 - **小宗手动过滤器面板的删除范围**：`SimplifyStorageMegaPanelUI` 一个类、主机侧 7 个方法 + 2 个 `@Persisted` 字段（选中的驱动器 / 页码）、驱动器侧 3 个方法（含 `setSmallBulkFilter` 那条 `@RPCMethod`）。标记能力没少——AE2 自己的盘配置界面和主机"一键标记"写的是**同一份 `getConfigInventory`**，路径不经过被删掉的那些方法；旧存档里那两个 `@Persisted` 字段被直接忽略，不报错、不炸档。
 - **驱动器 tooltip 那行图标的形状**：先 `IElementHelper.smallItem(stack)`，再用 `append` 接一条"数量 × 名字"的 Component。`ITooltip.add` 会**另起一行**，所以名字必须走 `append`；`ItemStackElement.text` 只喂 `renderGuiItemDecorations`（数字角标），永远画不出名字。
+- **`getCloneItemStack` 不会去问方块实体要组件**：原版那个方法只复制方块物品，只有蜂箱/潜影盒那几个自己额外做了这件事。所以任何"放下时带了数据、拿回来必须还带着"的方块，两个入口都得自己写：生存挖掘走战利品表里的 `copy_components`（`source = block_entity`），创造中键走覆写 `getCloneItemStack`——少后者就是"放下是好的、拿回来才坏"。（我们那四只具名玩偶现在什么都不存，所以两条都没挂；这条留给以后要挂的方块。）
 - **玩偶掉落的两个入口**：生存挖掘靠战利品表里的 `copy_components`（`source = block_entity`），创造中键靠覆写 `getCloneItemStack`。原版那个方法不会去问方块实体要组件，只有蜂箱/潜影盒那几个自己做了这件事——所以"放下是好的、拿回来才坏"。
 - **创造栏玩偶的默认皮肤**：profile 只带名字、id 为空时，原版会把四个名字解析成**同一张**兜底皮肤。现在按 `OfflinePlayer:<名字>` 生成离线 UUID（与单机离线玩家同一算法）。真人皮肤仍然只走 `/prototypefumo`——那条走原版 session 解析、会联网，建创造标签页时不能阻塞在上面。
 - **JEI 转移按钮必须自己写**：`ae2jeiintegration` 给样板编码终端注册的是一个**通用**处理器，认不出我们自定义的配方类型；而能把终端填进去的只有 AE2 内部的 `EncodingHelper`。
@@ -186,7 +187,9 @@ AE2 的下限从始至终是 `[19.2.17,)`，现在也是编译所依据的版本
 - `ae2omnicells`：**新增 optional `[1.1.6,)`**，全能与量子那两只矩阵读它的 cell type。
 - `jade` / `jei`：**新增 optional `*`**（上游给的是 `[0,)`，同为不设限），我们各有 4 处集成、全部走 `ModList` 判断。
 - `appflux`：上游那份**没有**这一条，FE 那一族是我们自己的依赖，所以地板也不由它代言，保持 `*`。
-- `extendedae`、`ae2lt`、`ae2_pattern_disk`、`appliedenhancements`、`molecularmanipulator`、`useless_mod`：**不声明**。按 mod id 与类包名两向 grep，我们源码里 0 处引用；上游声明它们不代表我们要声明。
+- `extendedae`、`ae2lt`、`appliedenhancements`、`molecularmanipulator`、`useless_mod`：**不声明**。按 mod id 与类包名两向 grep，我们源码里 0 处引用；上游声明它们不代表我们要声明。
+- `ae2_pattern_disk`：**10-23 起声明 optional `*` + ordering `NONE`**。上面那句"0 处引用"对它仍然成立——我们确实没调用它的任何类。声明它不是因为引用，而是因为**继承面**：我们的 L1 样板总线与 F1 通讯接口的方块实体是 eco 的 `ECOCraftingPatternBusBlockEntity` 与 `ECOMachineInterfaceBlockEntity` 本体（注册处直接 `new` 它的类），磁盘里的样板由 eco 的 `PatternCatalog.indexAuxiliaryPatterns` / `busAuxiliaryPatternKeys` 索引，所以磁盘在我们机器上好不好用完全由那两个 eco 类决定，我们一行没写。真机读数（`ae2_pattern_disk-0.9.3` + 它自己 required 的 `ae2wtlib 19.5.1`、`guideme 21.1.1`）：eco 打 `AE2 Pattern Disk present; pattern-disk storage is available to hosts that opt in`，磁盘 mod 打 `Encoding terminal upload button wired`，零 WARN；磁盘插进我们总线后那个配方查得到。地板仍写 `*`：真正的版本闸在 eco 手里——0.5.0 那次 eco 自己打 `its api has no removeAt(); the pattern-disk integration stands down. This build needs AE2 Pattern Disk 0.7.1 or newer`（磁盘 mod 那侧同时 skip 过一次，因为它找的是 eco 没有的 `AuxiliaryPatternStore`），我们不必替上游拦玩家。ordering 用 `NONE`：没有类接触就没有注册顺序问题，§4.3 那条坑只在有接触时成立。
+- **读别人 toml 的依赖表别用 `grep -A4`**：带长注释的条目会被窗口截掉——我就是这样把 0.9.3 的 required `ae2wtlib [19.5.0,)` 读没了，报过一次"它没有 ae2wtlib 硬依赖"，客户端随即 pre-load FATAL。用 `awk '/^\[\[dependencies/{d=1} …'` 一类按节走的写法。
 - **还开着的口子**：`mekanism` 与 `appmek` 各有 4 处引用（化学品族），但上游那份表里也没有这两条，所以这一版没写进 toml。要不要单独立 optional，是一个还没拍的判断。
 
 自证方式只有一条：改完跑 `runGameTestServer`。版本区间写错的表现是 pre-load FATAL（`[9.9.9,)` 那次实测过），而不是某条测试红 —— 这一次加载器起来、80 条 2.569 秒全绿。

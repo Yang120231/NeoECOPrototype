@@ -156,3 +156,21 @@ type = "optional"
 versionRange = "*"
 ordering = "AFTER"
 side = "BOTH"
+
+# AE2 Pattern Disk (mod id ae2_pattern_disk): pattern disks can be stored in our L1 pattern bus and written
+# through our F1 interface. We reference none of its classes and order nothing on it - the whole linkage
+# lives in the two eco block entities our own registrations instantiate verbatim
+# (ECOCraftingPatternBusBlockEntity and ECOMachineInterfaceBlockEntity), and eco's PatternCatalog is what
+# indexes a disk's patterns (indexAuxiliaryPatterns, busAuxiliaryPatternKeys). The entry is here to mark
+# that inherited interaction for pack authors, measured 2026-10-23 on 0.9.3 with zero warning lines: eco
+# logs "hosts that opt in" and the disk mod logs "Encoding terminal upload button wired".
+# Open range, same reasoning as appflux above: a floor we did not test would stop an older build starting
+# the game, while the actual version gate is eco's own - with 0.5.0 eco says the api has no removeAt() and
+# stands its integration down by itself. 0.9.3 in turn requires ae2wtlib [19.5.0,) and guideme, which are
+# its own entries, not ours.
+[[dependencies.neoecoprototype]]
+modId = "ae2_pattern_disk"
+type = "optional"
+versionRange = "*"
+ordering = "NONE"
+side = "BOTH"
