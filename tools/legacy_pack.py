@@ -30,6 +30,46 @@ SRC = f"src/main/resources/assets/{NS}"
 PACK = os.path.join(REPO, "src", "main", "resources", "legacy_art")
 PARTS = ("models", "textures", "blockstates")
 
+# The pack never overrides the drive-mounted cell look. The previous era's thirteen cell models sit a
+# hair off the drive's own face, so a player who switched the pack on saw two cells in one slot, and
+# the eleven sheets below are read by nothing else in the pack - dropping both keeps the drive drawing
+# current art while every other machine still reverts.
+DROP = tuple(f"models/block/cell/{n}.json" for n in (
+    "storage_cell_l1_chemical", "storage_cell_l1_concrete", "storage_cell_l1_custom",
+    "storage_cell_l1_default", "storage_cell_l1_fluid", "storage_cell_l1_item",
+    "storage_cell_l1_pigcat", "storage_cell_l1_quantum", "storage_cell_l1_small_bulk",
+    "storage_cell_l1_small_bulk_chemical", "storage_cell_l1_small_bulk_expanded",
+    "storage_cell_l1_small_bulk_fluid", "storage_cell_l1_universal")) + tuple(
+    f"textures/block/storage_recolor/drive/{n}.png" for n in (
+        "brown_cell_housing", "cell_housing", "cell_level", "cell_type", "cell_type_concrete",
+        "cell_type_pigcat", "omni_cell_housing", "quantum_cell_housing",
+        "quantum_omni_cell_housing", "small_bulk_cell_housing",
+        "small_bulk_cell_housing_expanded")) + (
+    # The skin-wearing plushie is gone from the mod entirely (10-23), so the pack must not keep a
+    # copy that would come back on the next re-cut from the tag.
+    "blockstates/fumo_reliqwq.json", "models/block/fumo_reliqwq.json",
+    "models/item/fumo_reliqwq.json", "textures/block/fumo/placeholder_skin.png")
+
+
+def prune_drop():
+    """Delete the DROP entries from the freshly cut pack, and report the table being wrong.
+
+    Both halves matter: a name that no longer exists in the tag means this table has rotted against
+    the art it describes, which a silent prune would hide until the drive looked wrong again."""
+    root = os.path.join(PACK, "assets", NS)
+    dropped, absent = [], []
+    for rel in DROP:
+        hit = False
+        for suffix in ("", ".mcmeta"):
+            path = os.path.join(root, *(rel + suffix).split("/"))
+            if os.path.exists(path):
+                os.remove(path)
+                dropped.append(rel + suffix)
+                hit = True
+        if not hit:
+            absent.append(rel)
+    return dropped, absent
+
 
 def extract(tag):
     scratch = os.path.join(REPO, "build", "legacy-pack-tmp")
@@ -114,9 +154,12 @@ def check_states_still_resolve():
 def main():
     tag = sys.argv[1] if len(sys.argv) > 1 else "v1.2.8"
     build(extract(tag))
+    dropped, absent = prune_drop()
     models, broken = check_self_contained()
     counts = {p: sum(len(fs) for _, _, fs in os.walk(os.path.join(PACK, "assets", NS, p))) for p in PARTS}
     print(f"{tag} -> src/main/resources/legacy_art/  {counts}")
+    print(f"dropped by DROP: {len(dropped)}, table entries missing from the cut: "
+          f"{len(absent)} {absent[:4]}")
     print("dangling blockstate references:", len(broken), broken[:3])
     stale = check_states_still_resolve()
     print("internally incomplete blockstates:", stale if stale else "none")
