@@ -10779,14 +10779,16 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
-     * Pins the L1 advancement tree on the four ways it can silently break.
+     * Pins the L1 advancement tree on the ways it can silently break.
      *
-     * <p>An advancement whose criteria names an unregistered item is dropped by NeoForge with a logged
-     * ERROR naming our file, and one whose parent was dropped by a condition ends up off the tree - so the
-     * load check and the item check are the same failure seen from two sides. The language check exists
-     * because the JSON carries {@code translate} components: a missing key shows the raw key to the player.
-     * And the criterion name for the two {@code minecraft:impossible} nodes is only matched to the Java by
-     * agreement, so it is asserted here instead of trusted.
+     * <p>Each node is first asked whether the server loaded it, because an optional family that is not
+     * installed gates its own node off and then every item id inside that file is absent by design - read
+     * the load state after the contents and the guard calls a correct install a broken one. A node that
+     * did load must not name items nobody registered, and one that names a missing parent or carries no
+     * condition must not be absent. The language check exists because the JSON carries {@code translate}
+     * components: a missing key shows the raw key to the player. And the criterion name for the two
+     * {@code minecraft:impossible} nodes is only matched to the Java by agreement, so it is asserted here
+     * instead of trusted.
      */
     @GameTest(template = "empty", batch = "advancement_tree", timeoutTicks = 100,
             templateNamespace = NeoECOPrototype.MOD_ID)
@@ -10818,10 +10820,6 @@ public final class NeoECOPrototypeGameTests {
             }
 
             String icon = node.getAsJsonObject("display").getAsJsonObject("icon").get("id").getAsString();
-            if (!itemRegistered(icon)) {
-                helper.fail(name + " shows " + icon + " as its icon, and that item is not registered");
-                return;
-            }
             if ("root".equals(name)) {
                 // A tab without a background paints the missing-texture checker across the whole panel.
                 // Nothing in the log says so - only eyes catch it - so it is asserted here instead.
@@ -10835,6 +10833,39 @@ public final class NeoECOPrototypeGameTests {
                     helper.fail("root's background " + background + " is not a texture in this jar");
                     return;
                 }
+            }
+
+            // Resolve whether the server actually took this file before reading anything about its
+            // contents: an optional family that is not installed gates its node off on purpose, and then
+            // every item id in the file is legitimately absent.
+            boolean loaded = advancements.get(ResourceLocation.fromNamespaceAndPath(
+                    NeoECOPrototype.MOD_ID, name)) != null;
+            if (node.has("neoforge:conditions")) {
+                var condition = node.getAsJsonArray("neoforge:conditions").get(0).getAsJsonObject();
+                String gate = condition.get("item").getAsString();
+                if (!gate.equals(icon)) {
+                    helper.fail(name + " is gated on " + gate + " but shows " + icon
+                            + " - one of the two will not follow the other when the family moves");
+                    return;
+                }
+                if (loaded != itemRegistered(gate)) {
+                    helper.fail(name + " loaded=" + loaded + " while its gate item " + gate
+                            + " is registered=" + itemRegistered(gate));
+                    return;
+                }
+            } else if (!loaded) {
+                helper.fail(name + " carries no condition yet the server did not load it - its parent is"
+                        + " missing or the file was rejected");
+                return;
+            }
+            // The one thing the branch above cannot say: a node that loaded may still paint an item
+            // nobody registered - an icon edited without its gate, or a family retired. Checking the
+            // icon before this point is wrong, because a gated-off node is absent with an unregistered
+            // icon on purpose.
+            if (loaded && !itemRegistered(icon)) {
+                helper.fail(name + " is loaded and paints " + icon + " as its icon, but that item is not"
+                        + " registered, so the tree shows a missing-texture cube");
+                return;
             }
 
             var criteria = node.getAsJsonObject("criteria");
@@ -10892,35 +10923,14 @@ public final class NeoECOPrototypeGameTests {
                         continue;
                     }
                     for (var item : groupObject.getAsJsonArray("items")) {
-                        if (!itemRegistered(item.getAsString())) {
-                            helper.fail(name + " waits on " + item.getAsString() + " in criterion \""
-                                    + entry.getKey() + "\", which is not registered - NeoForge drops this"
-                                    + " file with a logged ERROR");
+                        if (loaded && !itemRegistered(item.getAsString())) {
+                            helper.fail(name + " loaded and waits on " + item.getAsString()
+                                    + " in criterion \"" + entry.getKey() + "\", which is not registered"
+                                    + " - that item was retired without retiring the node");
                             return;
                         }
                     }
                 }
-            }
-
-            boolean loaded = advancements.get(ResourceLocation.fromNamespaceAndPath(
-                    NeoECOPrototype.MOD_ID, name)) != null;
-            if (node.has("neoforge:conditions")) {
-                var condition = node.getAsJsonArray("neoforge:conditions").get(0).getAsJsonObject();
-                String gate = condition.get("item").getAsString();
-                if (!gate.equals(icon)) {
-                    helper.fail(name + " is gated on " + gate + " but shows " + icon
-                            + " - one of the two will not follow the other when the family moves");
-                    return;
-                }
-                if (loaded != itemRegistered(gate)) {
-                    helper.fail(name + " loaded=" + loaded + " while its gate item " + gate
-                            + " is registered=" + itemRegistered(gate));
-                    return;
-                }
-            } else if (!loaded) {
-                helper.fail(name + " carries no condition yet the server did not load it - its parent is"
-                        + " missing or the file was rejected");
-                return;
             }
 
             titleKeys.add("advancement.neoecoprototype." + name + ".title");
