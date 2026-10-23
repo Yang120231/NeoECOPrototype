@@ -42,7 +42,6 @@ import cn.dancingsnow.neoecoprototype.block.computation.SimplifyComputationSyste
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingSystemBlock;
 import cn.dancingsnow.neoecoprototype.block.storage.SimplifyStorageControllerBlock;
 import cn.dancingsnow.neoecoprototype.blockentity.crafting.SimplifySuperconductiveInterfaceBlockEntity;
-import cn.dancingsnow.neoecoprototype.blockentity.decoration.FumoBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.storage.SimplifyEnergyCellBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.storage.SimplifyStorageHostBlockEntity;
 import cn.dancingsnow.neoecoprototype.blockentity.trinity.SimplifyTrinityComputationModuleBlockEntity;
@@ -2165,15 +2164,14 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
-     * The things that made the dolls look or read broken, each of which is invisible to the compiler:
-     * the extra effect a doll has to hand out, the tooltip line that describes it (it was silently
-     * missing, and "没回血" was really "没说"), the loot table that has to copy the owner component off
-     * the custom-skin doll's block entity, and which doll counts as "named" now that the four honoured
-     * players are each their own item. Reads everything through the mod classloader, so it costs no plot
-     * and touches no world.
+     * The things about a doll that are invisible to the compiler: the extra effect it has to hand out, the
+     * tooltip line that describes it (it was silently missing once, and "没回血" was really "没说"), that
+     * all four carry stats at all, that each blockstate turns with the facing it was set down in, and that
+     * a placed or worn doll actually moves a creeper. Reads everything through the mod classloader, so it
+     * costs no plot and touches no world.
      */
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void namedDollDescribesAndKeepsItsOwner(GameTestHelper helper) {
+    public static void namedDollsGrantWhatTheyAdvertiseAndScareCreepers(GameTestHelper helper) {
         ItemStack stack = new ItemStack(ModRegistration.FUMO_DOLL_TEDXENON_ITEM.get());
         net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> extra =
                 cn.dancingsnow.neoecoprototype.item.decoration.FumoItem.extraEffect(stack);
@@ -2181,26 +2179,14 @@ public final class NeoECOPrototypeGameTests {
             helper.fail("TedXenon's doll hands out " + extra + " instead of Regeneration");
             return;
         }
-        // The released half: the four dedicated dolls count as named, and the doll /prototypefumo hands
-        // out does not - even when its component says one of the honoured players' names, because the
-        // worn effects are keyed off the item now, not off a string a command wrote.
-        for (java.util.function.Supplier<? extends net.minecraft.world.item.Item> named : List.of(
+        for (java.util.function.Supplier<? extends net.minecraft.world.item.Item> doll : List.of(
                 ModRegistration.FUMO_DOLL_RELIQWQ_ITEM, ModRegistration.FUMO_DOLL_YANG120_ITEM,
                 ModRegistration.FUMO_DOLL_KOOOKI_ITEM, ModRegistration.FUMO_DOLL_TEDXENON_ITEM)) {
-            if (!cn.dancingsnow.neoecoprototype.item.decoration.FumoItem
-                    .isNamedDoll(new ItemStack(named.get()))) {
-                helper.fail(named.get() + " is in the creative tab as a named doll but grants nothing");
+            if (cn.dancingsnow.neoecoprototype.item.decoration.FumoItem
+                    .statsOf(new ItemStack(doll.get())) == null) {
+                helper.fail(doll.get() + " is in the creative tab as a doll but carries no stats");
                 return;
             }
-        }
-        var customSkin = new ItemStack(ModRegistration.FUMO_RELIQWQ_ITEM.get());
-        customSkin.set(ModRegistration.FUMO_OWNER.get(), new net.minecraft.world.item.component.ResolvableProfile(
-                java.util.Optional.of("reliqwq"), java.util.Optional.empty(),
-                new com.mojang.authlib.properties.PropertyMap()));
-        if (cn.dancingsnow.neoecoprototype.item.decoration.FumoItem.isNamedDoll(customSkin)) {
-            helper.fail("the custom-skin doll still reads a player's name off its component, so it hands"
-                    + " out armour and night vision that belong to the four named dolls");
-            return;
         }
         // The tooltip line is built from this key with the effect's own display name; if the key is
         // gone the doll stops advertising what it does and there is no error anywhere to notice.
@@ -2213,28 +2199,6 @@ public final class NeoECOPrototypeGameTests {
                 helper.fail("lang/" + lang + ".json has no fumo_reliqwq.worn_extra key");
                 return;
             }
-        }
-        String loot = readResource("/data/neoecoprototype/loot_table/blocks/fumo_reliqwq.json", helper);
-        if (loot == null) {
-            return;
-        }
-        if (!loot.contains("\"function\": \"minecraft:copy_components\"")
-                || !loot.contains("\"source\": \"block_entity\"")
-                || !loot.contains("neoecoprototype:fumo_owner")) {
-            helper.fail("the doll's loot table does not copy neoecoprototype:fumo_owner from the"
-                    + " block entity, so breaking one drops an anonymous doll");
-            return;
-        }
-        // The real check, though: the loader wants the key to be "function", and a table that does not
-        // parse is simply left out of the registry - the block then drops nothing while every test
-        // still reports green. Asking the loaded keys is the only way to see that from here.
-        var ourLoot = cn.dancingsnow.neoecoprototype.NeoECOPrototype.id("blocks/fumo_reliqwq");
-        boolean loaded = helper.getLevel().getServer().reloadableRegistries()
-                .getKeys(net.minecraft.core.registries.Registries.LOOT_TABLE).contains(ourLoot);
-        if (!loaded) {
-            helper.fail("loot table " + ourLoot + " is not among the loaded keys, so it failed to parse"
-                    + " and the doll block drops nothing");
-            return;
         }
         // Creepers back away from a plushie, worn or placed, and three things can undo that without a
         // word: the ticker hook never reaching the block (getTicker is an override, so a mistyped
@@ -2291,9 +2255,9 @@ public final class NeoECOPrototypeGameTests {
             // The worn half of the same rule reads the head slot, so that is the slot it has to find.
             creeper.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD,
                     new ItemStack(ModRegistration.FUMO_DOLL_RELIQWQ_ITEM.get()));
-            wearingDoll = cn.dancingsnow.neoecoprototype.event.PlushieScare.wearsNamedDoll(creeper);
+            wearingDoll = cn.dancingsnow.neoecoprototype.event.PlushieScare.wearsPlushie(creeper);
             creeper.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, ItemStack.EMPTY);
-            wearingNothing = cn.dancingsnow.neoecoprototype.event.PlushieScare.wearsNamedDoll(creeper);
+            wearingNothing = cn.dancingsnow.neoecoprototype.event.PlushieScare.wearsPlushie(creeper);
         } finally {
             creeper.discard();
         }
@@ -2367,86 +2331,9 @@ public final class NeoECOPrototypeGameTests {
                 }
             }
         }
-        ownerSurvivesEveryCopy(helper);
-        // A profile can carry a uuid and no name; the lang key is "%s's Doll", so that used to read as
-        // a dangling possessive.
-        var nameless = new ItemStack(ModRegistration.FUMO_RELIQWQ_ITEM.get());
-        nameless.set(ModRegistration.FUMO_OWNER.get(), new net.minecraft.world.item.component.ResolvableProfile(
-                java.util.Optional.empty(), java.util.Optional.of(java.util.UUID.randomUUID()),
-                new com.mojang.authlib.properties.PropertyMap()));
-        var plainTitle = ModRegistration.FUMO_RELIQWQ_ITEM.get().getName(ItemStack.EMPTY);
-        if (!nameless.getHoverName().equals(plainTitle)) {
-            helper.fail("a doll with a uuid but no name is titled \"" + nameless.getHoverName().getString()
-                    + "\" instead of the plain \"" + plainTitle.getString() + "\"");
-            return;
-        }
         helper.succeed();
     }
 
-    /**
-     * A doll's face rides four vanilla paths that never meet: the chunk save and the loader that reads it
-     * back, the block entity sync tag, the component map a broken doll's loot copies, and pick-block plus
-     * place-from-item. Each one is a separate call into {@link FumoBlockEntity}, so a broken round trip
-     * just gives the doll a different owner and nothing anywhere reports it. Touches no world and no plot.
-     *
-     * <p>Compared field by field on purpose: {@code ResolvableProfile} is a record whose components
-     * include a {@code PropertyMap} and a derived {@code GameProfile}, and neither has a value
-     * {@code equals}, so two faithful copies of one owner are never {@code equals} to each other.
-     */
-    private static void ownerSurvivesEveryCopy(GameTestHelper helper) {
-        var pos = new BlockPos(0, 0, 0);
-        var state = ModRegistration.FUMO_BLOCK.get().defaultBlockState();
-        var registries = helper.getLevel().registryAccess();
-        var skins = new com.mojang.authlib.properties.PropertyMap();
-        skins.put("textures", new com.mojang.authlib.properties.Property("textures",
-                "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0In19fQ==",
-                "a-signature-under-test"));
-        var owner = new net.minecraft.world.item.component.ResolvableProfile(
-                java.util.Optional.of("reliqwq"),
-                java.util.Optional.of(java.util.UUID.fromString("f0e6d3ba-3b17-4a5c-9c1a-2c5b9f0a7d31")), skins);
-        var placed = new FumoBlockEntity(pos, state);
-        placed.setOwner(owner);
-
-        var saved = placed.saveWithFullMetadata(registries);
-        if (!(net.minecraft.world.level.block.entity.BlockEntity.loadStatic(pos, state, saved, registries)
-                instanceof FumoBlockEntity reloaded)) {
-            helper.fail("the chunk tag of an owned doll no longer reads back as a FumoBlockEntity");
-            return;
-        }
-        if (!sameOwner(owner, reloaded.owner(), "chunk save", helper)) {
-            return;
-        }
-        var synced = new FumoBlockEntity(pos, state);
-        synced.loadCustomOnly(placed.getUpdateTag(registries), registries);
-        if (!sameOwner(owner, synced.owner(), "client sync tag", helper)) {
-            return;
-        }
-        var picked = new ItemStack(ModRegistration.FUMO_RELIQWQ_ITEM.get());
-        placed.saveToItem(picked, registries);
-        var replanted = new FumoBlockEntity(pos, state);
-        replanted.applyComponentsFromItemStack(picked);
-        if (!sameOwner(owner, replanted.owner(), "pick-block then place", helper)) {
-            return;
-        }
-        if (!sameOwner(owner, placed.collectComponents().get(ModRegistration.FUMO_OWNER.get()),
-                "loot component copy", helper)) {
-            return;
-        }
-        // The other half: an unowned doll must write no key at all, and a tag without one has to clear
-        // the field rather than leave whatever the block entity happened to hold before.
-        var plainTag = new FumoBlockEntity(pos, state).saveWithoutMetadata(registries);
-        if (plainTag.contains("fumo_owner")) {
-            helper.fail("a doll with no owner still wrote a fumo_owner key: " + plainTag);
-            return;
-        }
-        var hadOwner = new FumoBlockEntity(pos, state);
-        hadOwner.setOwner(owner);
-        hadOwner.loadCustomOnly(plainTag, registries);
-        if (hadOwner.owner() != null) {
-            helper.fail("reading a tag with no owner left the old one in place, so an anonymous doll"
-                    + " could wear the face of whatever it was copied from");
-        }
-    }
 
     /** Fails naming the path that lost the owner, so a break reports where rather than just going red. */
     private static boolean sameOwner(net.minecraft.world.item.component.ResolvableProfile expected,
@@ -2523,18 +2410,6 @@ public final class NeoECOPrototypeGameTests {
                         "textures/gui/panel/storage_marker.png"),
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
                         "textures/gui/panel/host_marker.png"),
-                // FumoRenderer.localSkin: the named dolls carry their owner's skin inside the jar. A
-                // missing file is not an error at runtime - the doll silently falls back to whatever
-                // default face its uuid hashes to, which is precisely the kind of regression nobody
-                // would notice until a player points at it.
-                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
-                        "textures/block/fumo/skins/reliqwq.png"),
-                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
-                        "textures/block/fumo/skins/yang120.png"),
-                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
-                        "textures/block/fumo/skins/kouooki.png"),
-                ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
-                        "textures/block/fumo/skins/tedxenon.png"),
                 // PartModel base models, frozen by PartModels.registerModels
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
                         "models/part/powered_me_interface.json"),
@@ -2751,34 +2626,52 @@ public final class NeoECOPrototypeGameTests {
                     + plantedLit.faceLightData() + ", expected 1, so the floor below is measured blind");
             return;
         }
-        var scan = countEmissiveKeys(models);
-        if (scan.models() < 500) {
-            helper.fail("the scan found only " + scan.models() + " model jsons on the classpath, so it"
-                    + " checked nothing");
+        // The fallback pack is scored on its own line, because what it carries is a decision we make: when
+        // the drive-mounted cell family came out of the pack on 2026-10-23, a combined floor went red by 65
+        // while no live face had lost anything.
+        var live = new java.util.LinkedHashMap<String, String>();
+        var fallback = new java.util.LinkedHashMap<String, String>();
+        for (var modelEntry : models.entrySet()) {
+            (modelEntry.getKey().startsWith("legacy_art/") ? fallback : live)
+                    .put(modelEntry.getKey(), modelEntry.getValue());
+        }
+        var liveScan = countEmissiveKeys(live);
+        var packScan = countEmissiveKeys(fallback);
+        if (liveScan.models() < 300 || packScan.models() < 150) {
+            helper.fail("the scan found " + liveScan.models() + " live and " + packScan.models()
+                    + " fallback-pack model jsons, expected at least 300 and 150, so one half of this"
+                    + " guard checked nothing");
             return;
         }
-        if (!scan.deadShadeFiles().isEmpty()) {
-            helper.fail(scan.faceShade() + " face-level \"shade\" key(s) in " + scan.deadShadeFiles()
-                    + " -- NeoForge's face deserializer has no such key, so those quads carry no light at"
-                    + " all and the lamp is dark");
+        var dead = new java.util.TreeSet<String>(liveScan.deadShadeFiles());
+        dead.addAll(packScan.deadShadeFiles());
+        if (!dead.isEmpty()) {
+            helper.fail((liveScan.faceShade() + packScan.faceShade()) + " face-level \"shade\" key(s) in "
+                    + dead + " -- NeoForge's face deserializer has no such key, so those quads carry no light"
+                    + " at all and the lamp is dark");
             return;
         }
-        if (scan.faceLightData() < FACE_LIGHT_DATA_FLOOR) {
-            helper.fail("only " + scan.faceLightData() + " face-level neoforge_data keys, floor is "
-                    + FACE_LIGHT_DATA_FLOOR + " -- an emissive face lost its light data again");
+        if (liveScan.faceLightData() < FACE_LIGHT_DATA_FLOOR) {
+            helper.fail("only " + liveScan.faceLightData() + " face-level neoforge_data keys in live assets,"
+                    + " floor is " + FACE_LIGHT_DATA_FLOOR + " (the fallback pack adds "
+                    + packScan.faceLightData() + ") -- an emissive face lost its light data again");
             return;
         }
         // Not asserted: a light-named face with no override is a look decision, not a dead key. 1.3.5's
         // own base and off models have ten of them, and the fallback pack has four.
-        NeoECOPrototype.LOGGER.info("emissive keys: {} models, {} face-level neoforge_data, no dead"
-                        + " face-level shade; {} light-named faces carry no override",
-                scan.models(), scan.faceLightData(), scan.lightFacesWithoutData());
+        NeoECOPrototype.LOGGER.info("emissive keys: {} live models / {} live face-level neoforge_data"
+                        + " (floor {}), {} fallback models / {} keys; {} light-named live faces carry no"
+                        + " override",
+                liveScan.models(), liveScan.faceLightData(), FACE_LIGHT_DATA_FLOOR,
+                packScan.models(), packScan.faceLightData(), liveScan.lightFacesWithoutData());
         helper.succeed();
     }
 
-    /** What 1.3.5 dropped to, plus the one nested face the first swap missed; a floor only blocks a
+    /** Live assets alone, measured 2026-10-23: 325 lit faces across 337 models. The floor deliberately
+     *  ignores the fallback pack - that pack's contents change by decision, and its drive-cell family
+     *  leaving it took 65 keys out of a combined count without touching live art. A floor only blocks a
      *  decrease, so adding lit faces stays free. */
-    private static final int FACE_LIGHT_DATA_FLOOR = 488;
+    private static final int FACE_LIGHT_DATA_FLOOR = 325;
 
     private record EmissiveScan(int models, int faceShade, int faceLightData, int lightFacesWithoutData,
                                 java.util.SortedSet<String> deadShadeFiles) { }
@@ -4879,7 +4772,6 @@ public final class NeoECOPrototypeGameTests {
                 {ModRegistration.ENERGIZED_COMPUTATION_CORE_BLOCK.get(), "energized_computation_core"},
                 {ModRegistration.ENERGIZED_COMPUTATION_THREADING_CORE_BLOCK.get(),
                         "energized_computation_threading_core"},
-                {ModRegistration.FUMO_BLOCK.get(), "fumo_reliqwq"},
                 {ModRegistration.SIMPLIFY_TRINITY_STORAGE_MODULE_BLOCK.get(), "simplify_trinity_storage_module"},
                 {ModRegistration.SIMPLIFY_TRINITY_COMPUTATION_MODULE_BLOCK.get(),
                         "simplify_trinity_computation_module"},
@@ -6972,8 +6864,8 @@ public final class NeoECOPrototypeGameTests {
             return;
         }
         if (SimplifyStorageHostBlockEntity.panelRowOf(mega, items)
-                != SimplifyStorageHostBlockEntity.ROW_MEGA_ITEM) {
-            helper.fail("a mega item matrix must be counted in the mega item row, not the plain one");
+                != SimplifyStorageHostBlockEntity.ROW_ITEM) {
+            helper.fail("a mega item matrix must read as the item medium now that it has no row of its own");
             return;
         }
         if (SimplifyStorageHostBlockEntity.panelRowOf(fluid, fluids)
@@ -7039,6 +6931,130 @@ public final class NeoECOPrototypeGameTests {
         if (SimplifyStorageHostBlockEntity.panelKindOf(SimplifyStorageHostBlockEntity.ROW_FLUX)
                 != cn.dancingsnow.neoecoae.gui.storage.StorageHostUI.CellEntry.KIND_OTHER) {
             helper.fail("the flux row should wear eco's \"other\" icon, not borrow the item one");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A row's glyph is chosen from {@code StorageTypeLine.resourceId()}, and a null one is not an error -
+     * it lands the row on swatch 18, which is one grey box multiplied by the row's accent colour. That is
+     * how every row of ours came to wear the same dull shape while eco's host paints eighteen different
+     * ones, and nothing about it reaches a log. So the property to pin is "each medium row reads a cell
+     * type that is registered under a key the panel can hand back", with the unregistered case asserted
+     * alongside it: if {@code getKey} answered something for every type, the first loop would be vacuous.
+     */
+    @GameTest(template = "empty", batch = "storage_panel_rows", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void panelRowGlyphIdsComeFromRegisteredTypes(GameTestHelper helper) {
+        var registry = cn.dancingsnow.neoecoae.all.NERegistries.CELL_TYPE;
+        var media = new java.util.ArrayList<cn.dancingsnow.neoecoae.api.storage.ECOCellType>();
+        media.add(cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem.getItemCellType());
+        media.add(cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem.getMegaItemCellType());
+        media.add(cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem.getFluidCellType());
+        for (var path : java.util.List.of("mekanism", "flux", "omni", "complex_omni", "quantum_omni",
+                "spent_nuclear_waste")) {
+            var type = registry.get(
+                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("neoecoae", path));
+            if (type != null) {
+                media.add(type);
+            }
+        }
+        if (media.size() < 3) {
+            helper.fail("expected at least the item, mega item and fluid rows to be resolvable, got "
+                    + media.size());
+            return;
+        }
+        for (var type : media) {
+            var id = registry.getKey(type);
+            if (id == null || registry.get(id) != type) {
+                helper.fail("a panel row reads a cell type with no registry key (" + type.desc().getString()
+                        + "), so its glyph falls back to the grey box");
+                return;
+            }
+        }
+        // The contrast that makes the loop above a reading rather than a tautology.
+        var unregistered = new cn.dancingsnow.neoecoae.api.storage.ECOCellType(
+                net.minecraft.network.chat.Component.literal("control"), 1, false);
+        if (registry.getKey(unregistered) != null) {
+            helper.fail("an unregistered cell type answered a registry key, so the check above proves nothing");
+            return;
+        }
+        for (var inHouse : java.util.List.of(
+                cn.dancingsnow.neoecoprototype.items.SimplifyConcreteStorageCellItem.CELL_TYPE,
+                cn.dancingsnow.neoecoprototype.items.SimplifySingularityCellItem.CELL_TYPE,
+                cn.dancingsnow.neoecoprototype.items.CustomInfiniteCellItem.INFINITE_CELL_TYPE)) {
+            if (registry.getKey(inHouse) != null) {
+                helper.fail("this in-house cell type is registered now (" + registry.getKey(inHouse)
+                        + "), so the fallback-box note in createStorageTypeLine is stale");
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Which row a mounted cell is drawn in and which types a row sums are two different lookups, and they
+     * used to disagree: eco's bulk fluid matrix carries the {@code mega_fluid} cell type, which
+     * {@code panelRowOf} routes into the plain fluid row by key type, while the row's own figures matched
+     * only {@code fluids} - so the row stood next to a visibly full drive reading "0 types, 0 bytes".
+     * Both halves are pure, so this asserts the pair agreeing rather than a fixture. The chemical half can
+     * only be checked as far as the suite's mod list reaches: routing needs the cell's own key types, and
+     * appmek is not installed here, so it asserts the counted set when eco has registered the type and
+     * says nothing otherwise.
+     */
+    @GameTest(template = "empty", batch = "storage_panel_rows", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void bulkCellsCountInTheRowTheyAreDrawnIn(GameTestHelper helper) {
+        var registry = cn.dancingsnow.neoecoae.all.NERegistries.CELL_TYPE;
+        var fluid = cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem.getFluidCellType();
+        var megaFluid = registry.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("neoecoae", "mega_fluid"));
+        if (megaFluid == null) {
+            helper.fail("eco's mega_fluid cell type is not registered, so this guard is reading nothing");
+            return;
+        }
+        var megaItem = cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem.getMegaItemCellType();
+        if (SimplifyStorageHostBlockEntity.panelRowOf(megaFluid,
+                java.util.Set.of(appeng.api.stacks.AEKeyType.fluids()))
+                != SimplifyStorageHostBlockEntity.ROW_FLUID) {
+            helper.fail("a bulk fluid matrix is no longer routed into the fluid row, so the widened "
+                    + "counted set is counting the wrong row");
+            return;
+        }
+        if (!SimplifyStorageHostBlockEntity.panelRowCountedTypes(fluid, SimplifyStorageHostBlockEntity.ROW_FLUID)
+                .contains(megaFluid)) {
+            helper.fail("the fluid row is drawn under a bulk fluid matrix but does not count its types "
+                    + "or bytes - that is the 0/0 the panel showed");
+            return;
+        }
+        var chemical = registry.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("neoecoae", "mekanism"));
+        var megaChemical = registry.get(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("neoecoae", "mega_chemical"));
+        if (chemical != null && megaChemical != null && !SimplifyStorageHostBlockEntity
+                .panelRowCountedTypes(chemical, SimplifyStorageHostBlockEntity.ROW_CHEMICAL)
+                .contains(megaChemical)) {
+            helper.fail("the chemical row does not count bulk chemical matrices either");
+            return;
+        }
+        // Control: each widening stays inside its own medium.
+        var item = cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem.getItemCellType();
+        var fluidRow = cn.dancingsnow.neoecoprototype.items.SimplifyStorageCellItem.getFluidCellType();
+        if (!SimplifyStorageHostBlockEntity.panelRowCountedTypes(item, SimplifyStorageHostBlockEntity.ROW_ITEM)
+                .contains(megaItem)) {
+            helper.fail("bulk item matrices are routed into the item row, but the item row does not count"
+                    + " them - they would be invisible in the numbers");
+            return;
+        }
+        if (SimplifyStorageHostBlockEntity.panelRowCountedTypes(item, SimplifyStorageHostBlockEntity.ROW_ITEM)
+                .contains(megaFluid)) {
+            helper.fail("the item row picked up the bulk fluid type; the widening leaked past its media");
+            return;
+        }
+        if (SimplifyStorageHostBlockEntity.panelRowCountedTypes(fluidRow, SimplifyStorageHostBlockEntity.ROW_FLUID)
+                .contains(megaItem)) {
+            helper.fail("the fluid row picked up the bulk item type");
             return;
         }
         helper.succeed();
@@ -10930,6 +10946,64 @@ public final class NeoECOPrototypeGameTests {
                     return;
                 }
             }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The same question {@code assemblerCanPushItsProductIntoOurProvider} answers for providers, asked of
+     * the two interfaces a player reported: AE2 hands a foreign pipe an item handler only through its
+     * generic-adapter hook, which wraps blocks answering {@code AECapabilities.GENERIC_INTERNAL_INV}, and
+     * that wrap is keyed on the block entity type AE2 registered for itself. Both of our interfaces carry
+     * their own type, so the question is whether anything answers there. AE2's own interface is the
+     * control: if it exposed nothing either, a pipe complaint could not be about us - it does.
+     *
+     * <p>The F1 machine interface is put in the table but not asserted: its block entity class is eco's
+     * {@code ECOMachineInterfaceBlockEntity}, and eco posts only
+     * {@code AECapabilities.IN_WORLD_GRID_NODE_HOST} for its own entries (read off
+     * {@code NEBlockEntityEntry}), so that half is eco's shape to answer, not ours to paper over.
+     */
+    @GameTest(template = "empty", batch = "interface_caps_probe", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void interfacesAnswerThePipeCapability(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var caps = net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK;
+        var generic = appeng.api.AECapabilities.GENERIC_INTERNAL_INV;
+        var ours = new net.minecraft.world.level.block.Block[]{
+                ModRegistration.SIMPLIFY_POWERED_ME_INTERFACE_BLOCK.get(),
+                ModRegistration.SUPERCONDUCTIVE_INTERFACE_BLOCK.get()};
+        var blocks = new net.minecraft.world.level.block.Block[]{
+                AEBlocks.INTERFACE.block(), ours[0], ours[1],
+                ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get()};
+
+        var report = new StringBuilder();
+        var exposed = new boolean[blocks.length];
+        var pos = new BlockPos(1, 1, 1);
+        for (int i = 0; i < blocks.length; i++) {
+            helper.setBlock(pos, blocks[i]);
+            var abs = helper.absolutePos(pos);
+            exposed[i] = level.getCapability(caps, abs, Direction.UP) != null;
+            report.append(' ').append(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(blocks[i]))
+                    .append(exposed[i] ? "=itemHandler" : "=none")
+                    .append(level.getCapability(generic, abs, Direction.UP) != null ? "+genericInv" : "")
+                    .append(";");
+        }
+        if (!exposed[0]) {
+            helper.fail("AE2's own interface exposes no item handler, so a pipe complaint cannot be about"
+                    + " ours - this probe is asking the wrong thing. Table:" + report);
+            return;
+        }
+        var missing = new StringBuilder();
+        for (int i = 1; i <= ours.length; i++) {
+            if (!exposed[i]) {
+                missing.append(' ').append(net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                        .getKey(blocks[i]));
+            }
+        }
+        if (missing.length() > 0) {
+            helper.fail("these of our interfaces expose no item handler while AE2's own does:" + missing
+                    + " ; table:" + report);
+            return;
         }
         helper.succeed();
     }

@@ -388,25 +388,28 @@ public class SimplifyStorageHostBlockEntity
     /**
      * The panel's rows. eco joins a cell entry to a row by number ({@code entry.typeId() ==
      * line.registryIndex()}), so the list below and {@link #panelRowOf} have to speak the same numbers -
-     * which is why neither of them writes a bare digit.
+     * which is why neither of them writes a bare digit. The numbers never leave the machine: they are
+     * rebuilt on every sync, so a row can be dropped without any saved data referring to it.
+     *
+     * <p>Small-bulk item matrices used to get a row of their own. They now read as items, which costs one
+     * thing worth knowing before "fixing" it: those cells report {@code Long.MAX_VALUE} total bytes, so
+     * summing them into the item row saturates that row's byte total and leaves its byte bar empty.
      */
     public static final int ROW_ITEM = 0;
-    public static final int ROW_MEGA_ITEM = 1;
-    public static final int ROW_FLUID = 2;
-    public static final int ROW_CHEMICAL = 3;
-    public static final int ROW_UNIVERSAL = 4;
-    public static final int ROW_QUANTUM = 5;
-    public static final int ROW_CONCRETE = 6;
-    public static final int ROW_FLUX = 7;
-    public static final int ROW_COMPLEX_UNIVERSAL = 8;
-    public static final int ROW_SPENT_WASTE = 9;
+    public static final int ROW_FLUID = 1;
+    public static final int ROW_CHEMICAL = 2;
+    public static final int ROW_UNIVERSAL = 3;
+    public static final int ROW_QUANTUM = 4;
+    public static final int ROW_CONCRETE = 5;
+    public static final int ROW_FLUX = 6;
+    public static final int ROW_COMPLEX_UNIVERSAL = 7;
+    public static final int ROW_SPENT_WASTE = 8;
     /** Not a row: a cell the panel must not count anywhere. */
     public static final int ROW_NONE = -1;
 
     private java.util.List<StorageHostUI.StorageTypeLine> createStorageTypeLines() {
         java.util.List<StorageHostUI.StorageTypeLine> lines = new java.util.ArrayList<>();
         lines.add(createStorageTypeLine(SimplifyStorageCellItem.getItemCellType(), ROW_ITEM));
-        lines.add(createStorageTypeLine(SimplifyStorageCellItem.getMegaItemCellType(), ROW_MEGA_ITEM));
         lines.add(createStorageTypeLine(SimplifyStorageCellItem.getFluidCellType(), ROW_FLUID));
         ECOCellType chemical = getChemicalCellType();
         if (chemical != null) {
@@ -447,8 +450,11 @@ public class SimplifyStorageHostBlockEntity
             // own number. The mounted cell is named on the drive and in Jade instead.
             return ROW_NONE;
         }
-        int row = SimplifyStorageCellItem.getMegaItemCellType().equals(cellType) ? ROW_MEGA_ITEM : ROW_ITEM;
-        // The same gate as the two rows above, and for the same reason: our omni item classes extend
+        // Everything that is neither of the special families below is an item, bulk matrices included:
+        // eco's mega_item type is the cell type our small-bulk family carries, and it reads as the item
+        // medium here and in panelRowCountedTypes.
+        int row = ROW_ITEM;
+        // The same gate as the item row above, and for the same reason: our omni item classes extend
         // eco's, which extend OmniCells', so reaching for them at all without that mod loaded is a
         // NoClassDefFoundError - not a null.
         if (ModList.get().isLoaded("ae2omnicells")) {
@@ -547,18 +553,60 @@ public class SimplifyStorageHostBlockEntity
     }
 
     private static ECOCellType registeredFluxType() {
-        return NERegistries.CELL_TYPE.get(ResourceLocation.fromNamespaceAndPath("neoecoae", "flux"));
+        return registeredCellType("flux");
+    }
+
+    /** One of eco's own cell types, read by id: absent medium answers null instead of failing the panel. */
+    private static ECOCellType registeredCellType(String path) {
+        return NERegistries.CELL_TYPE.get(ResourceLocation.fromNamespaceAndPath("neoecoae", path));
+    }
+
+    /**
+     * The panel picks a row's glyph by {@code resourceId}, never by the cell type object: a null one
+     * lands on swatch 18, which is a single grey box multiplied by the row's accent colour - that is
+     * why every row of ours showed the same dull shape while eco's host shows eighteen painted ones.
+     * eco's own rows hand over their registry key, so we read ours back out of the same registry;
+     * the three types we build in-house are deliberately unregistered, so they answer null and keep
+     * the fallback box until someone paints a glyph for them.
+     */
+    /**
+     * Which cell types' contents a row reports. It is not always just the type the row is named after:
+     * {@link #panelRowOf} routes eco's bulk item, fluid and chemical matrices (which carry their own
+     * {@code mega_item} / {@code mega_fluid} / {@code mega_chemical} type) into the plain medium's row by
+     * key type, so a row that matched only its own type stood next to visibly full drives reading
+     * "0 types, 0 bytes". The item row's byte total is the price of that list: a bulk item matrix reports
+     * {@code Long.MAX_VALUE} bytes, so the sum saturates - see the note on the row constants.
+     */
+    public static java.util.List<ECOCellType> panelRowCountedTypes(ECOCellType rowType, int row) {
+        ECOCellType bulk = switch (row) {
+            case ROW_ITEM -> registeredCellType("mega_item");
+            case ROW_FLUID -> registeredCellType("mega_fluid");
+            case ROW_CHEMICAL -> registeredCellType("mega_chemical");
+            default -> null;
+        };
+        return bulk == null || bulk.equals(rowType)
+                ? java.util.List.of(rowType)
+                : java.util.List.of(rowType, bulk);
     }
 
     private StorageHostUI.StorageTypeLine createStorageTypeLine(ECOCellType cellType, int registryIndex) {
+        final java.util.List<ECOCellType> totals = panelRowCountedTypes(cellType, registryIndex);
+        java.util.function.LongSupplier usedTypes = () -> storageTotals(totals).usedTypes();
+        java.util.function.LongSupplier totalTypes = () -> storageTotals(totals).totalTypes();
+        java.util.function.LongSupplier usedBytes = () -> storageTotals(totals).usedBytes();
+        java.util.function.LongSupplier totalBytes = () -> storageTotals(totals).totalBytes();
         return new StorageHostUI.StorageTypeLine(
                 cellType,
                 registryIndex,
-                () -> storageTotals(cellType).usedTypes(),
-                () -> storageTotals(cellType).totalTypes(),
-                () -> storageTotals(cellType).usedBytes(),
-                () -> storageTotals(cellType).totalBytes(),
-                () -> "0");
+                cellType::desc,
+                cellType::visible,
+                usedTypes,
+                totalTypes,
+                usedBytes,
+                totalBytes,
+                () -> "0",
+                NERegistries.CELL_TYPE.getKey(cellType),
+                () -> java.math.BigInteger.valueOf(usedBytes.getAsLong()));
     }
 
     public java.util.List<StorageHostUI.CellEntry> createCellEntries() {
@@ -628,6 +676,15 @@ public class SimplifyStorageHostBlockEntity
     }
 
     private L1StorageTotals storageTotals(ECOCellType cellType) {
+        return storageTotals(java.util.List.of(cellType));
+    }
+
+    /**
+     * The same figures summed over every cell type that belongs to one row. Resolved by id rather than
+     * through {@code integration/}, because the bulk families' types are eco's own and a missing MEGA Cells
+     * or appmek install has to answer null instead of loading a class the panel must not need.
+     */
+    private L1StorageTotals storageTotals(java.util.Collection<ECOCellType> cellTypes) {
         long usedTypes = 0L;
         long totalTypes = 0L;
         long usedBytes = 0L;
@@ -638,7 +695,7 @@ public class SimplifyStorageHostBlockEntity
         }
         for (SimplifyDriveBlockEntity drive : cluster.getDrives()) {
             IECOStorageCell cell = drive.getCellInventory();
-            if (cell == null || !cellType.equals(cell.getCellType())) {
+            if (cell == null || !cellTypes.contains(cell.getCellType())) {
                 continue;
             }
             usedTypes = saturatingAdd(usedTypes, Math.max(0L, cell.getStoredItemTypes()));
