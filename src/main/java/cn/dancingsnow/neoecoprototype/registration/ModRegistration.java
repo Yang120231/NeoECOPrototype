@@ -886,21 +886,37 @@ public class ModRegistration {
                 .lightLevel(state -> 15);
     }
 
+    /** A doll's worn stats: its own armour, then whatever effects it hands out on top of the night vision. */
     private static FumoItem.DollStats dollStats(float armor, float toughness,
-            net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> extra) {
-        return new FumoItem.DollStats(armor, toughness, extra);
+            FumoItem.DollEffect... extra) {
+        return new FumoItem.DollStats(armor, toughness, java.util.List.of(extra), 0.0D);
+    }
+
+    /**
+     * The same, for the doll that also feeds what its wearer is carrying: {@code aePerTick} is void-made
+     * and pushed into their chargeable items, so it is a rate of income and not a draw on anything.
+     */
+    private static FumoItem.DollStats chargingDollStats(float armor, float toughness, double aePerTick,
+            FumoItem.DollEffect... extra) {
+        return new FumoItem.DollStats(armor, toughness, java.util.List.of(extra), aePerTick);
+    }
+
+    /** One effect at one level - amplifier 0 is the first level, as everywhere else in vanilla. */
+    private static FumoItem.DollEffect dollEffect(
+            net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> effect, int amplifier) {
+        return new FumoItem.DollEffect(effect, amplifier);
     }
 
     public static final Supplier<NamedDollBlock> FUMO_DOLL_RELIQWQ_BLOCK =
             BLOCKS.register("fumo_doll_reliqwq", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_RELIQWQ_ITEM =
             ITEMS.register("fumo_doll_reliqwq", () -> new FumoItem(FUMO_DOLL_RELIQWQ_BLOCK.get(),
-                    coloredName(FUMO_DOLL_RELIQWQ_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(4.0F, 2.0F, null)));
+                    coloredName(FUMO_DOLL_RELIQWQ_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(4.0F, 2.0F)));
     public static final Supplier<NamedDollBlock> FUMO_DOLL_YANG120_BLOCK =
             BLOCKS.register("fumo_doll_yang120", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_YANG120_ITEM =
             ITEMS.register("fumo_doll_yang120", () -> new FumoItem(FUMO_DOLL_YANG120_BLOCK.get(),
-                    coloredName(FUMO_DOLL_YANG120_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(4.0F, 2.0F, null)));
+                    coloredName(FUMO_DOLL_YANG120_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(4.0F, 2.0F)));
 
     /**
      * The same plushie with a crafting CPU inside it. It is a second block rather than the shipped doll
@@ -915,7 +931,7 @@ public class ModRegistration {
             BLOCKS.register("fumo_doll_yang120_cpu", ModRegistration::newYang120CpuDoll);
     public static final Supplier<FumoItem> FUMO_DOLL_YANG120_CPU_ITEM =
             ITEMS.register("fumo_doll_yang120_cpu", () -> new FumoItem(FUMO_DOLL_YANG120_CPU_BLOCK.get(),
-                    coloredName(FUMO_DOLL_YANG120_CPU_BLOCK, NAME_THEME_CPU_DOLL).stacksTo(16), dollStats(4.0F, 2.0F, null)));
+                    coloredName(FUMO_DOLL_YANG120_CPU_BLOCK, NAME_THEME_CPU_DOLL).stacksTo(16), dollStats(4.0F, 2.0F)));
 
     /**
      * Built in a method rather than in the field's own initializer, because the unit names the doll's item
@@ -941,18 +957,20 @@ public class ModRegistration {
     public static final Supplier<FumoItem> FUMO_DOLL_YANG120_GIANT_ITEM =
             ITEMS.register("fumo_doll_yang120_giant", () -> new FumoItem(
                     FUMO_DOLL_YANG120_GIANT_BLOCK.get(), new Item.Properties().component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true).stacksTo(16),
-                    dollStats(4.0F, 2.0F, null)));
+                    dollStats(4.0F, 2.0F)));
     public static final Supplier<NamedDollBlock> FUMO_DOLL_KOOOKI_BLOCK =
             BLOCKS.register("fumo_doll_kouooki", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_KOOOKI_ITEM =
             ITEMS.register("fumo_doll_kouooki", () -> new FumoItem(FUMO_DOLL_KOOOKI_BLOCK.get(),
-                    coloredName(FUMO_DOLL_KOOOKI_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(1.0F, 5.0F, null)));
+                    coloredName(FUMO_DOLL_KOOOKI_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(1.0F, 5.0F)));
     public static final Supplier<NamedDollBlock> FUMO_DOLL_TEDXENON_BLOCK =
             BLOCKS.register("fumo_doll_tedxenon", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_TEDXENON_ITEM =
             ITEMS.register("fumo_doll_tedxenon", () -> new FumoItem(FUMO_DOLL_TEDXENON_BLOCK.get(),
                     coloredName(FUMO_DOLL_TEDXENON_BLOCK, NAME_THEME_GREEN).stacksTo(16),
-                    dollStats(6.0F, 1.0F, net.minecraft.world.effect.MobEffects.REGENERATION)));
+                    chargingDollStats(6.0F, 1.0F, 100.0D,
+                            dollEffect(net.minecraft.world.effect.MobEffects.REGENERATION, 1),
+                            dollEffect(net.minecraft.world.effect.MobEffects.LUCK, 0))));
 
     /**
      * The plushie CPU is AE2's own crafting-unit block entity, and it has to be exactly that class: the grid

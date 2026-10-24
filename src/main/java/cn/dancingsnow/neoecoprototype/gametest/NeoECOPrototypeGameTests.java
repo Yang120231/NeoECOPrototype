@@ -2308,11 +2308,46 @@ public final class NeoECOPrototypeGameTests {
     @GameTest(template = "empty", templateNamespace = NeoECOPrototype.MOD_ID)
     public static void namedDollsGrantWhatTheyAdvertiseAndScareCreepers(GameTestHelper helper) {
         ItemStack stack = new ItemStack(ModRegistration.FUMO_DOLL_TEDXENON_ITEM.get());
-        net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> extra =
-                cn.dancingsnow.neoecoprototype.item.decoration.FumoItem.extraEffect(stack);
-        if (extra != net.minecraft.world.effect.MobEffects.REGENERATION) {
-            helper.fail("TedXenon's doll hands out " + extra + " instead of Regeneration");
+        var extras = cn.dancingsnow.neoecoprototype.item.decoration.FumoItem.extraEffects(stack);
+        // The tooltip lines are built from this same list, so what is asserted here is what a player is
+        // promised - and the levels matter twice over: FumoEquipmentEffects hands this amplifier straight
+        // to the MobEffectInstance, and describe() writes it into the name.
+        if (extras.size() != 2) {
+            helper.fail("TedXenon's doll hands out " + extras.size() + " effects, expected 2: " + extras);
             return;
+        }
+        if (extras.get(0).effect() != net.minecraft.world.effect.MobEffects.REGENERATION
+                || extras.get(0).amplifier() != 1) {
+            helper.fail("TedXenon's first effect is " + extras.get(0) + ", expected Regeneration at 1");
+            return;
+        }
+        if (extras.get(1).effect() != net.minecraft.world.effect.MobEffects.LUCK
+                || extras.get(1).amplifier() != 0) {
+            helper.fail("TedXenon's second effect is " + extras.get(1) + ", expected Luck at 0");
+            return;
+        }
+        // Vanilla writes the first level with no numeral and the second with one; the tooltip follows it,
+        // so a doll promising "幸运 I" would be the thing that reads wrong.
+        if (!extras.get(1).describe().getSiblings().isEmpty()) {
+            helper.fail("the first-level effect's name carries " + extras.get(1).describe().getSiblings()
+                    + ", expected no numeral after it");
+            return;
+        }
+        var numerals = extras.get(0).describe().getSiblings();
+        if (numerals.size() != 2 || !(numerals.get(1).getContents()
+                instanceof net.minecraft.network.chat.contents.PlainTextContents literal)
+                || !"II".equals(literal.text())) {
+            helper.fail("the second-level effect's name carries " + numerals + ", expected \" II\"");
+            return;
+        }
+        for (java.util.function.Supplier<? extends net.minecraft.world.item.Item> doll : List.of(
+                ModRegistration.FUMO_DOLL_RELIQWQ_ITEM, ModRegistration.FUMO_DOLL_YANG120_ITEM,
+                ModRegistration.FUMO_DOLL_KOOOKI_ITEM)) {
+            if (!cn.dancingsnow.neoecoprototype.item.decoration.FumoItem
+                    .extraEffects(new ItemStack(doll.get())).isEmpty()) {
+                helper.fail(doll.get() + " hands out an effect it does not advertise in the guide");
+                return;
+            }
         }
         for (java.util.function.Supplier<? extends net.minecraft.world.item.Item> doll : List.of(
                 ModRegistration.FUMO_DOLL_RELIQWQ_ITEM, ModRegistration.FUMO_DOLL_YANG120_ITEM,
@@ -3029,6 +3064,173 @@ public final class NeoECOPrototypeGameTests {
                         + " stacks to " + stack.getMaxStackSize() + ", expected 16");
                 return;
             }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The charging doll, read on the three layers a player can tell apart: the stat the tooltip quotes, the
+     * tick that pays it out, and the number that actually lands in a carried item. The item is AE2's own
+     * charged staff because it answers the NeoForge item energy capability through
+     * {@code PoweredItemCapabilities} - the same surface any FE tool in the pack answers - and because it
+     * holds far more than the two sweeps below, so its own capacity is not what bounds the reading.
+     */
+    @GameTest(template = "empty", batch = "doll_charge", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void tedxenonsDollChargesWhatTheWearerCarries(GameTestHelper helper) {
+        record DollRate(java.util.function.Supplier<? extends net.minecraft.world.item.Item> doll,
+                        double aePerTick) {
+        }
+
+        // Exactly one doll carries a rate, and the other five carry zero - a second charging doll would be
+        // a content change nobody announced, and a zero here means the sweep never asks any stack at all.
+        var rates = List.of(
+                new DollRate(ModRegistration.FUMO_DOLL_RELIQWQ_ITEM, 0.0D),
+                new DollRate(ModRegistration.FUMO_DOLL_YANG120_ITEM, 0.0D),
+                new DollRate(ModRegistration.FUMO_DOLL_KOOOKI_ITEM, 0.0D),
+                new DollRate(ModRegistration.FUMO_DOLL_YANG120_CPU_ITEM, 0.0D),
+                new DollRate(ModRegistration.FUMO_DOLL_YANG120_GIANT_ITEM, 0.0D),
+                new DollRate(ModRegistration.FUMO_DOLL_TEDXENON_ITEM, 100.0D));
+        for (var rate : rates) {
+            var stats = cn.dancingsnow.neoecoprototype.item.decoration.FumoItem
+                    .statsOf(new ItemStack(rate.doll().get()));
+            if (stats == null) {
+                helper.fail(rate.doll().get() + " carries no stats at all, so nothing about it can be read");
+                return;
+            }
+            if (stats.chargeAEPerTick() != rate.aePerTick()) {
+                helper.fail(rate.doll().get() + " pays out " + stats.chargeAEPerTick()
+                        + " AE/t, expected " + rate.aePerTick());
+                return;
+            }
+        }
+
+        // The line the tooltip shows is built from the same stat; if the key is gone the doll stops
+        // advertising the one thing it does that the other five do not.
+        String chargeLine = Component.translatable("block.neoecoprototype.fumo_reliqwq.worn_charge",
+                Component.literal("100")).getString();
+        var tedTooltip = new ItemStack(ModRegistration.FUMO_DOLL_TEDXENON_ITEM.get())
+                .getTooltipLines(net.minecraft.world.item.Item.TooltipContext.EMPTY, null,
+                        net.minecraft.world.item.TooltipFlag.Default.NORMAL);
+        if (tedTooltip.stream().noneMatch(line -> line.getString().equals(chargeLine))) {
+            helper.fail("TedXenon's tooltip has no line equal to '" + chargeLine + "', it has "
+                    + tedTooltip.stream().map(Component::getString).toList());
+            return;
+        }
+        for (var rate : rates) {
+            if (rate.aePerTick() > 0.0D) {
+                continue;
+            }
+            var lines = new ItemStack(rate.doll().get())
+                    .getTooltipLines(net.minecraft.world.item.Item.TooltipContext.EMPTY, null,
+                            net.minecraft.world.item.TooltipFlag.Default.NORMAL);
+            if (lines.stream().anyMatch(line -> line.getString().equals(chargeLine))) {
+                helper.fail(rate.doll().get() + " advertises charging, but its rate is zero, so the line"
+                        + " and the sweep disagree");
+                return;
+            }
+        }
+        for (String lang : new String[]{"en_us", "zh_cn"}) {
+            String json = readResource("/assets/neoecoprototype/lang/" + lang + ".json", helper);
+            if (json == null) {
+                return;
+            }
+            if (!json.contains("fumo_reliqwq.worn_charge")) {
+                helper.fail("lang/" + lang + ".json has no fumo_reliqwq.worn_charge key");
+                return;
+            }
+        }
+
+        // The cadence itself has to fire once in five wearer ticks: always false is a doll that never pays
+        // out, always true is forty-one capability lookups every tick.
+        int dueInFive = 0;
+        for (int tick = 0; tick < 5; tick++) {
+            if (cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects.chargeDue(tick)) {
+                dueInFive++;
+            }
+        }
+        if (dueInFive != 1) {
+            helper.fail("the charging cadence fell " + dueInFive + " times in five ticks, so it is either"
+                    + " never reached or running every tick");
+            return;
+        }
+
+        // Then the tick itself. FakePlayer is the only stand-in that is a ServerPlayer and it has no
+        // connection to be surprised by the effect packets this handler sends.
+        var player = net.neoforged.neoforge.common.util.FakePlayerFactory.get(helper.getLevel(),
+                new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "doll-charge"));
+        player.getInventory().clearContent();
+        player.getInventory().selected = 0;
+        player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD,
+                new ItemStack(ModRegistration.FUMO_DOLL_TEDXENON_ITEM.get()));
+        var staff = AEItems.CHARGED_STAFF.stack();
+        player.getInventory().setItem(10, staff);
+        var staffEnergy = net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.ITEM
+                .getCapability(staff, null);
+        if (staffEnergy == null) {
+            helper.fail("a fresh charged staff answers no item energy capability, so this test would"
+                    + " measure an empty loop and pass");
+            return;
+        }
+        int start = staffEnergy.getEnergyStored();
+        if (start != 0) {
+            helper.fail("a fresh charged staff starts with " + start + " AE, expected 0 - the reading"
+                    + " below would be off by that much");
+            return;
+        }
+        // One paying tick is five ticks' worth at 100 AE/t.
+        player.tickCount = 0;
+        cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects.onPlayerTick(
+                new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
+        if (staffEnergy.getEnergyStored() != 500) {
+            helper.fail("one paying tick left the staff at " + staffEnergy.getEnergyStored()
+                    + " AE, expected 500 (100 AE/t times the five-tick sweep)");
+            return;
+        }
+        // And a tick off the cadence pays nothing, which is what keeps the cost bounded.
+        player.tickCount = 1;
+        cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects.onPlayerTick(
+                new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
+        if (staffEnergy.getEnergyStored() != 500) {
+            helper.fail("a tick off the cadence still paid out: the staff went from 500 to "
+                    + staffEnergy.getEnergyStored() + " AE");
+            return;
+        }
+        // The held slot is part of the sweep: the stack in the wearer's hand is slot 0, so it takes the
+        // whole budget first and the backpack staff behind it gets nothing this tick.
+        var held = AEItems.CHARGED_STAFF.stack();
+        player.getInventory().setItem(0, held);
+        player.getInventory().selected = 0;
+        var heldEnergy = net.neoforged.neoforge.capabilities.Capabilities.EnergyStorage.ITEM
+                .getCapability(held, null);
+        int backpackBefore = staffEnergy.getEnergyStored();
+        player.tickCount = 5;
+        cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects.onPlayerTick(
+                new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
+        if (heldEnergy == null || heldEnergy.getEnergyStored() != 500) {
+            helper.fail("the staff in the wearer's hand ended at "
+                    + (heldEnergy == null ? "no capability" : heldEnergy.getEnergyStored() + " AE")
+                    + ", expected 500 - the held slot is not being charged");
+            return;
+        }
+        if (staffEnergy.getEnergyStored() != backpackBefore) {
+            helper.fail("the sweep paid out more than one budget: the backpack staff went from "
+                    + backpackBefore + " to " + staffEnergy.getEnergyStored() + " AE in the same tick");
+            return;
+        }
+        // A full inventory accepts nothing; the sweep has to report zero rather than count the request.
+        staffEnergy.receiveEnergy(Integer.MAX_VALUE, false);
+        heldEnergy.receiveEnergy(Integer.MAX_VALUE, false);
+        if (staffEnergy.getEnergyStored() != staffEnergy.getMaxEnergyStored()) {
+            helper.fail("the staff would not fill: " + staffEnergy.getEnergyStored() + " of "
+                    + staffEnergy.getMaxEnergyStored() + ", so the full-stack control below is unarmed");
+            return;
+        }
+        int paidIntoFull = cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects
+                .chargeInventory(player, 500.0D);
+        if (paidIntoFull != 0) {
+            helper.fail("a full inventory still reported " + paidIntoFull + " AE paid out");
+            return;
         }
         helper.succeed();
     }

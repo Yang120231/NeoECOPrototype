@@ -25,15 +25,40 @@ import org.jetbrains.annotations.Nullable;
  * Block item for the four dolls of honoured players. Every one of them can be worn on the head: night
  * vision and the creepers keeping their distance come from
  * {@link cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects}, and each doll carries its own armour
- * and optional extra effect as a {@link DollStats} handed over where it is registered.
+ * and its own list of worn effects as a {@link DollStats} handed over where it is registered.
  *
  * <p>The face is in the block's own model, so nothing here resolves a player skin and no custom renderer
  * is involved. There used to be a fifth plushie that did exactly that, textured after whoever
  * {@code /prototypefumo} looked up; it is gone, and the four are what ships.
  */
 public class FumoItem extends BlockItem implements Equipable {
-    /** What the doll grants while worn on the head, plus the effect only some of them carry. */
-    public record DollStats(float armor, float toughness, @Nullable Holder<MobEffect> extraEffect) {
+    /**
+     * One effect a worn doll hands out, at the level it is handed out at.
+     *
+     * <p>The level lives here rather than at the site that applies it because the tooltip and the
+     * hand-out have to agree: {@code FumoEquipmentEffects} builds its {@code MobEffectInstance} straight
+     * from this record, and the line below quotes the same number.
+     */
+    public record DollEffect(Holder<MobEffect> effect, int amplifier) {
+        private static final String[] NUMERALS = {"", "II", "III", "IV", "V"};
+
+        /** The effect's own name with vanilla's roman numeral on it - none for the first level, as vanilla. */
+        public Component describe() {
+            var name = effect.value().getDisplayName().copy();
+            if (amplifier <= 0) {
+                return name;
+            }
+            return name.append(" ")
+                    .append(amplifier < NUMERALS.length ? NUMERALS[amplifier] : Integer.toString(amplifier + 1));
+        }
+    }
+
+    /**
+     * What the doll grants while worn: its own armour, the effects on top of the shared night vision, and
+     * the AE/t it pushes into chargeable things in the wearer's pockets - zero for the dolls that do not
+     * charge anything, which is most of them.
+     */
+    public record DollStats(float armor, float toughness, List<DollEffect> extraEffects, double chargeAEPerTick) {
     }
 
     /** The doll's own armour values, given at registration and never null. */
@@ -51,11 +76,10 @@ public class FumoItem extends BlockItem implements Equipable {
         return EquipmentSlot.HEAD;
     }
 
-    /** What a particular doll grants on top of the night vision every doll gives. */
-    @Nullable
-    public static Holder<MobEffect> extraEffect(ItemStack stack) {
+    /** What a particular doll grants on top of the night vision every doll gives, empty for most of them. */
+    public static List<DollEffect> extraEffects(ItemStack stack) {
         DollStats stats = statsOf(stack);
-        return stats == null ? null : stats.extraEffect();
+        return stats == null ? List.of() : stats.extraEffects();
     }
 
     /** Null for anything that is not one of our dolls. */
@@ -83,16 +107,24 @@ public class FumoItem extends BlockItem implements Equipable {
     public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip,
                                 TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
-        if (statsOf(stack) == null) return;
-        // What these two lines promise is exactly what FumoEquipmentEffects#onPlayerTick grants.
+        DollStats stats = statsOf(stack);
+        if (stats == null) return;
+        // What these lines promise is exactly what FumoEquipmentEffects#onPlayerTick grants.
         tooltip.add(Component.translatable("block.neoecoprototype.fumo_reliqwq.worn_hint")
                 .withStyle(ChatFormatting.GRAY));
-        Holder<MobEffect> extra = extraEffect(stack);
-        if (extra != null) {
+        for (DollEffect extra : stats.extraEffects()) {
             // Named after the effect itself, so a future DollStats entry needs no new lang key and the
-            // line cannot drift from what FumoEquipmentEffects actually applies.
+            // line cannot drift from what FumoEquipmentEffects actually applies - the level comes from the
+            // same number that is handed to the MobEffectInstance.
             tooltip.add(Component.translatable("block.neoecoprototype.fumo_reliqwq.worn_extra",
-                            extra.value().getDisplayName())
+                            extra.describe())
+                    .withStyle(ChatFormatting.GRAY));
+        }
+        if (stats.chargeAEPerTick() > 0.0D) {
+            // The rate is read out of the same stat the sweep uses, so the tooltip cannot promise a number
+            // the doll does not deliver.
+            tooltip.add(Component.translatable("block.neoecoprototype.fumo_reliqwq.worn_charge",
+                            Component.literal(Long.toString(Math.round(stats.chargeAEPerTick()))))
                     .withStyle(ChatFormatting.GRAY));
         }
     }

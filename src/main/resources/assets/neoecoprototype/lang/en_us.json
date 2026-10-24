@@ -180,6 +180,7 @@
   "block.neoecoprototype.fumo_doll_tedxenon": "TedXenon's Fumo Doll",
   "block.neoecoprototype.fumo_reliqwq.worn_hint": "While worn: Night Vision (30s)",
   "block.neoecoprototype.fumo_reliqwq.worn_extra": "While worn, also grants %s",
+  "block.neoecoprototype.fumo_reliqwq.worn_charge": "While worn: charges the chargeable items in your inventory and armor slots at %s AE/t (including the one in your hand)",
   "item.neoecoprototype.simplify_small_bulk_storage_matrix_housing": "ECO - Small Bulk Storage Matrix Housing",
   "jei.neoecoprototype.processor_assembler.encode_hint": "Crafts processors directly, working much like the Molecular Assembler.",
   "jei.neoecoprototype.processor_assembler.no_match": "One ingredient of this recipe currently matches no item, so no pattern can be encoded.",
