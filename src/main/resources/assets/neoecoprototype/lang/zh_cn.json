@@ -179,7 +179,7 @@
   "block.neoecoprototype.fumo_doll_tedxenon": "TedXenon 的 Fumo 玩偶",
   "block.neoecoprototype.fumo_reliqwq.worn_hint": "戴在头上时：夜视（30 秒）",
   "block.neoecoprototype.fumo_reliqwq.worn_extra": "戴在头上时还会给予：%s",
-  "block.neoecoprototype.fumo_reliqwq.worn_charge": "戴在头上时：以 %s AE/t 给背包与装备栏里的可充电物品补能（含手上拿着的那一格）",
+  "block.neoecoprototype.fumo_reliqwq.worn_charge": "戴在头上时：可对物品栏与装备栏里的物品充电，速度 %s AE/t",
   "item.neoecoprototype.simplify_universal_storage_cell_1k": "ECO - L1 全能 1K 存储矩阵",
   "item.neoecoprototype.simplify_quantum_storage_cell_1m": "ECO - L1 量子 1M 存储矩阵",
   "jei.neoecoprototype.processor_assembler.encode_hint": "直接制作处理器，与分子装配室逻辑类似。",
