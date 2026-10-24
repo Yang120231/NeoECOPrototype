@@ -11054,6 +11054,13 @@ public final class NeoECOPrototypeGameTests {
      * {@code ECOMachineInterfaceBlockEntity}, and eco posts only
      * {@code AECapabilities.IN_WORLD_GRID_NODE_HOST} for its own entries (read off
      * {@code NEBlockEntityEntry}), so that half is eco's shape to answer, not ours to paper over.
+     *
+     * <p>The F1 smart pattern bus is asserted twice over, because it is a different kind of exposure: the
+     * two interfaces hand out an inventory AE2 wraps, while the bus hands out eco's own item handler over
+     * the slots that hold the player's patterns. So besides "does a pipe see anything", this asks the
+     * question that decides whether that exposure is safe at all - can a pipe push a non-pattern into a
+     * pattern slot? eco filters the bus's inventory to encoded patterns; if that filter did not hold on
+     * this path, a pipe would be free to bury someone's pattern library under cobblestone.
      */
     @GameTest(template = "empty", batch = "interface_caps_probe", timeoutTicks = 100,
             templateNamespace = NeoECOPrototype.MOD_ID)
@@ -11063,9 +11070,10 @@ public final class NeoECOPrototypeGameTests {
         var generic = appeng.api.AECapabilities.GENERIC_INTERNAL_INV;
         var ours = new net.minecraft.world.level.block.Block[]{
                 ModRegistration.SIMPLIFY_POWERED_ME_INTERFACE_BLOCK.get(),
-                ModRegistration.SUPERCONDUCTIVE_INTERFACE_BLOCK.get()};
+                ModRegistration.SUPERCONDUCTIVE_INTERFACE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_CRAFTING_PATTERN_BUS_BLOCK.get()};
         var blocks = new net.minecraft.world.level.block.Block[]{
-                AEBlocks.INTERFACE.block(), ours[0], ours[1],
+                AEBlocks.INTERFACE.block(), ours[0], ours[1], ours[2],
                 ModRegistration.SIMPLIFY_STORAGE_INTERFACE_BLOCK.get()};
 
         var report = new StringBuilder();
@@ -11093,8 +11101,54 @@ public final class NeoECOPrototypeGameTests {
             }
         }
         if (missing.length() > 0) {
-            helper.fail("these of our interfaces expose no item handler while AE2's own does:" + missing
+            helper.fail("these of our blocks expose no item handler while AE2's own does:" + missing
                     + " ; table:" + report);
+            return;
+        }
+        // The bus is the one entry here whose slots hold something a player wants kept clean: their pattern
+        // grid. Unlike the two interfaces this is not AE2's wrapped inventory but eco's own handler, so the
+        // only thing between a pipe and a bus full of cobblestone is the encoded-pattern filter eco sets on
+        // the inventory underneath - and that has to hold here, or the exposure we just made is the next
+        // bug report.
+        var busPos = new BlockPos(1, 1, 1);
+        helper.setBlock(busPos, ModRegistration.SIMPLIFY_CRAFTING_PATTERN_BUS_BLOCK.get());
+        var bus = level.getCapability(caps, helper.absolutePos(busPos), Direction.UP);
+        if (bus == null || bus.getSlots() <= 0) {
+            helper.fail("the pattern bus answers the pipe face with "
+                    + (bus == null ? "nothing" : bus.getSlots() + " slots")
+                    + ", expected a handler over its pattern grid");
+            return;
+        }
+        var offered = new ItemStack(Items.DIRT, 3);
+        var leftover = bus.insertItem(0, offered.copy(), false);
+        var inSlot = bus.getStackInSlot(0);
+        if (!inSlot.isEmpty() || leftover.getCount() != offered.getCount()) {
+            helper.fail("the pattern bus took " + (offered.getCount() - leftover.getCount())
+                    + " dirt through the pipe face into slot 0, which now holds "
+                    + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(inSlot.getItem())
+                    + " x" + inSlot.getCount() + ", expected eco's encoded-pattern filter to refuse it");
+            return;
+        }
+        // Patterns, both ways, through the same face a pipe asks about - and nothing else. The insert is
+        // asserted before the pull because the pull needs something in the slot, and because eco's own
+        // filter (which overrides allowInsert only) is what decides both: a non-pattern cannot get in, and
+        // extraction is unrestricted.
+        ItemStack[] grid = emptyPatternGrid();
+        grid[0] = new ItemStack(Items.OAK_LOG);
+        var pattern = PatternDetailsHelper.encodeCraftingPattern(
+                craftingRecipe(helper, 1, 1, new ItemStack(Items.OAK_LOG)), grid,
+                new ItemStack(Items.OAK_PLANKS, 4), false, false);
+        var refused = bus.insertItem(0, pattern.copy(), false);
+        if (refused.getCount() != 0 || !bus.getStackInSlot(0).is(pattern.getItem())) {
+            helper.fail("the bus would not take an encoded crafting pattern through the pipe face:"
+                    + " leftover " + refused.getCount() + ", slot 0 " + itemName(bus.getStackInSlot(0))
+                    + ", expected the pattern in slot 0");
+            return;
+        }
+        var pulled = bus.extractItem(0, 16, false);
+        if (!pulled.is(pattern.getItem()) || !bus.getStackInSlot(0).isEmpty()) {
+            helper.fail("a pipe pulling from the bus got " + itemName(pulled) + " and left "
+                    + itemName(bus.getStackInSlot(0)) + ", expected the pattern out and the slot empty");
             return;
         }
         helper.succeed();

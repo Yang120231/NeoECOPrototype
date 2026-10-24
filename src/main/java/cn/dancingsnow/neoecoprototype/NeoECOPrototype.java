@@ -171,6 +171,15 @@ public class NeoECOPrototype {
         // own type, so until this pair is posted a pipe standing next to one finds nothing at all.
         registerInterface(event, ModRegistration.SIMPLIFY_POWERED_ME_INTERFACE_BE.get());
         registerInterface(event, ModRegistration.SUPERCONDUCTIVE_INTERFACE_BE.get());
+        // The F1 smart pattern bus holds its patterns in its own slots, and a player asked that pipes be
+        // able to move them. eco publishes no pipe face for its own bus - read off 21.2.9, no class there
+        // touches GENERIC_INTERNAL_INV and NEBlockEntityEntry posts only the node host - but its block
+        // entity does carry a public item handler over those slots, and the inventory under it already has
+        // eco's own AEEncodedPatternFilter set on it. That filter is what makes handing it out safe: a
+        // pipe can move patterns and nothing else.
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK,
+                ModRegistration.SIMPLIFY_CRAFTING_PATTERN_BUS_BE.get(),
+                (blockEntity, unused) -> blockEntity.itemHandler);
     }
 
     /**
