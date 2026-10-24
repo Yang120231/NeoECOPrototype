@@ -10832,6 +10832,15 @@ public final class NeoECOPrototypeGameTests {
             "simplify_fluid_storage_cell_1m", "simplify_fluid_storage_cell_4m",
             "simplify_concrete_storage_cell", "pigmee_storage_cell", "simplify_singularity_cell"};
 
+    /**
+     * Ids the "any L1 matrix" achievement must not count. Beyond Dimensions' cell is registered and
+     * even sits in the creative tab when that mod is installed, but nothing crafts it (AGENTS.md §15),
+     * and the decided half of that row is "no achievement for support we never delivered". The list
+     * above can only say "this one has to be there"; without this one the decision lives in a markdown
+     * file and a later edit to the tag would silently undo it.
+     */
+    private static final String[] MATRICES_OUTSIDE_THE_ACHIEVEMENT = {"neoecoprototype:beyond_storage_cell"};
+
     private static boolean itemRegistered(String id) {
         return BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse(id));
     }
@@ -10982,6 +10991,14 @@ public final class NeoECOPrototypeGameTests {
                             if (!listed.contains("neoecoprototype:" + always)) {
                                 helper.fail(tagId + " no longer lists " + always
                                         + ", so that family stopped counting for the cell achievement");
+                                return;
+                            }
+                        }
+                        for (String outside : MATRICES_OUTSIDE_THE_ACHIEVEMENT) {
+                            if (listed.contains(outside)) {
+                                helper.fail(tagId + " lists " + outside + ", which is the family that is"
+                                        + " registered but has no recipe - the tree would hand out an"
+                                        + " achievement for support we never delivered");
                                 return;
                             }
                         }
