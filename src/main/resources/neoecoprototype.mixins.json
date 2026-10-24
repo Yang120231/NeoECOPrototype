@@ -4,6 +4,8 @@
   "package": "cn.dancingsnow.neoecoprototype.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "CraftingBlockEntityDollSidesMixin",
+    "CraftingCPUCalculatorFamilyMixin",
     "ECOComputationSystemBlockEntityMixin",
     "NEBlockEntityPowerMixin",
     "ECOClientUIBridgeMixin",

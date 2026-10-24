@@ -159,6 +159,10 @@ public class NeoECOPrototype {
         // block entity types in its own registry. Without this line each battery sits alone in its own grid
         // of one node and no controller ever adds its buffer.
         registerNodeHost(event, ModRegistration.ENERGIZED_ENERGY_CELL_BE.get());
+        // Same rule again, and the plushie CPU is the newest proof of it: AE2 asks the neighbour's block
+        // entity for this capability, and AE2 only posts it for the block entity types in its own registry,
+        // so an unlisted type sits alone in a grid of one node however correctly its faces are exposed.
+        registerNodeHost(event, ModRegistration.FUMO_DOLL_CPU_BE.get());
         event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK,
                 ModRegistration.METEORITE_DISSOCIATOR_BE.get(),
                 (blockEntity, side) -> blockEntity.getEnergyStorage());

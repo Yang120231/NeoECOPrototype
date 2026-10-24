@@ -3,6 +3,7 @@ package cn.dancingsnow.neoecoprototype.registration;
 import appeng.api.stacks.AEKeyType;
 import appeng.block.AEBaseEntityBlock;
 import appeng.blockentity.AEBaseBlockEntity;
+import appeng.blockentity.crafting.CraftingBlockEntity;
 import cn.dancingsnow.neoecoprototype.block.SimplifyCasingBlock;
 import cn.dancingsnow.neoecoprototype.block.SimplifyCryotheumOreBlock;
 import cn.dancingsnow.neoecoprototype.block.frigit.FrigitBuddingBlock;
@@ -40,6 +41,8 @@ import cn.dancingsnow.neoecoprototype.block.computation.SimplifyComputationSyste
 import cn.dancingsnow.neoecoprototype.block.computation.SimplifyComputationThreadingCoreBlock;
 import cn.dancingsnow.neoecoprototype.block.computation.SimplifyComputationTransmitterBlock;
 import cn.dancingsnow.neoecoprototype.block.computation.SimplifyEnergizedComputationCoreBlock;
+import cn.dancingsnow.neoecoprototype.block.crafting.DollCraftingUnitBlock;
+import cn.dancingsnow.neoecoprototype.block.crafting.DollCraftingUnitType;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingCasingBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingInterfaceBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingNetworkInterfaceBlock;
@@ -50,6 +53,7 @@ import cn.dancingsnow.neoecoprototype.block.energy.EnergizedEnergyCellBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingVentBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyCraftingWorkerBlock;
 import cn.dancingsnow.neoecoprototype.block.crafting.SimplifyStonecuttingAssemblerBlock;
+import cn.dancingsnow.neoecoprototype.block.decoration.GiantDollBlock;
 import cn.dancingsnow.neoecoprototype.block.decoration.NamedDollBlock;
 import cn.dancingsnow.neoecoprototype.blockentity.decoration.NamedDollBlockEntity;
 import cn.dancingsnow.neoecoprototype.item.decoration.FumoItem;
@@ -246,6 +250,13 @@ public class ModRegistration {
     private static final int NAME_THEME_TIER_L4 = 0xFF80AEFF;
     private static final int NAME_THEME_TIER_L6 = 0xFFE57E39;
     private static final int NAME_THEME_TIER_L9 = 0xFFB379E0;
+
+    /**
+     * The CPU plushie's own name colour. Deliberately not {@link #NAME_THEME_TIER_L4}: that number means
+     * "starts at L4" on the migration ladder, and a plushie CPU is not a tier rung - the letters are the
+     * pack's blue, reused because the shelf needs the working doll to read apart from the plain one.
+     */
+    private static final int NAME_THEME_CPU_DOLL = 0xFF80AEFF;
 
     /** AE, not FE. eco's own top cell is 1e9, so these are 16x and 512x above it. */
     private static final double ENERGIZED_CELL_CAPACITY_16G = 16_000_000_000.0;
@@ -863,7 +874,7 @@ public class ModRegistration {
     /**
      * What the four dolls are made of. Their face is in their texture, so nothing resolves a skin and no
      * client renderer is involved - only the shared {@link NamedDollBlockEntity}, which exists to sweep
-     * for creepers.
+     * for creepers. The plushie CPU ships the same model on a block of its own.
      *
      * <p>The light level is deliberate rather than a leftover: 11e4d69 put it on the plushie on purpose
      * ("the block lights its cell at level 15") and the four inherited it. No reason beyond that was
@@ -884,29 +895,90 @@ public class ModRegistration {
             BLOCKS.register("fumo_doll_reliqwq", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_RELIQWQ_ITEM =
             ITEMS.register("fumo_doll_reliqwq", () -> new FumoItem(FUMO_DOLL_RELIQWQ_BLOCK.get(),
-                    new Item.Properties().stacksTo(1), dollStats(4.0F, 2.0F, null)));
+                    coloredName(FUMO_DOLL_RELIQWQ_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(4.0F, 2.0F, null)));
     public static final Supplier<NamedDollBlock> FUMO_DOLL_YANG120_BLOCK =
             BLOCKS.register("fumo_doll_yang120", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_YANG120_ITEM =
             ITEMS.register("fumo_doll_yang120", () -> new FumoItem(FUMO_DOLL_YANG120_BLOCK.get(),
-                    new Item.Properties().stacksTo(1), dollStats(4.0F, 2.0F, null)));
+                    coloredName(FUMO_DOLL_YANG120_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(4.0F, 2.0F, null)));
+
+    /**
+     * The same plushie with a crafting CPU inside it. It is a second block rather than the shipped doll
+     * turned into one, because {@code fumo_doll_yang120} has been in every jar since 1.3.0: a world that
+     * already has one set down loads its saved {@code NamedDollBlockEntity} against a crafting-unit block,
+     * and vanilla refuses that. Read in the dev client on 2026-10-24, once per chunk load:
+     * {@code IllegalStateException: Invalid block entity neoecoprototype:fumo_doll ... got
+     * DollCraftingUnitBlock[fumo_doll_yang120]}, thrown out of {@code BlockEntity.create}, so that cell
+     * comes back with no block entity of any kind.
+     */
+    public static final Supplier<DollCraftingUnitBlock> FUMO_DOLL_YANG120_CPU_BLOCK =
+            BLOCKS.register("fumo_doll_yang120_cpu", ModRegistration::newYang120CpuDoll);
+    public static final Supplier<FumoItem> FUMO_DOLL_YANG120_CPU_ITEM =
+            ITEMS.register("fumo_doll_yang120_cpu", () -> new FumoItem(FUMO_DOLL_YANG120_CPU_BLOCK.get(),
+                    coloredName(FUMO_DOLL_YANG120_CPU_BLOCK, NAME_THEME_CPU_DOLL).stacksTo(16), dollStats(4.0F, 2.0F, null)));
+
+    /**
+     * Built in a method rather than in the field's own initializer, because the unit names the doll's item
+     * and the item names this block: the unit resolves the item when AE2 asks it, which is after both are
+     * registered, but a forward reference in an initializer is illegal to the compiler either way.
+     */
+    private static DollCraftingUnitBlock newYang120CpuDoll() {
+        return new DollCraftingUnitBlock(dollProperties(), new DollCraftingUnitType(
+                // The same byte arithmetic as SimplifyStorageCellItem.BYTES_1M, twelve of them.
+                12L << 20, 12, () -> FUMO_DOLL_YANG120_CPU_ITEM.get(), "yang咪口算单元"));
+    }
+
+    /**
+     * The plushie drawn three times her size, standing on the one block she was set down on. It is
+     * decoration only - no CPU, no grid node - and it carries no model of its own: the block declares
+     * itself {@link net.minecraft.world.level.block.RenderShape#INVISIBLE} and
+     * {@link cn.dancingsnow.neoecoprototype.client.renderer.blockentity.GiantPlushieRenderer} draws the
+     * plain doll's model scaled up, which is why the blockstate still names her model (breaking particles
+     * and the fallback path read it).
+     */
+    public static final Supplier<GiantDollBlock> FUMO_DOLL_YANG120_GIANT_BLOCK =
+            BLOCKS.register("fumo_doll_yang120_giant", () -> new GiantDollBlock(dollProperties()));
+    public static final Supplier<FumoItem> FUMO_DOLL_YANG120_GIANT_ITEM =
+            ITEMS.register("fumo_doll_yang120_giant", () -> new FumoItem(
+                    FUMO_DOLL_YANG120_GIANT_BLOCK.get(), new Item.Properties().component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true).stacksTo(16),
+                    dollStats(4.0F, 2.0F, null)));
     public static final Supplier<NamedDollBlock> FUMO_DOLL_KOOOKI_BLOCK =
             BLOCKS.register("fumo_doll_kouooki", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_KOOOKI_ITEM =
             ITEMS.register("fumo_doll_kouooki", () -> new FumoItem(FUMO_DOLL_KOOOKI_BLOCK.get(),
-                    new Item.Properties().stacksTo(1), dollStats(1.0F, 5.0F, null)));
+                    coloredName(FUMO_DOLL_KOOOKI_BLOCK, NAME_THEME_GREEN).stacksTo(16), dollStats(1.0F, 5.0F, null)));
     public static final Supplier<NamedDollBlock> FUMO_DOLL_TEDXENON_BLOCK =
             BLOCKS.register("fumo_doll_tedxenon", () -> new NamedDollBlock(dollProperties()));
     public static final Supplier<FumoItem> FUMO_DOLL_TEDXENON_ITEM =
             ITEMS.register("fumo_doll_tedxenon", () -> new FumoItem(FUMO_DOLL_TEDXENON_BLOCK.get(),
-                    new Item.Properties().stacksTo(1),
+                    coloredName(FUMO_DOLL_TEDXENON_BLOCK, NAME_THEME_GREEN).stacksTo(16),
                     dollStats(6.0F, 1.0F, net.minecraft.world.effect.MobEffects.REGENERATION)));
 
-    /** All four dolls share one block entity: it saves nothing and exists only to sweep for creepers. */
+    /**
+     * The plushie CPU is AE2's own crafting-unit block entity, and it has to be exactly that class: the grid
+     * keys its machine table by the runtime class of the block entity, so a subclass of ours would never be
+     * collected as a CPU. The factory below reads this field, which is assigned by the time the supplier is
+     * consulted - that is why it is a method rather than an initializer.
+     */
+    public static final Supplier<BlockEntityType<CraftingBlockEntity>> FUMO_DOLL_CPU_BE =
+            registerYang120CpuBe();
+
+    private static Supplier<BlockEntityType<CraftingBlockEntity>> registerYang120CpuBe() {
+        return (Supplier) BLOCK_ENTITIES.register("fumo_doll_cpu", () -> BlockEntityType.Builder.of(
+                (pos, state) -> new CraftingBlockEntity(FUMO_DOLL_CPU_BE.get(), pos, state),
+                FUMO_DOLL_YANG120_CPU_BLOCK.get()).build(null));
+    }
+
+    /**
+     * All four dolls share one block entity: it saves nothing and exists only to sweep for creepers. The
+     * giant plushie is on this list too, which is what lets one client renderer cover her - renderers are
+     * registered per block entity type, not per block.
+     */
     public static final Supplier<BlockEntityType<NamedDollBlockEntity>> FUMO_DOLL_BE =
             BLOCK_ENTITIES.register("fumo_doll", () -> BlockEntityType.Builder.of(NamedDollBlockEntity::new,
                     FUMO_DOLL_RELIQWQ_BLOCK.get(), FUMO_DOLL_YANG120_BLOCK.get(),
-                    FUMO_DOLL_KOOOKI_BLOCK.get(), FUMO_DOLL_TEDXENON_BLOCK.get()).build(null));
+                    FUMO_DOLL_KOOOKI_BLOCK.get(), FUMO_DOLL_TEDXENON_BLOCK.get(),
+                    FUMO_DOLL_YANG120_GIANT_BLOCK.get()).build(null));
 
     public static final Supplier<Item> SIMPLIFY_STORAGE_COMPONENT_1M =
              ITEMS.register("simplify_storage_component_1m", () -> new Item(new Item.Properties()));
@@ -1435,6 +1507,8 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
                          output.accept(FUMO_DOLL_YANG120_ITEM.get());
                          output.accept(FUMO_DOLL_KOOOKI_ITEM.get());
                          output.accept(FUMO_DOLL_TEDXENON_ITEM.get());
+                         output.accept(FUMO_DOLL_YANG120_CPU_ITEM.get());
+                         output.accept(FUMO_DOLL_YANG120_GIANT_ITEM.get());
                          if (OPTIONAL_SMALL_BULK_CHEMICAL_CELL != null) {
                              output.accept(OPTIONAL_SMALL_BULK_CHEMICAL_CELL.get());
                              output.accept(OPTIONAL_SMALL_BULK_CHEMICAL_CELL_EXPANDED.get());
@@ -1633,6 +1707,10 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
         asEntityBlock(SIMPLIFY_PATTERN_PROVIDER_BLOCK).setBlockEntity(SimplifyPatternProviderBlockEntity.class, SIMPLIFY_PATTERN_PROVIDER_BE.get(), null, null);
          asEntityBlock(SIMPLIFY_POWERED_ME_INTERFACE_BLOCK).setBlockEntity(SimplifyPoweredMEInterfaceBlockEntity.class, SIMPLIFY_POWERED_ME_INTERFACE_BE.get(), null, null);
          asEntityBlock(SUPERCONDUCTIVE_INTERFACE_BLOCK).setBlockEntity(SimplifySuperconductiveInterfaceBlockEntity.class, SUPERCONDUCTIVE_INTERFACE_BE.get(), null, null);
+        // The plushie CPU keeps sweeping for creepers on AE2's own block entity, and takes its CPU-list
+        // name from the same tick, because the block entity is not ours to give a constructor hook.
+        ((AEBaseEntityBlock<CraftingBlockEntity>) FUMO_DOLL_YANG120_CPU_BLOCK.get()).setBlockEntity(
+                CraftingBlockEntity.class, FUMO_DOLL_CPU_BE.get(), null, DollCraftingUnitBlock::tick);
         asEntityBlock(ENERGIZED_COMPUTATION_CORE_BLOCK).setBlockEntity(
                 ECOComputationParallelCoreBlockEntity.class, ENERGIZED_COMPUTATION_CORE_BE.get(), null, null);
         asEntityBlock(SIMPLIFY_CRAFTING_SYSTEM_BLOCK).setBlockEntity(

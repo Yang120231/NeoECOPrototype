@@ -12,6 +12,7 @@ import cn.dancingsnow.neoecoae.client.rendering.FixedBlockEntityRenderers;
 import cn.dancingsnow.neoecoprototype.integration.kubejs.InfiniteMatrixClientModels;
 import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
 import cn.dancingsnow.neoecoprototype.client.model.SimplifyCoolingControllerBakedModel;
+import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.GiantPlushieRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyComputationDriveRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyCoolingControllerRenderer;
 import cn.dancingsnow.neoecoprototype.client.renderer.blockentity.SimplifyDriveRenderer;
@@ -298,6 +299,9 @@ public final class NeoECOPrototypeClient {
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModRegistration.SIMPLIFY_DRIVE_BE.get(), SimplifyDriveRenderer::new);
+        // One renderer for the doll block entity type: it draws nothing for the four shelf dolls and the
+        // scaled-up plushie for the giant, which is why the type is shared rather than split.
+        event.registerBlockEntityRenderer(ModRegistration.FUMO_DOLL_BE.get(), GiantPlushieRenderer::new);
         event.registerBlockEntityRenderer(ModRegistration.SIMPLIFY_COMPUTATION_DRIVE_BE.get(), SimplifyComputationDriveRenderer::new);
         event.registerBlockEntityRenderer(ModRegistration.SIMPLIFY_STONECUTTING_ASSEMBLER_BE.get(),
                 MolecularAssemblerRenderer::new);

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "neoecoprototype:fumo_doll_yang120" },
+    { "item": "neoecoprototype:pigmee_storage_matrix_housing" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "neoecoprototype:fumo_doll_yang120_cpu"
+  }
+}

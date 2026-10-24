@@ -19,6 +19,7 @@ import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.cells.ISaveProvider;
 import appeng.api.upgrades.Upgrades;
 import appeng.api.util.AEColor;
+import appeng.blockentity.crafting.CraftingBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
 import appeng.core.definitions.AEParts;
@@ -366,11 +367,145 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
+     * Every tag folder we ship has a name in both languages.
+     *
+     * <p>Why this exists: an unnamed tag is not silent the way a missing item name is - the readers that
+     * show a tag's display name fall back to the raw key, and EMI says so out loud ({@code Untranslated tag
+     * #neoecoprototype:storage_matrices}, read off the dev client on 2026-10-24). Today the tag is only
+     * named by an advancement condition, so nothing a player sees is wrong yet; the day one is used as a
+     * recipe ingredient this guard is what keeps the raw key off the page.</p>
+     */
+    @GameTest(template = "empty", batch = "tag_names", timeoutTicks = 200,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void everyShippedTagHasANameInBothLanguages(GameTestHelper helper) {
+        var folder = "data/" + NeoECOPrototype.MOD_ID + "/tags";
+        var tagPaths = new java.util.TreeSet<String>();
+        try {
+            for (var entry : System.getProperty("java.class.path")
+                    .split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+                var start = java.nio.file.Path.of(entry).toAbsolutePath().resolve(folder);
+                if (!java.nio.file.Files.isDirectory(start)) {
+                    continue;
+                }
+                try (var walk = java.nio.file.Files.walk(start)) {
+                    for (var path : (Iterable<java.nio.file.Path>) walk
+                            .filter(java.nio.file.Files::isRegularFile)::iterator) {
+                        var relative = start.relativize(path).toString()
+                                .replace(java.io.File.separatorChar, '/');
+                        if (!relative.endsWith(".json")) {
+                            continue;
+                        }
+                        // tags/item/foo.json names tag.neoecoprototype:foo - the registry folder is not part
+                        // of the key, so dropping that first segment is the whole mapping rule here.
+                        var cut = relative.indexOf('/');
+                        if (cut < 0) {
+                            helper.fail(relative + " sits directly in " + folder
+                                    + " with no registry folder, so its tag key cannot be derived");
+                            return;
+                        }
+                        tagPaths.add(relative.substring(cut + 1, relative.length() - 5));
+                    }
+                }
+            }
+        } catch (java.io.IOException failure) {
+            helper.fail("the tag folders could not be read: " + failure);
+            return;
+        }
+        if (tagPaths.isEmpty()) {
+            helper.fail("not one tag file was found under " + folder
+                    + " on this classpath, so the scan measured nothing");
+            return;
+        }
+        for (var lang : List.of("zh_cn", "en_us")) {
+            var table = com.google.gson.JsonParser.parseString(
+                    readResource("/assets/neoecoprototype/lang/" + lang + ".json", helper)).getAsJsonObject();
+            for (var tagPath : tagPaths) {
+                var key = "tag." + NeoECOPrototype.MOD_ID + "." + tagPath;
+                if (!table.has(key) || table.get(key).getAsString().isBlank()) {
+                    helper.fail("lang/" + lang + ".json has no " + key + " (tag " + tagPath
+                            + "), so a reader that shows the tag's name falls back to the raw key");
+                    return;
+                }
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
      * Items that legitimately have no crafting recipe, each with the way it is actually obtained.
      * Anything added here needs that reason checked, not guessed - an entry with a wrong reason is how
      * this guard stops meaning anything.
      */
     private static final java.util.Map<Item, String> OBTAINABLE_WITHOUT_CRAFTING = java.util.Map.of();
+
+    /**
+     * Every recipe file we ship really reached the recipe manager.
+     *
+     * <p>Why this exists: a json the recipe codec refuses is dropped in silence. The load writes one ERROR
+     * line and carries on, so the jar builds, the game starts, the viewer simply has no page, and the only
+     * thing a player can notice is an item nobody can make. Measured here on 2026-10-24, from an unpacking
+     * recipe that asked for nine plushies where one stacks to a single slot:
+     * {@code Item stack with stack size of 9 was larger than maximum: 1}, and the recipe was gone.</p>
+     *
+     * <p>Scope, stated so nobody reads more out of it than it does: our own namespace, and only files
+     * carrying no {@code neoforge:conditions} - a gated recipe is supposed to vanish when its mod is absent,
+     * and deciding that is not this server's job.</p>
+     */
+    @GameTest(template = "empty", batch = "recipe_files_all_load", timeoutTicks = 200,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void everyShippedRecipeFileReachesTheRecipeManager(GameTestHelper helper) {
+        var folder = "data/" + NeoECOPrototype.MOD_ID + "/recipe";
+        var shipped = new java.util.TreeMap<ResourceLocation, String>();
+        var skipped = new java.util.ArrayList<String>();
+        try {
+            for (var entry : System.getProperty("java.class.path")
+                    .split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+                var start = java.nio.file.Path.of(entry).toAbsolutePath().resolve(folder);
+                if (!java.nio.file.Files.isDirectory(start)) {
+                    continue;
+                }
+                try (var walk = java.nio.file.Files.walk(start)) {
+                    for (var path : (Iterable<java.nio.file.Path>) walk
+                            .filter(java.nio.file.Files::isRegularFile)::iterator) {
+                        var relative = start.relativize(path).toString()
+                                .replace(java.io.File.separatorChar, '/');
+                        if (!relative.endsWith(".json")) {
+                            continue;
+                        }
+                        var text = java.nio.file.Files.readString(path);
+                        if (text.contains("neoforge:conditions")) {
+                            skipped.add(relative + " (gated)");
+                            continue;
+                        }
+                        shipped.put(NeoECOPrototype.id(relative.substring(0, relative.length() - 5)), relative);
+                    }
+                }
+            }
+        } catch (java.io.IOException failure) {
+            helper.fail("the recipe folder could not be read: " + failure);
+            return;
+        }
+        if (shipped.isEmpty()) {
+            helper.fail("not one ungated recipe file was found under " + folder
+                    + " on this classpath, so the scan measured nothing - the folder moved, or only jar"
+                    + " entries carry it now: " + skipped);
+            return;
+        }
+        var manager = helper.getLevel().getRecipeManager();
+        var missing = new java.util.ArrayList<String>();
+        for (var file : shipped.entrySet()) {
+            if (manager.byKey(file.getKey()).isEmpty()) {
+                missing.add(file.getKey() + " (from " + file.getValue() + ")");
+            }
+        }
+        if (!missing.isEmpty()) {
+            helper.fail(missing.size() + " of the " + shipped.size()
+                    + " ungated recipe files we ship were dropped at load, so their output cannot be made"
+                    + " by anyone: " + String.join(", ", missing));
+            return;
+        }
+        helper.succeed();
+    }
 
     /** Fixed infinite sources keep a null config so the cell workbench refuses them (AE2 NPE guard). */
     /**
@@ -2332,6 +2467,638 @@ public final class NeoECOPrototypeGameTests {
             }
         }
         helper.succeed();
+    }
+
+
+    /**
+     * The plushie CPU is a whole machine in one block: it forms on its own, sits on the network, carries
+     * the bytes and the threads it advertises, and is the one entry the crafting service lists. Twelve and
+     * twelve are the design and are written here rather than read back from the registration, so a change
+     * to either number has to be decided twice.
+     */
+    @GameTest(template = "empty", batch = "doll_cpu", timeoutTicks = 240,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void plushieCpuCarriesItsOwnBytesAndThreads(GameTestHelper helper) {
+        var dollPos = new BlockPos(2, 3, 2);
+        var powerPos = dollPos.below();
+        helper.setBlock(powerPos, AEBlocks.CREATIVE_ENERGY_CELL.block());
+        helper.setBlock(dollPos, ModRegistration.FUMO_DOLL_YANG120_CPU_BLOCK.get());
+        Runnable leave = () -> {
+            helper.setBlock(dollPos, Blocks.AIR);
+            helper.setBlock(powerPos, Blocks.AIR);
+        };
+        waitUntil(helper, 8, () -> {
+            var cpu = plushieCpuAt(helper, dollPos);
+            var node = nodeAt(helper, dollPos);
+            return cpu != null && cpu.isFormed() && node != null && node.getGrid() != null;
+        }, () -> {
+            var cpu = plushieCpuAt(helper, dollPos);
+            var why = "the plushie never became a listed CPU at " + at(dollPos) + ": blockEntity="
+                    + (cpu == null ? "not AE2's crafting block entity" : "present")
+                    + " formed=" + (cpu != null && cpu.isFormed())
+                    + " node=" + nodeGrid(helper, dollPos) + " power=" + nodeGrid(helper, powerPos);
+            leave.run();
+            return why;
+        }, () -> {
+            var cpu = plushieCpuAt(helper, dollPos);
+            var cluster = cpu.getCluster();
+            var cpus = nodeAt(helper, dollPos).getGrid().getCraftingService().getCpus();
+            var name = cluster.getName();
+            if (cpus.size() != 1) {
+                leave.run();
+                helper.fail("the plushie's grid lists " + cpus.size() + " CPUs, expected the plushie alone");
+                return;
+            }
+            // The name is the part AE2 would otherwise invent: a cluster without a custom-named member is
+            // named after the pile of units in it, and the plushie is one block that is not AE2's unit.
+            if (name == null || !"yang咪口算单元".equals(name.getString())) {
+                leave.run();
+                helper.fail("the CPU is named " + (name == null ? "null" : "\"" + name.getString() + "\"")
+                        + ", expected \"yang咪口算单元\"");
+                return;
+            }
+            if (cpu.getStorageBytes() != 12L << 20 || cpu.getAcceleratorThreads() != 12) {
+                leave.run();
+                helper.fail("the plushie block itself reports bytes=" + cpu.getStorageBytes()
+                        + " threads=" + cpu.getAcceleratorThreads() + ", expected " + (12L << 20) + " and 12");
+                return;
+            }
+            if (cluster.getAvailableStorage() != 12L << 20 || cluster.getCoProcessors() != 12) {
+                leave.run();
+                helper.fail("the CPU the service hands out reports storage="
+                        + cluster.getAvailableStorage() + " coProcessors=" + cluster.getCoProcessors()
+                        + ", expected " + (12L << 20) + " and 12");
+                return;
+            }
+            leave.run();
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A power cell beside the plushie reaches nobody, and the same cell under it does. The first half is the
+     * control for the second: without it, "not connected" would be indistinguishable from a block entity
+     * that never came online, so formation is read during the refused half rather than assumed.
+     */
+    @GameTest(template = "empty", batch = "doll_cpu_side", timeoutTicks = 300,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void plushieCpuReachesTheNetworkOnlyFromBelow(GameTestHelper helper) {
+        var dollPos = new BlockPos(2, 3, 2);
+        var sidePos = dollPos.east();
+        var belowPos = dollPos.below();
+        helper.setBlock(sidePos, AEBlocks.CREATIVE_ENERGY_CELL.block());
+        helper.setBlock(dollPos, ModRegistration.FUMO_DOLL_YANG120_CPU_BLOCK.get());
+        Runnable leave = () -> {
+            helper.setBlock(dollPos, Blocks.AIR);
+            helper.setBlock(sidePos, Blocks.AIR);
+            helper.setBlock(belowPos, Blocks.AIR);
+        };
+        waitUntil(helper, 8, () -> {
+            var cpu = plushieCpuAt(helper, dollPos);
+            return cpu != null && cpu.isFormed() && nodeAt(helper, sidePos) != null;
+        }, () -> {
+            var cpu = plushieCpuAt(helper, dollPos);
+            var why = "the plushie did not form beside a power cell at " + at(dollPos) + ": formed="
+                    + (cpu != null && cpu.isFormed()) + " node=" + nodeGrid(helper, dollPos)
+                    + " power=" + nodeGrid(helper, sidePos);
+            leave.run();
+            return why;
+        }, () -> {
+            var dollGrid = nodeAt(helper, dollPos).getGrid();
+            var sideGrid = nodeAt(helper, sidePos).getGrid();
+            if (dollGrid != null && dollGrid == sideGrid) {
+                leave.run();
+                helper.fail("the cell east of the formed plushie joined its grid, so its channels do not"
+                        + " leave through the bottom face only: doll " + exposureReport(helper, dollPos));
+                return;
+            }
+            helper.setBlock(sidePos, Blocks.AIR);
+            helper.setBlock(belowPos, AEBlocks.CREATIVE_ENERGY_CELL.block());
+            waitUntil(helper, 8, () -> {
+                var node = nodeAt(helper, dollPos);
+                var under = nodeAt(helper, belowPos);
+                return node != null && under != null && under.getGrid() != null
+                        && node.getGrid() == under.getGrid();
+            }, () -> {
+                var why = "with the power cell under it the plushie is still on its own grid: doll="
+                        + nodeGrid(helper, dollPos) + " " + exposureReport(helper, dollPos)
+                        + " under=" + nodeGrid(helper, belowPos) + " " + exposureReport(helper, belowPos);
+                leave.run();
+                return why;
+            }, () -> {
+                leave.run();
+                helper.succeed();
+            });
+        });
+    }
+
+    /**
+     * Which faces AE2 lets this node be reached through, and which ones it actually reached - the two
+     * readings that tell a refused side apart from a node that never came up.
+     */
+    private static String exposureReport(GameTestHelper helper, BlockPos pos) {
+        var node = nodeAt(helper, pos);
+        if (node == null) {
+            return "no node";
+        }
+        var exposure = node instanceof appeng.me.InWorldGridNode inWorld
+                ? "exposed[down=" + inWorld.isExposedOnSide(Direction.DOWN)
+                        + ",up=" + inWorld.isExposedOnSide(Direction.UP)
+                        + ",east=" + inWorld.isExposedOnSide(Direction.EAST) + "]"
+                : "not an in-world node";
+        return exposure + " connected=" + node.getConnectedSides();
+    }
+
+    /**
+     * An AE2 crafting storage stood against the plushie stays its own machine. AE2 finds the cells of a CPU
+     * by geometry, not by network, so this is the half that a bottom face alone cannot refuse: if the two
+     * ever shared a cluster, the plushie's bytes would be the wall's bytes plus twelve megabytes and the
+     * threads would be shared too.
+     */
+    @GameTest(template = "empty", batch = "doll_cpu_wall", timeoutTicks = 240,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void plushieCpuStaysOutOfTheAe2CraftingWall(GameTestHelper helper) {
+        var dollPos = new BlockPos(2, 3, 2);
+        var belowPos = dollPos.below();
+        var wallPos = dollPos.above();
+        helper.setBlock(belowPos, AEBlocks.CREATIVE_ENERGY_CELL.block());
+        helper.setBlock(wallPos, AEBlocks.CRAFTING_STORAGE_1K.block());
+        helper.setBlock(dollPos, ModRegistration.FUMO_DOLL_YANG120_CPU_BLOCK.get());
+        Runnable leave = () -> {
+            helper.setBlock(dollPos, Blocks.AIR);
+            helper.setBlock(wallPos, Blocks.AIR);
+            helper.setBlock(belowPos, Blocks.AIR);
+        };
+        waitUntil(helper, 8, () -> {
+            var doll = plushieCpuAt(helper, dollPos);
+            var wall = plushieCpuAt(helper, wallPos);
+            return doll != null && wall != null && doll.isFormed() && wall.isFormed();
+        }, () -> {
+            var doll = plushieCpuAt(helper, dollPos);
+            var wall = plushieCpuAt(helper, wallPos);
+            var why = "one of the two blocks did not form at " + at(dollPos) + "/" + at(wallPos)
+                    + ": plushie=" + (doll == null ? "wrong block entity" : doll.isFormed())
+                    + " ae2Storage=" + (wall == null ? "wrong block entity" : wall.isFormed());
+            leave.run();
+            return why;
+        }, () -> {
+            var doll = plushieCpuAt(helper, dollPos);
+            var wall = plushieCpuAt(helper, wallPos);
+            var dollCluster = doll.getCluster();
+            var wallCluster = wall.getCluster();
+            if (dollCluster == null || wallCluster == null) {
+                leave.run();
+                helper.fail("both blocks reported themselves formed, yet the clusters read as plushie="
+                        + dollCluster + " ae2Storage=" + wallCluster + " at " + at(dollPos) + "/"
+                        + at(wallPos));
+                return;
+            }
+            if (dollCluster == wallCluster) {
+                leave.run();
+                helper.fail("the AE2 crafting storage above the plushie shares its cluster, whose storage is"
+                        + " " + dollCluster.getAvailableStorage() + " bytes");
+                return;
+            }
+            if (dollCluster.getAvailableStorage() != 12L << 20
+                    || wallCluster.getAvailableStorage() != 1024L) {
+                leave.run();
+                helper.fail("the two machines report plushie=" + dollCluster.getAvailableStorage()
+                        + " bytes, ae2Storage=" + wallCluster.getAvailableStorage()
+                        + " bytes, expected " + (12L << 20) + " and 1024");
+                return;
+            }
+            leave.run();
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Two plushies side by side are no CPU at all - the gate accepts a single plushie and nothing else.
+     * The half that makes this a reading rather than a guess is the second one: take the neighbour back out
+     * and the remaining plushie has to come back as a solo CPU, which rules out "this pile never worked".
+     */
+    @GameTest(template = "empty", batch = "doll_cpu_partial", timeoutTicks = 300,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void partialPlushiePileFormsNoCpu(GameTestHelper helper) {
+        var first = new BlockPos(2, 2, 2);
+        var second = first.east();
+        var power = first.below();
+        Runnable leave = () -> {
+            helper.setBlock(first, Blocks.AIR);
+            helper.setBlock(second, Blocks.AIR);
+            helper.setBlock(power, Blocks.AIR);
+        };
+        helper.setBlock(power, AEBlocks.CREATIVE_ENERGY_CELL.block());
+        helper.setBlock(first, ModRegistration.FUMO_DOLL_YANG120_CPU_BLOCK.get());
+        helper.setBlock(second, ModRegistration.FUMO_DOLL_YANG120_CPU_BLOCK.get());
+        // Refusal is the expected outcome, so this waits a fixed stretch rather than watching for a
+        // decision: a test that waits for the pile to form would time out on the very behaviour it means
+        // to pin. Forty ticks is twice what the solo plushie and the three-cubed pile took to form here.
+        helper.runAfterDelay(40, () -> {
+            var a = plushieCpuAt(helper, first);
+            var b = plushieCpuAt(helper, second);
+            if (a == null || b == null) {
+                leave.run();
+                helper.fail("one of the two plushies has no crafting block entity at all: "
+                        + plushieReport(helper, first) + " / " + plushieReport(helper, second));
+                return;
+            }
+            var aFormed = a.isFormed();
+            var bFormed = b.isFormed();
+            if (aFormed || bFormed) {
+                leave.run();
+                helper.fail("a 2-long pile formed: " + at(first) + "=" + aFormed + " " + at(second) + "="
+                        + bFormed + " shared cluster=" + (a.getCluster() == b.getCluster())
+                        + ", expected the size gate to refuse a pile of two plushies");
+                return;
+            }
+            // Now the same two cells with the neighbour taken away have to form - otherwise the refusal
+            // above would only prove that this spot never works.
+            helper.setBlock(second, Blocks.AIR);
+            waitUntil(helper, 8, () -> {
+                var solo = plushieCpuAt(helper, first);
+                return solo != null && solo.isFormed();
+            }, () -> {
+                var why = "after the neighbour was taken back the lone plushie still did not form: "
+                        + plushieReport(helper, first) + " power=" + nodeGrid(helper, power);
+                leave.run();
+                return why;
+            }, () -> {
+                leave.run();
+                helper.succeed();
+            });
+        });
+    }
+
+    /**
+     * The giant plushie draws nothing of her own - her size comes from the client renderer - so the four
+     * things that make that work are all readable without a frame: the block declares no model of its own,
+     * the shared doll block entity type accepts her state (which is what lets one renderer cover her and
+     * what keeps the creeper sweep running), that pairing offers a server ticker, and her blockstate names
+     * the plain doll's model instead of carrying a second copy of the artwork.
+     */
+    @GameTest(template = "empty", batch = "doll_giant", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void giantPlushieDrawsThroughTheDollSheIsScaledFrom(GameTestHelper helper) {
+        var giant = ModRegistration.FUMO_DOLL_YANG120_GIANT_BLOCK.get();
+        var state = giant.defaultBlockState();
+        if (state.getRenderShape() != net.minecraft.world.level.block.RenderShape.INVISIBLE) {
+            helper.fail("the giant plushie renders as " + state.getRenderShape()
+                    + ", expected INVISIBLE, so her own cube and the scaled drawing would both show up");
+            return;
+        }
+        var dollType = ModRegistration.FUMO_DOLL_BE.get();
+        if (!dollType.isValid(state)) {
+            helper.fail("the shared doll block entity type does not accept the giant's state, so neither the"
+                    + " one renderer nor the creeper sweep can ever run for her");
+            return;
+        }
+        if (state.getTicker(helper.getLevel(), dollType) == null) {
+            helper.fail("the giant plushie offers no server ticker, so she stopped repelling creepers the"
+                    + " moment she grew");
+            return;
+        }
+        var file = readShippedResource(ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID,
+                "blockstates/fumo_doll_yang120_giant.json"));
+        if (file == null) {
+            helper.fail("the giant plushie ships no blockstate, so the renderer has no model to scale");
+            return;
+        }
+        var variants = com.google.gson.JsonParser.parseString(file).getAsJsonObject()
+                .getAsJsonObject("variants");
+        for (var facing : new String[]{"north", "east", "south", "west"}) {
+            var variant = variants.getAsJsonObject("facing=" + facing);
+            if (variant == null
+                    || !"neoecoprototype:block/dolls/yang120".equals(variant.get("model").getAsString())) {
+                helper.fail("facing=" + facing + " names "
+                        + (variant == null ? "no entry" : variant.get("model"))
+                        + ", expected the plain doll's model, so the giant is scaled off a second copy of her");
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Nine plain plushies press into one giant at a crafting table. The recipe is the only survival path
+     * to her, so this pins the four ways it could be wrong without crashing: no recipe at all, a second
+     * recipe competing for the same output, an input widened to a tag that also takes the CPU plushie, and
+     * a shape loose enough to accept an incomplete grid.
+     */
+    @GameTest(template = "empty", batch = "doll_giant_recipe", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void ninePlainPlushiesPressIntoTheGiant(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var plain = new ItemStack(ModRegistration.FUMO_DOLL_YANG120_ITEM.get());
+        var cpu = new ItemStack(ModRegistration.FUMO_DOLL_YANG120_CPU_ITEM.get());
+        var giant = new ItemStack(ModRegistration.FUMO_DOLL_YANG120_GIANT_ITEM.get());
+
+        var makers = level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING).stream()
+                .filter(holder -> ItemStack.isSameItem(holder.value().getResultItem(level.registryAccess()),
+                        giant))
+                .toList();
+        if (makers.size() != 1) {
+            helper.fail(makers.size() + " crafting recipes yield the giant plushie, expected exactly one: "
+                    + makers.stream().map(holder -> holder.id().toString()).collect(java.util.stream.Collectors.joining(", ")));
+            return;
+        }
+        var recipe = makers.get(0).value();
+        var result = recipe.getResultItem(level.registryAccess());
+        if (result.getCount() != 1) {
+            helper.fail("one pressing of nine plushies makes " + result.getCount()
+                    + " giants, expected 1, so the easter egg counts as a compression in only one direction");
+            return;
+        }
+        for (var ingredient : recipe.getIngredients()) {
+            for (var asked : ingredient.getItems()) {
+                if (!asked.is(plain.getItem())) {
+                    helper.fail("the giant asks for " + asked + ", expected only the plain yang120 plushie,"
+                            + " so a grid that should not press together might do so anyway");
+                    return;
+                }
+            }
+        }
+
+        var pressed = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING,
+                CraftingInput.of(3, 3, java.util.Collections.nCopies(9, plain)), level).orElse(null);
+        if (pressed == null || pressed.value() != recipe) {
+            helper.fail("a full 3x3 of plain plushies resolves to "
+                    + (pressed == null ? "no recipe" : pressed.id().toString())
+                    + ", expected " + makers.get(0).id() + ", so the recipe never matches a real table");
+            return;
+        }
+
+        // Control one: the same shape with a hole in it. A pattern that accepts this is not 3x3.
+        var withAHole = new java.util.ArrayList<ItemStack>(java.util.Collections.nCopies(8, plain));
+        withAHole.add(ItemStack.EMPTY);
+        var holed = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING,
+                CraftingInput.of(3, 3, withAHole), level);
+        if (holed.isPresent()) {
+            helper.fail("eight plushies and an empty corner pressed into a giant via " + holed.get().id()
+                    + ", so the pattern is looser than 3x3");
+            return;
+        }
+
+        // Control two: the CPU plushie is a different item and must not count as a plain one.
+        var cpuGrid = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING,
+                CraftingInput.of(3, 3, java.util.Collections.nCopies(9, cpu)), level);
+        if (cpuGrid.isPresent()) {
+            helper.fail("nine CPU plushies matched " + cpuGrid.get().id()
+                    + ", expected no match, so the giant recipe takes the working doll too");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The giant presses back into the nine plushies she came from, in one slot of a crafting table.
+     *
+     * <p>The middle assertion is the one that keeps this file honest about last night's failure: a recipe
+     * whose result counts more than the item stacks to is dropped at load in silence (measured here as
+     * {@code Item stack with stack size of 9 was larger than maximum: 1}), so the plushies have to stay
+     * stackable to nine or more for the unpacking to exist at all. {@code everyShippedRecipeFileReachesTheRecipeManager}
+     * is the net under that; this is the version that says which number is load-bearing.</p>
+     */
+    @GameTest(template = "empty", batch = "doll_giant_unrecipe", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void theGiantPressesBackIntoNinePlushies(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var plain = ModRegistration.FUMO_DOLL_YANG120_ITEM.get();
+        var plainStack = new ItemStack(plain);
+        var giant = new ItemStack(ModRegistration.FUMO_DOLL_YANG120_GIANT_ITEM.get());
+
+        if (plainStack.getMaxStackSize() < 9) {
+            helper.fail("the plain plushie stacks to " + plainStack.getMaxStackSize()
+                    + ", below the 9 this unpacking hands out, so the recipe is dropped at load and nobody"
+                    + " can unpack her");
+            return;
+        }
+
+        var makers = level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING).stream()
+                .filter(holder -> ItemStack.isSameItem(holder.value().getResultItem(level.registryAccess()),
+                        plainStack))
+                .toList();
+        if (makers.size() != 1) {
+            helper.fail(makers.size() + " vanilla crafting recipes yield the plain plushie, expected exactly"
+                    + " one (her assembly-room recipe is a different RecipeType and is not counted here): "
+                    + makers.stream().map(holder -> holder.id().toString())
+                            .collect(java.util.stream.Collectors.joining(", ")));
+            return;
+        }
+        var recipe = makers.get(0).value();
+        var result = recipe.getResultItem(level.registryAccess());
+        if (result.getCount() != 9) {
+            helper.fail("one giant unpacks into " + result.getCount()
+                    + " plushies, expected 9, so the compression loses or invents plushies");
+            return;
+        }
+        if (recipe.getIngredients().size() != 1) {
+            helper.fail("the unpacking asks for " + recipe.getIngredients().size()
+                    + " ingredient slots, expected 1, so it is no longer a one-into-nine unpack");
+            return;
+        }
+        for (var asked : recipe.getIngredients().get(0).getItems()) {
+            if (!asked.is(giant.getItem())) {
+                helper.fail("the unpacking accepts " + asked + ", expected only the giant plushie, so some"
+                        + " other item might unpack into nine plushies");
+                return;
+            }
+        }
+
+        var unpacked = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING,
+                CraftingInput.of(1, 1, List.of(giant)), level).orElse(null);
+        if (unpacked == null || unpacked.value() != recipe) {
+            helper.fail("a table holding just the giant resolves to "
+                    + (unpacked == null ? "no recipe" : unpacked.id().toString()) + ", expected "
+                    + makers.get(0).id() + ", so the unpacking never matches a real table");
+            return;
+        }
+
+        // Control: the plushie she unpacks into must not unpack again, or nine become eighty-one.
+        var dollAlone = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING,
+                CraftingInput.of(1, 1, List.of(plainStack)), level);
+        if (dollAlone.isPresent()) {
+            helper.fail("a single plain plushie matched " + dollAlone.get().id()
+                    + ", expected no match, so plushies multiply on their own");
+            return;
+        }
+
+        // And the nine have to arrive, not just be named: an empty survival pocket, then count what is in it.
+        var player = helper.makeMockPlayer(GameType.SURVIVAL);
+        player.getInventory().clearContent();
+        if (!player.getInventory().add(new ItemStack(plain, 9))) {
+            helper.fail("the inventory refused nine plushies outright, so the unpacking delivers nothing");
+            return;
+        }
+        int total = 0;
+        for (var held : player.getInventory().items) {
+            if (held.is(plain)) {
+                if (held.getCount() > held.getMaxStackSize()) {
+                    helper.fail("a plushie stack of " + held.getCount() + " sits in a slot that takes "
+                            + held.getMaxStackSize());
+                    return;
+                }
+                total += held.getCount();
+            }
+        }
+        if (total != 9) {
+            helper.fail("nine plushies arrived as " + total
+                    + ", expected 9 - what Inventory#add does not take never comes back");
+            return;
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The plushies read apart in an inventory without needing a file to say so: the four named dolls share
+     * one green, the working doll wears a different colour from all of them, and the giant is the only one
+     * of the six with a glint. Every coloured name here is checked in three parts - it sits on ITEM_NAME
+     * (on CUSTOM_NAME every stack would render as anvil-renamed and italic), it translates the block's own
+     * key (invent a key nobody ships and the slot shows the raw letters), and that key is in both languages.
+     */
+    @GameTest(template = "empty", batch = "doll_names", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void plushiesReadApartInAnInventory(GameTestHelper helper) {
+        var dolls = List.of(ModRegistration.FUMO_DOLL_RELIQWQ_ITEM, ModRegistration.FUMO_DOLL_YANG120_ITEM,
+                ModRegistration.FUMO_DOLL_KOOOKI_ITEM, ModRegistration.FUMO_DOLL_TEDXENON_ITEM);
+
+        Integer sharedGreen = null;
+        for (var doll : dolls) {
+            var stack = new ItemStack(doll.get());
+            var colour = nameColour(helper, stack);
+            if (colour == null) {
+                return;
+            }
+            if (sharedGreen == null) {
+                sharedGreen = colour;
+            } else if (!sharedGreen.equals(colour)) {
+                helper.fail(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem())
+                        + " wears a different green from the other named dolls: "
+                        + Integer.toHexString(colour) + " vs " + Integer.toHexString(sharedGreen));
+                return;
+            }
+            if (stack.has(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) {
+                helper.fail("a plain named doll glinted, so the giant's glint stops being the thing that"
+                        + " tells them apart");
+                return;
+            }
+        }
+        if (sharedGreen == null) {
+            helper.fail("none of the named dolls was reached, so this measured no colour at all");
+            return;
+        }
+
+        var cpu = new ItemStack(ModRegistration.FUMO_DOLL_YANG120_CPU_ITEM.get());
+        var cpuColour = nameColour(helper, cpu);
+        if (cpuColour == null) {
+            return;
+        }
+        if (cpuColour.equals(sharedGreen)) {
+            helper.fail("the CPU plushie's name is the same colour as the plain dolls ("
+                    + Integer.toHexString(cpuColour) + "), so the working one does not read apart on a shelf");
+            return;
+        }
+
+        var giant = new ItemStack(ModRegistration.FUMO_DOLL_YANG120_GIANT_ITEM.get());
+        if (giant.has(net.minecraft.core.component.DataComponents.ITEM_NAME)) {
+            helper.fail("the giant plushie was given a coloured name, so it is now told apart twice over and"
+                    + " one of those can be missed");
+            return;
+        }
+        if (!giant.has(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE)) {
+            helper.fail("the giant plushie has no glint, so in an inventory of stacked plushies she is"
+                    + " indistinguishable from the doll she is drawn from");
+            return;
+        }
+        if (!Boolean.TRUE.equals(
+                giant.get(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE))) {
+            helper.fail("the giant's glint override is not TRUE, which the renderer reads as no glint");
+            return;
+        }
+
+        // The shelf numbers the same change moved: every plushie stacks to sixteen.
+        var onShelf = new ArrayList<ItemStack>();
+        for (var doll : dolls) {
+            onShelf.add(new ItemStack(doll.get()));
+        }
+        onShelf.add(cpu);
+        onShelf.add(giant);
+        for (var stack : onShelf) {
+            if (stack.getMaxStackSize() != 16) {
+                helper.fail(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem())
+                        + " stacks to " + stack.getMaxStackSize() + ", expected 16");
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * One plushie's name, checked where it has to sit: ITEM_NAME, translating the block's own key, present
+     * in both languages, with a colour. Null once a {@code helper.fail} has been written - the caller must
+     * return on null.
+     */
+    private static Integer nameColour(GameTestHelper helper, ItemStack stack) {
+        var id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+        if (stack.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME)) {
+            helper.fail(id + "'s colour sits on CUSTOM_NAME, so every stack reads as renamed and renders"
+                    + " italic");
+            return null;
+        }
+        var name = stack.get(net.minecraft.core.component.DataComponents.ITEM_NAME);
+        if (name == null) {
+            helper.fail(id + " has no ITEM_NAME, so it shows plain white in an inventory");
+            return null;
+        }
+        if (!(name.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents contents)) {
+            helper.fail(id + "'s name is not a translation key, so it cannot follow the language");
+            return null;
+        }
+        var key = contents.getKey();
+        var blockKey = ((net.minecraft.world.item.BlockItem) stack.getItem()).getBlock().getDescriptionId();
+        if (!key.equals(blockKey)) {
+            helper.fail(id + " names " + key + ", expected the block's own " + blockKey
+                    + ", so the item and the placed block would drift apart");
+            return null;
+        }
+        var colour = name.getStyle().getColor();
+        if (colour == null) {
+            helper.fail(id + "'s name has no colour, so the shelf cannot read which plushie it is");
+            return null;
+        }
+        for (var lang : List.of("zh_cn", "en_us")) {
+            var table = com.google.gson.JsonParser.parseString(
+                    readResource("/assets/neoecoprototype/lang/" + lang + ".json", helper)).getAsJsonObject();
+            if (!table.has(key) || table.get(key).getAsString().isBlank()) {
+                helper.fail("lang/" + lang + ".json has no " + key
+                        + ", so the coloured name shows the raw key instead of a word");
+                return null;
+            }
+        }
+        return colour.getValue();
+    }
+
+    /** What an ItemStack is, in the short form a failure line needs. */
+    private static String itemName(ItemStack stack) {
+        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem())
+                + " x" + stack.getCount();
+    }
+
+    /** What one plushie cell currently reads, for the failure lines that have to say which half failed. */
+    private static String plushieReport(GameTestHelper helper, BlockPos pos) {
+        var cpu = plushieCpuAt(helper, pos);
+        if (cpu == null) {
+            return "no crafting block entity";
+        }
+        return "formed=" + cpu.isFormed() + " cluster=" + cpu.getCluster()
+                + " node=" + nodeGrid(helper, pos);
+    }
+
+    /** AE2's own crafting-unit block entity standing at a template-relative cell, or null. */
+    @javax.annotation.Nullable
+    private static CraftingBlockEntity plushieCpuAt(GameTestHelper helper, BlockPos pos) {
+        return helper.getLevel().getBlockEntity(helper.absolutePos(pos)) instanceof CraftingBlockEntity cpu
+                ? cpu : null;
     }
 
 
