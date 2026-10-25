@@ -1,60 +1,76 @@
 package cn.dancingsnow.neoecoprototype.mixin;
 
-/* Version lock: eco 21.2.9. Re-checked against that jar on 2026-10-22: renderFixed still asks
- * ECOComputationModels for one connected cable model (offset 268) and two disconnected ones (313, 355),
- * and SimplifyComputationDriveRenderer overrides renderFixed(ECOComputationDriveBlockEntity, ...) -- that
- * override is what makes "our tier was asked for" mean "the host is eco's". (First written against 21.2.1.) */
+/* eco 21.2.9 uses tier-only cable lookups; 21.2.10 also passes the host block. Each injection group
+ * must still wrap one connected and two disconnected lookups across either signature. Our own drive
+ * overrides renderFixed, so reaching these wrappers continues to mean the renderer is eco's. */
 
-import cn.dancingsnow.neoecoae.api.ECOComputationModels;
 import cn.dancingsnow.neoecoae.api.IECOTier;
 import cn.dancingsnow.neoecoprototype.api.SimplifyTier;
 import cn.dancingsnow.neoecoprototype.client.ComputationCableModels;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Block;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Group;
 
 /**
  * Wears the glowing computation cable in someone else's frame.
  *
  * <p>The split Ted asked for is by host, not by cell: our own frame shows the plain pair, an eco frame
- * shows the {@code _normal} pair. eco cannot express that through its registry, because its drive
- * renderer replaces the lookup key with the inserted cell's tier as soon as the cell is accepted - so
- * our cells resolve to our plain entries no matter how high the host is. The redirects below answer
- * for our tiers only, and reaching this method at all already means the host is eco's: our drive has
- * its own {@code renderFixed}, which this mixin cannot see.
+ * shows the {@code _normal} pair. Older eco versions key the lookup only on the inserted cell's tier;
+ * newer ones also pass the host block. The wrappers below answer for our tiers and preserve eco's
+ * original lookup, including that host argument, for every other tier. Our drive has its own
+ * {@code renderFixed}, which this mixin cannot see.
  */
 @Mixin(cn.dancingsnow.neoecoae.client.renderer.blockentity.ECOComputationDriveRenderer.class)
 public final class ECOComputationDriveRendererMixin {
-    @Redirect(method = "renderFixed(Lcn/dancingsnow/neoecoae/blocks/entity/computation/ECOComputationDriveBlockEntity;"
+    @Group(name = "neoecoprototype$connectedCable", min = 1, max = 1)
+    @WrapOperation(method = "renderFixed(Lcn/dancingsnow/neoecoae/blocks/entity/computation/ECOComputationDriveBlockEntity;"
             + "FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V",
             at = @At(value = "INVOKE",
                     target = "Lcn/dancingsnow/neoecoae/api/ECOComputationModels;getCableConnectedModel("
-                            + "Lcn/dancingsnow/neoecoae/api/IECOTier;)Lnet/minecraft/resources/ResourceLocation;"))
-    private ResourceLocation neoecoprototype$connected(IECOTier tier) {
+                            + "Lcn/dancingsnow/neoecoae/api/IECOTier;)Lnet/minecraft/resources/ResourceLocation;"), require = 0)
+    private ResourceLocation neoecoprototype$connected(IECOTier tier, Operation<ResourceLocation> original) {
         var upper = neoecoprototype$upperHostCable(tier, false);
-        return upper != null ? upper : ECOComputationModels.getCableConnectedModel(tier);
+        return upper != null ? upper : original.call(tier);
     }
 
-    @Redirect(method = "renderFixed(Lcn/dancingsnow/neoecoae/blocks/entity/computation/ECOComputationDriveBlockEntity;"
+    @Group(name = "neoecoprototype$connectedCable", min = 1, max = 1)
+    @WrapOperation(method = "renderFixed(Lcn/dancingsnow/neoecoae/blocks/entity/computation/ECOComputationDriveBlockEntity;"
             + "FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V",
-            at = @At(value = "INVOKE", ordinal = 0,
-                    target = "Lcn/dancingsnow/neoecoae/api/ECOComputationModels;getCableDisconnectedModel("
-                            + "Lcn/dancingsnow/neoecoae/api/IECOTier;)Lnet/minecraft/resources/ResourceLocation;"))
-    private ResourceLocation neoecoprototype$disconnectedFirst(IECOTier tier) {
-        var upper = neoecoprototype$upperHostCable(tier, true);
-        return upper != null ? upper : ECOComputationModels.getCableDisconnectedModel(tier);
+            at = @At(value = "INVOKE",
+                    target = "Lcn/dancingsnow/neoecoae/api/ECOComputationModels;getCableConnectedModel("
+                            + "Lcn/dancingsnow/neoecoae/api/IECOTier;Lnet/minecraft/world/level/block/Block;)"
+                            + "Lnet/minecraft/resources/ResourceLocation;"), require = 0)
+    private ResourceLocation neoecoprototype$connectedWithHost(IECOTier tier, Block host, Operation<ResourceLocation> original) {
+        var upper = neoecoprototype$upperHostCable(tier, false);
+        return upper != null ? upper : original.call(tier, host);
     }
 
-    @Redirect(method = "renderFixed(Lcn/dancingsnow/neoecoae/blocks/entity/computation/ECOComputationDriveBlockEntity;"
+    @Group(name = "neoecoprototype$disconnectedCable", min = 2, max = 2)
+    @WrapOperation(method = "renderFixed(Lcn/dancingsnow/neoecoae/blocks/entity/computation/ECOComputationDriveBlockEntity;"
             + "FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V",
-            at = @At(value = "INVOKE", ordinal = 1,
+            at = @At(value = "INVOKE",
                     target = "Lcn/dancingsnow/neoecoae/api/ECOComputationModels;getCableDisconnectedModel("
-                            + "Lcn/dancingsnow/neoecoae/api/IECOTier;)Lnet/minecraft/resources/ResourceLocation;"))
-    private ResourceLocation neoecoprototype$disconnectedSecond(IECOTier tier) {
+                            + "Lcn/dancingsnow/neoecoae/api/IECOTier;)Lnet/minecraft/resources/ResourceLocation;"), require = 0)
+    private ResourceLocation neoecoprototype$disconnected(IECOTier tier, Operation<ResourceLocation> original) {
         var upper = neoecoprototype$upperHostCable(tier, true);
-        return upper != null ? upper : ECOComputationModels.getCableDisconnectedModel(tier);
+        return upper != null ? upper : original.call(tier);
+    }
+
+    @Group(name = "neoecoprototype$disconnectedCable", min = 2, max = 2)
+    @WrapOperation(method = "renderFixed(Lcn/dancingsnow/neoecoae/blocks/entity/computation/ECOComputationDriveBlockEntity;"
+            + "FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V",
+            at = @At(value = "INVOKE",
+                    target = "Lcn/dancingsnow/neoecoae/api/ECOComputationModels;getCableDisconnectedModel("
+                            + "Lcn/dancingsnow/neoecoae/api/IECOTier;Lnet/minecraft/world/level/block/Block;)"
+                            + "Lnet/minecraft/resources/ResourceLocation;"), require = 0)
+    private ResourceLocation neoecoprototype$disconnectedWithHost(IECOTier tier, Block host, Operation<ResourceLocation> original) {
+        var upper = neoecoprototype$upperHostCable(tier, true);
+        return upper != null ? upper : original.call(tier, host);
     }
 
     /**
