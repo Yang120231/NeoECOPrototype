@@ -25,7 +25,7 @@ Trinity 多方块（三合一联合体）把存储、配置与合成收进同一
 | Minecraft | 1.21.1 |
 | NeoForge | 21.1.251 或兼容的 21.1.x |
 | Applied Energistics 2 | 19.2.17 或兼容的 19.2.x |
-| Neo ECO AE Extension | 21.2.9 或更高的兼容版本 |
+| Neo ECO AE Extension | 21.2.10 或更高的兼容版本 |
 | LDLib2 | 2.2.40 或更新 —— 本模组与 Neo ECO AE Extension 都要求它 |
 | Java | 21 |
 | MegaCells | 可选；启用小宗存储矩阵时必需 |
@@ -70,7 +70,7 @@ gradlew.bat build --offline
 
 从全新克隆直接构建会停下来，报它缺的是哪几个 JAR——本仓库不转发任何依赖。产物是 `build/libs/neoecoprototype-<version>.jar`，`<version>` 就是写在 `build.gradle` 里的那个字面量。`libs/`、`run/`、`build/`、参考检出与本地世界数据都不要提交进仓库。
 
-依赖下限为什么这么写、eco 那条下限是怎么从带预发布号一路抬到 `21.2.9` 的，记在 [docs/ae2-extension-playbook.md](docs/ae2-extension-playbook.md)。一次发布要带什么、怎么发，记在 [docs/publishing.md](docs/publishing.md)。
+依赖下限为什么这么写、eco 那条下限是怎么从带预发布号一路抬到 `21.2.10` 的，记在 [docs/ae2-extension-playbook.md](docs/ae2-extension-playbook.md)。一次发布要带什么、怎么发，记在 [docs/publishing.md](docs/publishing.md)。
 
 ## 参与
 

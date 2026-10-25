@@ -72,6 +72,18 @@ public enum SimplifyTier implements IECOTier {
         return tier;
     }
 
+    /**
+     * The number eco asks its own host classes for: {@code ECOComputationSystemBlockEntity#onReady} finishes
+     * with {@code applyIdlePower(COMPUTATION_CONTROLLER, tier.getComponentIdlePower(), 0)}, so leaving this at
+     * the interface's 16.0 would have the C1 frame idle at eco's L4 baseline. This is the same figure the
+     * onReady injection used to write to the node by hand - see {@code NeoECOPrototype#commonSetup} for the
+     * provider that covers the machines which report no tier at all.
+     */
+    @Override
+    public double getComponentIdlePower() {
+        return SimplifyPowerProfile.L1.baseComponentIdlePower();
+    }
+
     // L1 computation capacity is one eighth of the previous 8 MiB setting.
 
     /**

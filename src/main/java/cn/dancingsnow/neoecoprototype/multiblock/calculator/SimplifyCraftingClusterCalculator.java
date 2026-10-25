@@ -144,9 +144,9 @@ public class SimplifyCraftingClusterCalculator extends NECraftingClusterCalculat
         Optional<BlockPos> workerEnd = validateBlockLine(level, expandSide, workerStart,
                 matchingFacing(holder(ModRegistration.SIMPLIFY_CRAFTING_WORKER_BLOCK.get()), front));
         Optional<BlockPos> upperCoreEnd = validateBlockLine(level, expandSide, workerStart.relative(top),
-                matchingParallelCore(level, tier, front));
+                matchingOwnParallelCore(level, tier, front));
         Optional<BlockPos> lowerCoreEnd = validateBlockLine(level, expandSide, workerStart.relative(down),
-                matchingParallelCore(level, tier, front));
+                matchingOwnParallelCore(level, tier, front));
         BlockPos ventStart = workerStart.relative(back);
         Optional<BlockPos> ventEnd = validateBlockLine(level, expandSide, ventStart,
                 matchingFacing(holder(ModRegistration.SIMPLIFY_CRAFTING_VENT_BLOCK.get()), back));
@@ -178,7 +178,10 @@ public class SimplifyCraftingClusterCalculator extends NECraftingClusterCalculat
                 && state.getValue(BlockStateProperties.HORIZONTAL_FACING) == facing;
     }
 
-    private static BiPredicate<BlockState, BlockPos> matchingParallelCore(
+    // Not an override of NECraftingClusterCalculator.matchingParallelCore: that one went from private to
+    // protected in eco 21.2.10 and matches its own core family, while this predicate matches ours. Same
+    // signature would make a static method hide an instance one, which javac rejects.
+    private static BiPredicate<BlockState, BlockPos> matchingOwnParallelCore(
             Level level, IECOTier tier, Direction facing) {
         return (state, pos) -> state.is(holder(ModRegistration.SIMPLIFY_CRAFTING_PARALLEL_CORE_BLOCK.get()))
                 && level.getBlockEntity(pos) instanceof ECOCraftingParallelCoreBlockEntity core

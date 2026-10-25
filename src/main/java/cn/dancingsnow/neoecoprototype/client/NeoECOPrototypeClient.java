@@ -205,16 +205,24 @@ public final class NeoECOPrototypeClient {
         // The cable splits by the drive it sits in, never by which cell pushed it there: our own frame is
         // a level 1 one, so both of our tiers wear the plain pair here. Both entries are still needed --
         // eco's lookup has no miss branch, so a tier a cell can carry without a registration would NPE
-        // inside chunk rendering.
+        // inside chunk rendering. Our renderer asks the one-argument lookups, which pass a null host and so
+        // never read the per-host table below.
         ECOComputationModels.registerCableModel(
                 cn.dancingsnow.neoecoprototype.api.SimplifyTier.L1,
                 ComputationCableModels.LOWER_DISCONNECTED, ComputationCableModels.LOWER_CONNECTED);
         ECOComputationModels.registerCableModel(
                 cn.dancingsnow.neoecoprototype.api.SimplifyTier.L1_REINFORCED,
                 ComputationCableModels.LOWER_DISCONNECTED, ComputationCableModels.LOWER_CONNECTED);
-        // The glowing pair therefore has exactly one route to the screen: ECOComputationDriveRendererMixin,
-        // which switches our tiers onto it whenever eco's own frame asks for them. It covers the three
-        // lookups in eco's renderFixed(); a stub whose key is an eco tier is left as eco drew it.
+        // The glowing pair lives in eco's per-host table: eco 21.2.10 hands renderFixed's lookup the drive
+        // block the cell is sitting in (blockEntity.getBlockState().getBlock()), which is the key our own
+        // frame cannot produce. So each of our four tiers is registered against eco's computation drive --
+        // reaching this table at all already means the host is eco's. A tier we do not own is left as eco
+        // drew it, exactly as the retired redirect used to return null.
+        for (var tier : cn.dancingsnow.neoecoprototype.api.SimplifyTier.values()) {
+            ECOComputationModels.registerCableModel(tier,
+                    cn.dancingsnow.neoecoae.all.NEBlocks.COMPUTATION_DRIVE.get(),
+                    ComputationCableModels.UPPER_DISCONNECTED, ComputationCableModels.UPPER_CONNECTED);
+        }
         ECOComputationModels.runDeferredRegistration();
 
         FixedBlockEntityRenderers.register(ModRegistration.SIMPLIFY_DRIVE_BE.get(),

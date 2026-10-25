@@ -209,6 +209,11 @@ public class NeoECOPrototype {
                 (blockEntity, unused) -> (IInWorldGridNodeHost) blockEntity);
     }
 
+    private static boolean isOurBlock(net.minecraft.world.level.block.state.BlockState state) {
+        var key = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        return key != null && MOD_ID.equals(key.getNamespace());
+    }
+
     private static void commonSetup(final FMLCommonSetupEvent event) {
         // Bind each block to its BlockEntityType (AE2's AEBaseEntityBlock#setBlockEntity).
         ModRegistration.linkBlockEntityTypes();
@@ -230,6 +235,28 @@ public class NeoECOPrototype {
         cn.dancingsnow.neoecoae.blocks.entity.NEBlockEntity.registerCalculatorFactory(
                 ModRegistration.SIMPLIFY_CRAFTING_SYSTEM_BE.get(),
                 cn.dancingsnow.neoecoprototype.multiblock.calculator.SimplifyCraftingClusterCalculator::new);
+        // The C1 frame's block entity type is eco's own ECOComputationSystemBlockEntity, and since 21.2.10 that
+        // class asks ECOMultiblockDefinitions.resolve, which consults registered providers before its tier
+        // hook and before the caller's own supplier. Answering here is what the HEAD injection on that class
+        // used to do; the condition is the same one - only the L1 tier constant, not the three member tiers.
+        cn.dancingsnow.neoecoae.api.multiblock.ECOMultiblockDefinitions.register(id("l1_computation_definition"),
+                100,
+                context -> context.tier() == cn.dancingsnow.neoecoprototype.api.SimplifyTier.L1
+                        && context.kind() == cn.dancingsnow.neoecoae.api.multiblock.ECOMachineKind.COMPUTATION
+                        ? cn.dancingsnow.neoecoprototype.multiblock.definition.SimplifyComputationDefinition.L1
+                        : null);
+        // eco sizes every networked block entity's idle draw through ECOPowerProfiles.resolve, which asks its
+        // providers before falling back to the caller's base number, and NEBlockEntity#onReady always finishes
+        // with a COMPONENT pass-through. Answering that for our namespace is what this mod's onReady injection
+        // used to do, and it is the only shape that covers our machines: the sweep `addonMachineIdlePowerInventory`
+        // reports 20 of 32 block entities with tier=null, so IECOTier#getComponentIdlePower - the hook eco added
+        // for exactly this request - never sees them. The role stays pinned to COMPONENT so the controller and
+        // member callers keep the numbers they set for themselves.
+        cn.dancingsnow.neoecoae.api.power.ECOPowerProfiles.register(id("addon_component_idle_power"), 100,
+                context -> context.role() == cn.dancingsnow.neoecoae.api.power.ECOPowerRole.COMPONENT
+                        && isOurBlock(context.state())
+                        ? cn.dancingsnow.neoecoprototype.api.SimplifyPowerProfile.L1.baseComponentIdlePower()
+                        : null);
         // AE2 only lets a card into a machine when the card is associated with that machine's item,
         // and the machine tooltip is generated from the same association. The slot count mirrors the
         // inherited molecular assembler, which allows five cards.

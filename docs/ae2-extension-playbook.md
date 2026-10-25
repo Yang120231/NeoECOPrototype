@@ -121,7 +121,7 @@ AE2 Part 不是普通方块模型。保留 AE2 的 Part 几何、背面和侧面
 - **还能再往前一步**：把覆写从 `verifyInternalStructure` 缩到上游新增的 `protected verifyStructure(...)`，那样 `setMirrored` / 冷却控制器 / `network_switch` 的写回就交回上游。我们现在必须自己写，因为检查一旦路由给我们，上游那半段不跑。
 - **mixin 实盘形状**：7 个类（`mixins.json` 里 4 server + 3 client），注解级是 3 个 `@Inject` + 4 个 `@Redirect`，另有 3 个 `@Accessor` + 4 个 `@Invoker`。其中 `InterfaceLogicAccess`（2 访问器 + 4 invoker）与 `SlotYAccessor` 是纯访问器、没有注入点。旧条目里"从 16 条降到 7 条"的那个 16 是 PR 合并前的数，**别再引用**。
 - **合成侧的功耗已经不靠注入**：`ECOCraftingHighPowerMixin` 删掉了，三块合成成员（worker / parallel core / vent）改成我们自己的子类，`onReady()` 里 `super.onReady()` 之后写 `SimplifyPowerProfile.L1.highIdleComponentPower()`。**注册面一个字没改**：`BlockEntityType` 声明的泛型仍是 eco 的父类，只有工厂 lambda 里 `new` 的类换了，`AEBaseEntityBlock#setBlockEntity` 传的仍是父类的 class —— 与 `6a00d02` 给 F1 主机用的是同一个形状。守卫是 `craftingMembersIdleAtTheAddonRate`：eco 自己三块都写 64.0 AE/t，我们写 **4.0**（`highIdleComponentPower` 的 32.0 也过 1/8 缩放），摘掉任何一块的覆写，那条就点名到具体方块。
-- **同一招还能往下拆**：`NEBlockEntityPowerMixin` 现在管着其余仍复用 eco BE 类的方块（计算侧 threading / parallel / cooling / transmitter、pattern bus、两个流体孔；注册表里一共挂着 12 个 eco 的 BE 类型）。要不要拆看成本，但**每拆一块都得先有读数**——那三块成员在补断言之前是零覆盖，也就是注入坏了没人知道。
+- **那条功耗注入已经在 2026-10-25 撤掉了**，改成两处：`ECOPowerProfiles.register(...)` 的 provider 只对 `role==COMPONENT` 且方块在我们命名空间时答 `SimplifyPowerProfile.L1.baseComponentIdlePower()`，加上 `SimplifyTier` / `SimplifyCraftingTier` 覆写 `getComponentIdlePower()`。**为什么必须两处**：`NEBlockEntity.onReady()` 结尾那条 `applyIdlePower(COMPONENT, 16.0, 0)` 只在 `tier != null` 时才改问档位，而我们 32 台机器里 20 台的 BE `tier==null`（36 个工厂有 14 个不传 tier）——单靠 tier 覆写会把那 20 台放回 eco 的 16.0；反过来 `ECOComputationSystemBlockEntity.onReady()` 在 `super.onReady()` **之后**又调一次 `applyIdlePower(COMPUTATION_CONTROLLER, tier.getComponentIdlePower(), 0)`，所以只留 provider 会把 C1 主机顶回 16.0（实测过）。**尺子**是 `addonMachineIdlePowerInventory`：逐台打 `beClass | tier | idle`，任何一台退回 16.0 就红，改动前后 32 行逐行相同才算等价。同一天撤掉的两条：`ECOComputationSystemBlockEntityMixin` → `ECOMultiblockDefinitions` 的 provider（`resolve` 先问 provider，再问 `tier.getBuildDefinition(kind)`，最后才是调用方 supplier），`ECOComputationDriveRendererMixin` → `ECOComputationModels.registerCableModel(tier, NEBlocks.COMPUTATION_DRIVE, ...)`（单参查找传的 block 是 null，所以两张表互不干扰；**这条只有客户端能验**）。
 
 ## EMI 的多方块工作台清单是上游硬编码的，我们的主机要自己登记
 
@@ -165,9 +165,11 @@ CHANGELOG 现在只写玩家看得见的结果。这一节收着那些"以后改
 
 ## 版本下限怎么定
 
-`neoforge.mods.toml` 里 eco 的下限现在写 **`[21.2.9,)`**，与编译基线同数（那条规矩见 AGENTS.md §5：编译基线 = 运行地板）。上限我们**故意不写** —— 写上限会把每一个新 eco 玩家挡在外面。
+`neoforge.mods.toml` 里 eco 的下限现在写 **`[21.2.10,)`**，与编译基线同数（那条规矩见 AGENTS.md §5：编译基线 = 运行地板）。上限我们**故意不写** —— 写上限会把每一个新 eco 玩家挡在外面。
 
 **这段是历史，保留是因为决策方式还在用。**下限一度停在 `[21.2.1-beta2,)` 而不是 `[21.2.1,)`：`21.2.1-beta1` 把自己声明成 plain `21.2.1`，宽范围恰好收下它；`beta2` 声明真实版本，而预发布版本比较时排在正式版**之下**，于是 `[21.2.1,)` 直接拒绝启动（实测过那句报错）。正式版 `21.2.1` 在 2026-10-07 放出之后下限仍留在 beta2 也是故意的：写成 `[21.2.1,)` 对新增玩家没多买到什么，却会把还拿着 beta2 的人整台游戏挡在启动之外。那条下限当时的实际内容是 `gui.GuiTitleProvider` —— 它在 `21.2.0` 里不存在，而我们的通讯接口与样板总线方块实现了它。
+
+**抬到 21.2.10 的那一笔不是被需求推的，是 §5 那条规矩推的**（2026-10-25 对 21.2.9 与 21.2.10 两份 jar 现量；**当天作者重传过同一个版本号**，现用的是 md5 `444dcfc3fdab`，被换掉的那颗是 `5b607afc4446`，两颗逐条比只有 2 个条目不同，都是 eco 自己的 `recipe/LargeWorkstationRecipeSources` 与它的 `$LightningBorrowing`，我们一颗都没点名，所以下面这些读数对新那颗照样成立）：类级 1498 → 1568（+72 / −2，去掉的两颗 `ExactAmountCollector$AmountVisitor` 与 `LargeWorkstationRecipes$FluidInput` 我们都没点名），我们字节码引用的 106 个 eco 类型全部解析；成员级 `tools/audit_eco_abi.py` 对控制组与被换掉那颗 21.2.10 打印的是同一份清单（10-25 那次 `wc -l` 读到 154 行，读的是相等不是长度；这份工具的输出行数从来随我们的字节码变，别把它当一个固定数）；非类条目 4505 → 4584，去掉的 7 张全是 eco 自己 `working_station/controller_formed` 下的兼容贴图。**唯一真撞上的一处是编译器抓到的**：`NECraftingClusterCalculator.matchingParallelCore` 由 `private` 改成 `protected`，我们同签名的私有静态谓词就变成"静态方法遮蔽实例方法"，改名收场（见 AGENTS.md §15）。同版 eco 开出的 API v1（`api/extension`、`api/multiblock`、`api/power`、`api/storage`、`api/workstation`）我们**没有接**，这是"未勘"不是"无用"。
 
 **抬到 21.2.9 的那一笔，理由是面板换图的三条通道**（2026-10-22 对 21.2.8 与 21.2.9 两份 jar 各 `javap` 一遍现量）：`api.IHostPanelTextureProvider$Part` 在 21.2.8 只有 **5** 个常量、21.2.9 有 **12** 个；`IHostPanelTextureProvider` 的 `getPanelTexture` 在 21.2.8 只有 **1** 个重载、21.2.9 有 **2** 个（五参那条答状态灯/开关/模式按钮，正是我们三个方块要覆写的）。枚举常量不存在是**首次触碰就 `NoSuchFieldError`**，读它们的代码不能声称更旧的地板。另一条同族教训是流体仓界面调 eco 的 `gui/common/FluidHatchUI`（21.2.1 没有这个类）与主机面板两条构造子在 21.2.3 换了参数个数（`StorageHostUI$Config` 13→15、`StorageHostActionUI$Config` 16→13）。
 

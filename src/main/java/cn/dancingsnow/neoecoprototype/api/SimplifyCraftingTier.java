@@ -34,6 +34,17 @@ public enum SimplifyCraftingTier implements IECOTier {
         return tier;
     }
 
+    /**
+     * The L1 idle baseline, asked in two places by eco: the COMPONENT pass-through that
+     * {@code NEBlockEntity#onReady} finishes with, and the base its own host classes hand to
+     * {@code applyIdlePower} for their controller role. Leaving this at the interface's 16.0 would make
+     * an F1 frame idle at eco's L4 number the moment its host class re-applies after onReady.
+     */
+    @Override
+    public double getComponentIdlePower() {
+        return SimplifyPowerProfile.L1.baseComponentIdlePower();
+    }
+
     @Override
     public int getCrafterParallel() {
         return crafterParallel;

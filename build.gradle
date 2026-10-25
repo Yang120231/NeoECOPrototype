@@ -5,7 +5,7 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.78'
 }
 
-version = '1.3.10'
+version = '1.4.0'
 group = 'cn.dancingsnow.neoecoprototype'
 
 base {
@@ -45,10 +45,38 @@ dependencies {
     // here (core.localization.Tooltips lost three public static fields) and would then throw on 18.
     implementation files("libs/ae2-19.2.17.jar")               // AE2 (modId: ae2)
     implementation files("libs/guideme-21.1.1.jar")            // GuideME (AE2 强制依赖, modId: guideme)
-    implementation files("libs/ldlib2-neoforge-1.21.1-2.2.40-all.jar")  // LDLib2 (eco 运行依赖, modId: ldlib2) - eco 21.2.1 raised its floor to [2.2.40,) and 21.2.2 keeps it
+    // LDLib2 (modId: ldlib2) - eco 21.2.1 raised its floor to [2.2.40,) and 21.2.10 keeps it, so this is both
+    // the compile baseline and the dev runtime. It briefly read `compileOnly 2.2.40 + runtimeOnly 2.2.42`
+    // because ae2lt 2.1.2-beta4 demands [2.2.42,3.0.0) and eco 21.2.10 would not start without ae2lt; eco
+    // re-uploaded 21.2.10 on 2026-10-25 (md5 444dcfc3fdab, two classes changed) with that gate in place, so
+    // lightning is optional again and the runtime is back on the floor we ship. libs/ keeps the 2.2.42 jar
+    // for a lightning test bed.
+    implementation files("libs/ldlib2-neoforge-1.21.1-2.2.40-all.jar")
     implementation "dev.vfyjxf:taffy:1.1.3"
     implementation "org.appliedenergistics.yoga:yoga:1.0.0"
-// ABI target: eco 21.2.9 (moved 2026-10-21; the previous line of sight was 21.2.7, moved 2026-10-20).
+// ABI target: eco 21.2.10 (moved 2026-10-25; the previous line of sight was 21.2.9, moved 2026-10-21).
+// The jar was re-uploaded the same day (md5 444dcfc3fdab, replacing 5b607afc4446): two entries change,
+// recipe/LargeWorkstationRecipeSources and its $LightningBorrowing inner class, and the only thing they do is
+// move the LightningKey reference out of the outer class behind loaded("ae2lt") - that was the crash that made
+// 21.2.10 need lightning at all. Neither class is named by our bytecode, so the ABI face below is unchanged.
+// What the 21.2.9 -> 21.2.10 measurement says (taken against the first 21.2.10 upload, md5 5b607afc4446;
+// neither entry that changed in the re-upload is named by our bytecode, so every reading below stands):
+// entry-level 1498 -> 1568 classes,
+// +72 / -2, and the two removed are ExactAmountCollector$AmountVisitor and LargeWorkstationRecipes$FluidInput,
+// neither named by us. Class-level: the 106 neoecoae types our bytecode references all resolve. Member-level:
+// tools/audit_eco_abi.py prints the same 155-line list for the 21.2.9 control and for 21.2.10, so no member we
+// reference went away - the reading is the equality, not the length (supertype members, <init> and getClass
+// are javap artefacts). Non-class entries 4505 -> 4584 with 7 eco textures removed, all under its own
+// working_station/controller_formed compat family; our resources name no neoecoae: path at all (CI gate).
+// Mixin targets re-checked with javap: onReady, getBuildDefinition, renderFixed(BE,float,PoseStack,
+// MultiBufferSource,int,int) and Class.forName in ClientUIBridge.call all keep their shape; the two
+// other @Mixins bind AE2 classes, which this sync does not touch. One real break, and it is client-side
+// only (the suite never loads a renderer): renderFixed now calls getCable{Connected,Disconnected}Model
+// (IECOTier, Block) - the one-argument overloads it used before are no longer called - so those three
+// @Redirect targets were re-pointed at the two-argument form.
+// New this round and not adopted: eco's addon API v1 (api/extension, api/multiblock, api/power, api/storage,
+// api/workstation) and ECOComputationModels.registerCableModel(IECOTier, Block, ...), which could retire
+// ECOComputationDriveRendererMixin. Unsurveyed, not worthless.
 // Why 21.2.9 and not 21.2.8: the panel channels #125 asked for are not in 21.2.8 - IHostPanelTextureProvider$Part
 // still has 5 members there, and 21.2.9 has 12 (COMPUTATION_TIER / COMPUTATION_MARKER / CRAFTING_TIER /
 // CRAFTING_MARKER / COMPUTATION_STATUS / COMPUTATION_SWITCH / CRAFTING_MODE) plus the
@@ -111,7 +139,7 @@ dependencies {
 // GuiTitleProvider (PR #110) and grid.NEMachineLookup (PR #109) are still carried; both are in the 104.
 // A sync is certified by compiling against that jar and running the suite. tools/audit_eco_abi.py is a
 // companion check, not a verdict -- read its docstring before believing its "MISSING" list.
-    implementation files("neoecobeta/neoecoae-21.2.9.jar")
+    implementation files("neoecobeta/neoecoae-21.2.10.jar")
     // MegaCells 4.11.0 is the supported optional integration version.
     implementation files("libs/megacells-4.11.0.jar")
     // Dev-runtime only: keep them off the compile classpath but on the runtime classpath.
@@ -199,7 +227,19 @@ tasks.named('processResources', ProcessResources) {
 }
 tasks.named('test', Test) {
     useJUnitPlatform()
+    // Point the cable-model contract test at any eco jar to watch it disagree with us - the way this file
+    // proves it is reading upstream rather than our own assumptions:
+    //   ./gradlew test -Dneoecoprototype.test.ecoJar=neoecobeta/neoecoae-21.2.9.jar
+    def ecoJar = System.getProperty('neoecoprototype.test.ecoJar')
+    if (ecoJar != null) {
+        systemProperty 'neoecoprototype.test.ecoJar', ecoJar
+    }
 }
+
+// The two contract tests below read upstream class files (and one eco interface) off the compile classpath,
+// which ModDev puts on main only. Without these lines the test source set cannot see them.
+sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.main.compileClasspath
 
 neoForge {
     version = '21.1.251'

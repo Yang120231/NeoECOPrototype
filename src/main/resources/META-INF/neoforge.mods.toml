@@ -67,19 +67,22 @@ side = "BOTH"
 # class loads, so on 21.2.4 to 21.2.6 this is a NoClassDefFoundError at registration, not a
 # cosmetic miss. (Overriding a default method, which is what getPanelTierName() is, would NOT
 # have needed this: an extra method nobody calls is inert on the older jars.)
-# 21.2.9 is the floor because it is the baseline we compile against - the rule this file keeps: the
+# 21.2.10 is the floor because it is the baseline we compile against - the rule this file keeps: the
 # version that filled in the symbol scan is the version the range starts at, because a range is not what
-# catches an ABI surprise. The reason 21.2.9 and not 21.2.8 is the panel shape: eco's #125 channels only
-# arrive there (21.2.8 still carries five IHostPanelTextureProvider$Part members, 21.2.9 carries twelve and
-# the five-argument getPanelTexture overload), and an enum constant that does not exist yet is a
-# NoSuchFieldError on first touch, so the code that reads them cannot claim an older floor.
+# catches an ABI surprise. 21.2.10 is a pure addition on the symbol face for us (106 referenced types all
+# resolve, the member audit list is identical to the 21.2.9 control), so this line moves with the baseline
+# rather than because something we call changed shape.
+# 21.2.9 is where the panel shape arrived: eco's #125 channels only land there (21.2.8 still carries
+# five IHostPanelTextureProvider$Part members, 21.2.9 carries twelve and the five-argument
+# getPanelTexture overload), and an enum constant that does not exist yet is a NoSuchFieldError on first
+# touch, so the code that reads them cannot claim an older floor.
 # Do not treat a range as a safety net: 1.2.7 shipped an upper bound that should have excluded
 # 21.2.0, a player still loaded it with that eco and got NoSuchMethodError when opening the L1
 # storage host GUI. ABI surprises are caught by compiling against the target, not by bounding it.
 [[dependencies.neoecoprototype]]
 modId = "neoecoae"
 mandatory = true
-versionRange = "[21.2.9,)"
+versionRange = "[21.2.10,)"
 # AFTER for the same reason as AE2 above: several of our items extend eco's cell items, so binding our
 # registry entry loads eco's class and runs its statics, which read eco's and AE2's registries.
 ordering = "AFTER"
