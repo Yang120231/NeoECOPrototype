@@ -157,11 +157,11 @@ public class CryotheumMeteoriteStructure extends Structure {
             this.cryotheumOre = ModRegistration.CRYOTHEUM_ORE_BLOCK.get().defaultBlockState();
             this.endCryotheumOre = ModRegistration.END_CRYOTHEUM_ORE_BLOCK.get().defaultBlockState();
             this.quartzBlock = state("ae2", "quartz_block", Blocks.BLUE_ICE);
-            this.floor = new Block[]{ModRegistration.FRIGIT_CRYSTAL_BLOCK.get(),
-                    ModRegistration.DAMAGED_BUDDING_FRIGIT.get(), ModRegistration.CHIPPED_BUDDING_FRIGIT.get(),
-                    ModRegistration.FLAWED_BUDDING_FRIGIT.get(), ModRegistration.FLAWLESS_BUDDING_FRIGIT.get()};
-            this.buds = new Block[]{ModRegistration.SMALL_FRIGIT_BUD.get(), ModRegistration.MEDIUM_FRIGIT_BUD.get(),
-                    ModRegistration.LARGE_FRIGIT_BUD.get()};
+            this.floor = new Block[]{ModRegistration.GRETTE_CRYSTAL_BLOCK.get(),
+                    ModRegistration.DAMAGED_BUDDING_GRETTE.get(), ModRegistration.CHIPPED_BUDDING_GRETTE.get(),
+                    ModRegistration.FLAWED_BUDDING_GRETTE.get(), ModRegistration.FLAWLESS_BUDDING_GRETTE.get()};
+            this.buds = new Block[]{ModRegistration.SMALL_GRETTE_BUD.get(), ModRegistration.MEDIUM_GRETTE_BUD.get(),
+                    ModRegistration.LARGE_GRETTE_BUD.get()};
         }
 
         @Override

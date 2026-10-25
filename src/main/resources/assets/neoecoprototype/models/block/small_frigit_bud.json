@@ -1,7 +1,0 @@
-{
-  "parent": "minecraft:block/cross",
-  "textures": {
-    "cross": "neoecoprototype:block/small_frigit_bud"
-  },
-  "render_type": "cutout"
-}

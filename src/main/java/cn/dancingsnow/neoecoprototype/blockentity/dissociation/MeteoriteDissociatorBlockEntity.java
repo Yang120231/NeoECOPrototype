@@ -248,7 +248,7 @@ public class MeteoriteDissociatorBlockEntity extends AENetworkedBlockEntity
     private record CatalystBonus(int ticksPercent, int powerPercent) {
     }
 
-    private static final CatalystBonus FRIGIT_BONUS = new CatalystBonus(75, 125);
+    private static final CatalystBonus GRETTE_BONUS = new CatalystBonus(75, 125);
 
     /**
      * The catalogue is deliberately one line long: it is ours to tune, and every entry has to say what a
@@ -256,8 +256,8 @@ public class MeteoriteDissociatorBlockEntity extends AENetworkedBlockEntity
      */
     private CatalystBonus catalystBonus() {
         ItemStack stack = catalyst.getStackInSlot(0);
-        if (!stack.isEmpty() && stack.is(ModRegistration.FRIGIT_CRYSTAL.get())) {
-            return FRIGIT_BONUS;
+        if (!stack.isEmpty() && stack.is(ModRegistration.GRETTE_CRYSTAL.get())) {
+            return GRETTE_BONUS;
         }
         return new CatalystBonus(100, 100);
     }

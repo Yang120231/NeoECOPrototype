@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "neoecoprototype:block/grette_cluster"
+  },
+  "render_type": "cutout"
+}

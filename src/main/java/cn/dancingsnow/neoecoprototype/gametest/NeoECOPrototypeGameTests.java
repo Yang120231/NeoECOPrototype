@@ -3084,13 +3084,16 @@ public final class NeoECOPrototypeGameTests {
 
         // Exactly one doll carries a rate, and the other five carry zero - a second charging doll would be
         // a content change nobody announced, and a zero here means the sweep never asks any stack at all.
+        // The one non-zero value is the shipped default, the same constant the config key defaults to, so
+        // the doll's stat and the key cannot drift apart.
         var rates = List.of(
                 new DollRate(ModRegistration.FUMO_DOLL_RELIQWQ_ITEM, 0.0D),
                 new DollRate(ModRegistration.FUMO_DOLL_YANG120_ITEM, 0.0D),
                 new DollRate(ModRegistration.FUMO_DOLL_KOOOKI_ITEM, 0.0D),
                 new DollRate(ModRegistration.FUMO_DOLL_YANG120_CPU_ITEM, 0.0D),
                 new DollRate(ModRegistration.FUMO_DOLL_YANG120_GIANT_ITEM, 0.0D),
-                new DollRate(ModRegistration.FUMO_DOLL_TEDXENON_ITEM, 100.0D));
+                new DollRate(ModRegistration.FUMO_DOLL_TEDXENON_ITEM,
+                        NeoECOPrototypeServerConfig.FUMO_CHARGE_AE_PER_TICK_DEFAULT));
         for (var rate : rates) {
             var stats = cn.dancingsnow.neoecoprototype.item.decoration.FumoItem
                     .statsOf(new ItemStack(rate.doll().get()));
@@ -3105,10 +3108,37 @@ public final class NeoECOPrototypeGameTests {
             }
         }
 
-        // The line the tooltip shows is built from the same stat; if the key is gone the doll stops
-        // advertising the one thing it does that the other five do not.
-        String chargeLine = Component.translatable("block.neoecoprototype.fumo_reliqwq.worn_charge",
-                Component.literal("100")).getString();
+        // The shipped default, pinned without reading a config file: the key's default and the constant
+        // the doll is registered with are the same number, and that number is 100 AE/t.
+        if (NeoECOPrototypeServerConfig.FUMO_CHARGE_AE_PER_TICK.getDefault()
+                != NeoECOPrototypeServerConfig.FUMO_CHARGE_AE_PER_TICK_DEFAULT) {
+            helper.fail("the charge key defaults to "
+                    + NeoECOPrototypeServerConfig.FUMO_CHARGE_AE_PER_TICK.getDefault() + " AE/t, but the doll"
+                    + " is registered with " + NeoECOPrototypeServerConfig.FUMO_CHARGE_AE_PER_TICK_DEFAULT
+                    + " - the tooltip and the payout would be authored from two different numbers");
+            return;
+        }
+        if (NeoECOPrototypeServerConfig.FUMO_CHARGE_AE_PER_TICK_DEFAULT != 100.0D) {
+            helper.fail("the shipped charge rate is "
+                    + NeoECOPrototypeServerConfig.FUMO_CHARGE_AE_PER_TICK_DEFAULT + " AE/t, expected the"
+                    + " announced 100 - if this was meant, the changelog has to say so too");
+            return;
+        }
+        // The live rate is the server's, and every payout below is measured against it rather than against
+        // a literal, so a run with the key set away from its default pins the wiring: a sweep that kept a
+        // hard-coded 100 AE/t would fail that run and pass this one.
+        double configuredRate = NeoECOPrototypeServerConfig.fumoChargeAePerTick();
+        if (configuredRate <= 0.0D) {
+            helper.fail("this run's server config has charging at " + configuredRate + " AE/t, so every"
+                    + " reading below would be zero by construction; the sweep needs a non-zero rate");
+            return;
+        }
+        int sweepBudget = (int) Math.round(configuredRate * 5.0D);
+
+        // The line the tooltip shows carries no number at all: the rate is a server key, and a dedicated
+        // client never loads one, so a number here would have to be hard-coded and could drift.
+        String chargeKey = "block.neoecoprototype.fumo_reliqwq.worn_charge";
+        String chargeLine = Component.translatable(chargeKey).getString();
         var tedTooltip = new ItemStack(ModRegistration.FUMO_DOLL_TEDXENON_ITEM.get())
                 .getTooltipLines(net.minecraft.world.item.Item.TooltipContext.EMPTY, null,
                         net.minecraft.world.item.TooltipFlag.Default.NORMAL);
@@ -3135,8 +3165,17 @@ public final class NeoECOPrototypeGameTests {
             if (json == null) {
                 return;
             }
-            if (!json.contains("fumo_reliqwq.worn_charge")) {
-                helper.fail("lang/" + lang + ".json has no fumo_reliqwq.worn_charge key");
+            var table = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+            if (!table.has(chargeKey)) {
+                helper.fail("lang/" + lang + ".json has no " + chargeKey + " key");
+                return;
+            }
+            String text = table.get(chargeKey).getAsString();
+            // The tooltip passes no argument now, so a placeholder left in either language would render
+            // wrong or throw; the key has to be a plain sentence.
+            if (text.contains("%")) {
+                helper.fail("lang/" + lang + ".json still writes a placeholder into " + chargeKey + " ('"
+                        + text + "'), but the tooltip passes no argument any more");
                 return;
             }
         }
@@ -3178,21 +3217,22 @@ public final class NeoECOPrototypeGameTests {
                     + " below would be off by that much");
             return;
         }
-        // One paying tick is five ticks' worth at 100 AE/t.
+        // One paying tick is five ticks' worth at the configured rate.
         player.tickCount = 0;
         cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects.onPlayerTick(
                 new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
-        if (staffEnergy.getEnergyStored() != 500) {
+        if (staffEnergy.getEnergyStored() != sweepBudget) {
             helper.fail("one paying tick left the staff at " + staffEnergy.getEnergyStored()
-                    + " AE, expected 500 (100 AE/t times the five-tick sweep)");
+                    + " AE, expected " + sweepBudget + " (" + configuredRate
+                    + " AE/t from the server config times the five-tick sweep)");
             return;
         }
         // And a tick off the cadence pays nothing, which is what keeps the cost bounded.
         player.tickCount = 1;
         cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects.onPlayerTick(
                 new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
-        if (staffEnergy.getEnergyStored() != 500) {
-            helper.fail("a tick off the cadence still paid out: the staff went from 500 to "
+        if (staffEnergy.getEnergyStored() != sweepBudget) {
+            helper.fail("a tick off the cadence still paid out: the staff went from " + sweepBudget + " to "
                     + staffEnergy.getEnergyStored() + " AE");
             return;
         }
@@ -3207,10 +3247,10 @@ public final class NeoECOPrototypeGameTests {
         player.tickCount = 5;
         cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects.onPlayerTick(
                 new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
-        if (heldEnergy == null || heldEnergy.getEnergyStored() != 500) {
+        if (heldEnergy == null || heldEnergy.getEnergyStored() != sweepBudget) {
             helper.fail("the staff in the wearer's hand ended at "
                     + (heldEnergy == null ? "no capability" : heldEnergy.getEnergyStored() + " AE")
-                    + ", expected 500 - the held slot is not being charged");
+                    + ", expected " + sweepBudget + " - the held slot is not being charged");
             return;
         }
         if (staffEnergy.getEnergyStored() != backpackBefore) {
@@ -3227,7 +3267,7 @@ public final class NeoECOPrototypeGameTests {
             return;
         }
         int paidIntoFull = cn.dancingsnow.neoecoprototype.event.FumoEquipmentEffects
-                .chargeInventory(player, 500.0D);
+                .chargeInventory(player, sweepBudget);
         if (paidIntoFull != 0) {
             helper.fail("a full inventory still reported " + paidIntoFull + " AE paid out");
             return;
@@ -4150,7 +4190,7 @@ public final class NeoECOPrototypeGameTests {
             helper.fail("the drive is missing from the tab, so this reader cannot see membership at all");
             return;
         }
-        if (inTab.test(ModRegistration.FLAWLESS_BUDDING_FRIGIT_ITEM.get())) {
+        if (inTab.test(ModRegistration.FLAWLESS_BUDDING_GRETTE_ITEM.get())) {
             helper.fail("the outsider control is inside the tab, so the membership test is not the tab");
             return;
         }
@@ -6865,7 +6905,7 @@ public final class NeoECOPrototypeGameTests {
     }
 
     /**
-     * The four conditions of frigit mother rock have to move in the right direction: a rock grows crystals
+     * The four conditions of grette mother rock have to move in the right direction: a rock grows crystals
      * into the space in front of it, and every condition wears down into the next one. Getting that
      * backwards is invisible in game and silent in a compile - and the first cut of this chain did have it
      * inverted, so both halves are asserted here.
@@ -6873,18 +6913,18 @@ public final class NeoECOPrototypeGameTests {
      * <p>Driven tick by tick with a seeded random because waiting for the world to hand out that many
      * random ticks would take longer than the test is worth.
      */
-    @GameTest(template = "empty", batch = "frigit_chain", timeoutTicks = 120,
+    @GameTest(template = "empty", batch = "grette_chain", timeoutTicks = 120,
             templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void frigitBuddingGrowsAndWearsDown(GameTestHelper helper) {
+    public static void gretteBuddingGrowsAndWearsDown(GameTestHelper helper) {
         var level = helper.getLevel();
-        var stages = List.of(ModRegistration.SMALL_FRIGIT_BUD.get(),
-                ModRegistration.MEDIUM_FRIGIT_BUD.get(), ModRegistration.LARGE_FRIGIT_BUD.get(),
-                ModRegistration.FRIGIT_CLUSTER.get());
+        var stages = List.of(ModRegistration.SMALL_GRETTE_BUD.get(),
+                ModRegistration.MEDIUM_GRETTE_BUD.get(), ModRegistration.LARGE_GRETTE_BUD.get(),
+                ModRegistration.GRETTE_CLUSTER.get());
         var pos = new BlockPos(0, 2, 0);
-        helper.setBlock(pos, ModRegistration.FLAWLESS_BUDDING_FRIGIT.get());
+        helper.setBlock(pos, ModRegistration.FLAWLESS_BUDDING_GRETTE.get());
         // The structure is addressed relatively, but randomTick talks to the real level in world coordinates.
         var anchor = helper.absolutePos(pos);
-        var flawless = ModRegistration.FLAWLESS_BUDDING_FRIGIT.get();
+        var flawless = ModRegistration.FLAWLESS_BUDDING_GRETTE.get();
         var random = net.minecraft.util.RandomSource.create(20261003L);
         for (var i = 0; i < 400; i++) {
             flawless.randomTick(level.getBlockState(anchor), level, anchor, random);
@@ -6902,16 +6942,95 @@ public final class NeoECOPrototypeGameTests {
                         + " - the top condition has to stay permanent, or an untouched meteorite erodes itself");
 
         var wornPos = new BlockPos(6, 2, 6);
-        helper.setBlock(wornPos, ModRegistration.FLAWED_BUDDING_FRIGIT.get());
+        helper.setBlock(wornPos, ModRegistration.FLAWED_BUDDING_GRETTE.get());
         var worn = helper.absolutePos(wornPos);
-        var flawed = ModRegistration.FLAWED_BUDDING_FRIGIT.get();
+        var flawed = ModRegistration.FLAWED_BUDDING_GRETTE.get();
         var decay = net.minecraft.util.RandomSource.create(7L);
         for (var i = 0; i < 400 && level.getBlockState(worn).is(flawed); i++) {
             flawed.randomTick(level.getBlockState(worn), level, worn, decay);
         }
-        helper.assertTrue(level.getBlockState(worn).is(ModRegistration.CHIPPED_BUDDING_FRIGIT.get()),
+        helper.assertTrue(level.getBlockState(worn).is(ModRegistration.CHIPPED_BUDDING_GRETTE.get()),
                 "flawed mother rock wore down to " + level.getBlockState(worn).getBlock()
                         + ", expected chipped");
+        helper.succeed();
+    }
+
+    /**
+     * The crystal family shipped in v1.3.9 under {@code frigit_*}, and 1.4.0 renames it to
+     * {@code grette_*}. Every old id therefore has to keep pointing at the renamed entry, or the blocks
+     * already placed in a world and the stacks already sitting in inventories turn into air - vanilla
+     * drops a registry id it cannot resolve, silently and with no log line.
+     *
+     * <p>This asserts the alias on the registries the game itself reads (blocks and items), and a
+     * misspelled id as the control, so a constructor that resolves everything to anything cannot pass.
+     */
+    @GameTest(template = "empty", batch = "grette_alias", timeoutTicks = 40,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void oldFrigitIdsStillResolve(GameTestHelper helper) {
+        record Renamed(String oldPath, String newPath, Block block, Item item) {}
+        var family = List.of(
+                new Renamed("frigit_crystal", "grette_crystal", null,
+                        ModRegistration.GRETTE_CRYSTAL.get()),
+                new Renamed("frigit_crystal_block", "grette_crystal_block",
+                        ModRegistration.GRETTE_CRYSTAL_BLOCK.get(),
+                        ModRegistration.GRETTE_CRYSTAL_BLOCK_ITEM.get()),
+                new Renamed("frigit_cluster", "grette_cluster",
+                        ModRegistration.GRETTE_CLUSTER.get(), ModRegistration.GRETTE_CLUSTER_ITEM.get()),
+                new Renamed("small_frigit_bud", "small_grette_bud",
+                        ModRegistration.SMALL_GRETTE_BUD.get(), ModRegistration.SMALL_GRETTE_BUD_ITEM.get()),
+                new Renamed("medium_frigit_bud", "medium_grette_bud",
+                        ModRegistration.MEDIUM_GRETTE_BUD.get(), ModRegistration.MEDIUM_GRETTE_BUD_ITEM.get()),
+                new Renamed("large_frigit_bud", "large_grette_bud",
+                        ModRegistration.LARGE_GRETTE_BUD.get(), ModRegistration.LARGE_GRETTE_BUD_ITEM.get()),
+                new Renamed("damaged_budding_frigit", "damaged_budding_grette",
+                        ModRegistration.DAMAGED_BUDDING_GRETTE.get(),
+                        ModRegistration.DAMAGED_BUDDING_GRETTE_ITEM.get()),
+                new Renamed("chipped_budding_frigit", "chipped_budding_grette",
+                        ModRegistration.CHIPPED_BUDDING_GRETTE.get(),
+                        ModRegistration.CHIPPED_BUDDING_GRETTE_ITEM.get()),
+                new Renamed("flawed_budding_frigit", "flawed_budding_grette",
+                        ModRegistration.FLAWED_BUDDING_GRETTE.get(),
+                        ModRegistration.FLAWED_BUDDING_GRETTE_ITEM.get()),
+                new Renamed("flawless_budding_frigit", "flawless_budding_grette",
+                        ModRegistration.FLAWLESS_BUDDING_GRETTE.get(),
+                        ModRegistration.FLAWLESS_BUDDING_GRETTE_ITEM.get()));
+        for (var entry : family) {
+            var oldId = NeoECOPrototype.id(entry.oldPath());
+            var newId = NeoECOPrototype.id(entry.newPath());
+            if (entry.block() != null) {
+                if (!newId.equals(BuiltInRegistries.BLOCK.getKey(entry.block()))) {
+                    helper.fail("the renamed block registers as "
+                            + BuiltInRegistries.BLOCK.getKey(entry.block()) + ", expected " + newId);
+                    return;
+                }
+                if (BuiltInRegistries.BLOCK.getOptional(oldId).orElse(null) != entry.block()) {
+                    helper.fail("block " + oldId + " resolves to "
+                            + BuiltInRegistries.BLOCK.getOptional(oldId).orElse(null) + " instead of "
+                            + newId + " - a world that already has this block would lose it");
+                    return;
+                }
+            }
+            if (!newId.equals(BuiltInRegistries.ITEM.getKey(entry.item()))) {
+                helper.fail("the renamed item registers as "
+                        + BuiltInRegistries.ITEM.getKey(entry.item()) + ", expected " + newId);
+                return;
+            }
+            if (BuiltInRegistries.ITEM.getOptional(oldId).orElse(null) != entry.item()) {
+                helper.fail("item " + oldId + " resolves to "
+                        + BuiltInRegistries.ITEM.getOptional(oldId).orElse(null) + " instead of "
+                        + newId + " - a stack already in an inventory would vanish");
+                return;
+            }
+        }
+        // Control: if the registries answered every id, the loop above would prove nothing.
+        var nowhere = NeoECOPrototype.id("frigit_that_never_existed");
+        if (BuiltInRegistries.BLOCK.getOptional(nowhere).isPresent()
+                || BuiltInRegistries.ITEM.getOptional(nowhere).isPresent()) {
+            helper.fail("an id that was never registered resolved to "
+                    + BuiltInRegistries.ITEM.getOptional(nowhere) + ", so this guard cannot tell an "
+                    + "alias from a registry that answers everything");
+            return;
+        }
         helper.succeed();
     }
 
@@ -7183,6 +7302,155 @@ public final class NeoECOPrototypeGameTests {
                     }
                 });
     }
+
+    /**
+     * One row per addon machine: which class holds its block entity, what tier it carries, and what its
+     * grid node actually idles at. Two of those three routes answer for us - the {@code ECOPowerProfiles}
+     * provider for the machines whose block entity reports no tier, and {@code IECOTier#getComponentIdlePower}
+     * for the ones that do - and a row left at eco's unscaled 16.0 means neither of them fired. The scan
+     * fails on an empty read, because a scan that read nothing would prove nothing.
+     */
+    @GameTest(template = "l1_room", batch = "idle_power_inventory", timeoutTicks = 400,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void addonMachineIdlePowerInventory(GameTestHelper helper) {
+        var inventoryLog = org.slf4j.LoggerFactory.getLogger("neoecoprototype-idle-inventory");
+        var placed = new java.util.ArrayList<BlockPos>();
+        int slotX = 0;
+        int slotZ = 12;
+        for (Block block : BuiltInRegistries.BLOCK) {
+            var id = BuiltInRegistries.BLOCK.getKey(block);
+            if (id == null || !NeoECOPrototype.MOD_ID.equals(id.getNamespace())
+                    || !block.defaultBlockState().hasBlockEntity()) {
+                continue;
+            }
+            if (slotX >= L1_ROOM_SIZE) {
+                slotX = 0;
+                slotZ++;
+                if (slotZ >= L1_ROOM_SIZE) {
+                    helper.fail("the room is too small to hold every addon block entity");
+                    return;
+                }
+            }
+            var rel = new BlockPos(slotX++, 14, slotZ);
+            helper.setBlock(rel, block.defaultBlockState());
+            placed.add(rel);
+        }
+        helper.runAfterDelay(30, () -> {
+            int rows = 0;
+            for (var rel : placed) {
+                var absolute = helper.absolutePos(rel);
+                var state = helper.getLevel().getBlockState(absolute);
+                if (!(helper.getLevel().getBlockEntity(absolute) instanceof NEBlockEntity<?, ?> machine)) {
+                    continue;
+                }
+                var node = machine.getMainNode() == null ? null : machine.getMainNode().getNode();
+                inventoryLog.info("IDLE-INVENTORY {} | {} | tier={} | idle={}",
+                        BuiltInRegistries.BLOCK.getKey(state.getBlock()),
+                        machine.getClass().getSimpleName(),
+                        machine.getTier(),
+                        node == null ? "no node" : node.getIdlePowerUsage());
+                if (node != null && node.getIdlePowerUsage() == 16.0D) {
+                    helper.fail(name(state.getBlock()) + " idles at 16.0 AE/t, which is eco's own "
+                            + "un-scaled component baseline - nothing scaled it for the addon's L1 frame");
+                    return;
+                }
+                rows++;
+            }
+            if (rows == 0) {
+                helper.fail("none of the addon blocks placed an NEBlockEntity, so the inventory read nothing");
+                return;
+            }
+            inventoryLog.info("IDLE-INVENTORY done: {} rows, mixin baseline is {} AE/t",
+                    rows, cn.dancingsnow.neoecoprototype.api.SimplifyPowerProfile.L1.baseComponentIdlePower());
+            helper.succeed();
+        });
+    }
+
+    /**
+     * eco's pattern-migration source pool is built from the grid's {@code PatternContainer} machines, and
+     * every machine that is a {@code PatternStorageHost} is dropped unless
+     * {@code allowsPatternMigrationSource()} says otherwise ({@code PatternCatalog.beginExternalPatternIndexBuild},
+     * offsets 125-151). The interface default is false and eco ships no override anywhere in its jar, so both
+     * eco's own bus and ours were excluded -- issue #128. Ours answers true now; eco's own bus is placed next
+     * to it as the control, because "the default still applies to the class we did not touch" is the only way
+     * this test cannot pass by having quietly widened the interface.
+     */
+    @GameTest(template = "l1_room", batch = "pattern_bus_migration_source", timeoutTicks = 200,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void addonPatternBusJoinsTheMigrationSourcePool(GameTestHelper helper) {
+        var oursPos = new BlockPos(3, 2, 3);
+        var ecoPos = new BlockPos(5, 2, 3);
+        helper.setBlock(oursPos, ModRegistration.SIMPLIFY_CRAFTING_PATTERN_BUS_BLOCK.get());
+        helper.setBlock(ecoPos, cn.dancingsnow.neoecoae.all.NEBlocks.CRAFTING_PATTERN_BUS.get());
+        helper.runAfterDelay(20, () -> {
+            var ours = helper.getLevel().getBlockEntity(helper.absolutePos(oursPos));
+            var eco = helper.getLevel().getBlockEntity(helper.absolutePos(ecoPos));
+            if (!(ours instanceof cn.dancingsnow.neoecoae.blocks.entity.crafting.ECOCraftingPatternBusBlockEntity oursBus)) {
+                helper.fail("our bus placed a " + (ours == null ? "nothing" : ours.getClass().getName())
+                        + " instead of an eco pattern bus, so the machine table no longer sees it");
+                return;
+            }
+            if (!(ours instanceof cn.dancingsnow.neoecoprototype.blockentity.crafting
+                    .SimplifyCraftingPatternBusBlockEntity)) {
+                helper.fail("our bus is still eco's own class - the registration factory does not build the"
+                        + " addon subclass, so nothing answers the migration hook");
+                return;
+            }
+            if (!oursBus.allowsPatternMigrationSource()) {
+                helper.fail("the addon bus refuses to be a migration source, which is the whole symptom"
+                        + " #128 was about");
+                return;
+            }
+            if (!(eco instanceof cn.dancingsnow.neoecoae.api.PatternStorageHost ecoBus)) {
+                helper.fail("eco's own bus is not a PatternStorageHost, so this control row reads nothing");
+                return;
+            }
+            if (ecoBus.allowsPatternMigrationSource()) {
+                helper.fail("eco's own bus now answers the hook true, which our subclass cannot do - the"
+                        + " interface default was changed upstream and this test's premise moved");
+                return;
+            }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * eco's large-workstation recipe scan used to reach for lightning unconditionally: in the 21.2.10 build
+     * that first shipped, {@code LargeWorkstationRecipeSources} carried the {@code LightningKey} reference
+     * in its own body, so the class could not even be verified without ae2lt - an integrated server died at
+     * world load with {@code NoClassDefFoundError} on any base holding one of eco's L4 workstation
+     * interfaces, while ae2lt is only declared optional. The re-uploaded 21.2.10 moved that reference into
+     * {@code $LightningBorrowing} behind {@code loaded("ae2lt")}, which is the same shape this repo's §4.2
+     * requires. Nothing here builds an L4 machine: the scan is the unit, and it runs on every server that
+     * has an AE2 grid, so calling it with lightning absent is the whole test.
+     */
+    @GameTest(template = "empty", batch = "large_station_scan", timeoutTicks = 100,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void largeWorkstationScanSurvivesWithoutLightning(GameTestHelper helper) {
+        if (ModList.get().isLoaded("ae2lt")) {
+            helper.fail("ae2lt is loaded in this run, so this scan would not be reading the no-lightning case");
+            return;
+        }
+        java.util.List<cn.dancingsnow.neoecoae.recipe.LargeWorkstationRecipe> recipes;
+        try {
+            recipes = cn.dancingsnow.neoecoae.recipe.LargeWorkstationRecipes.getAll(helper.getLevel());
+        } catch (Throwable thrown) {
+            helper.fail("the scan reached for lightning although ae2lt is not installed: " + thrown);
+            return;
+        }
+        if (recipes == null) {
+            helper.fail("eco's large-workstation scan returned null with no lightning mod, where an empty"
+                    + " list is the answer");
+            return;
+        }
+        if (recipes.isEmpty()) {
+            helper.fail("the scan answered with no recipe at all, so this run is not reading eco's real"
+                    + " table and the check above would pass on an empty list anyway");
+            return;
+        }
+        helper.succeed();
+    }
+
 
     /**
      * eco builds three of its own placement definitions from {@code NEConfig} values that are only
@@ -10074,6 +10342,75 @@ public final class NeoECOPrototypeGameTests {
                         helper.fail("the swap took or invented parts from outside our own pack: " + strays);
                         return;
                     }
+                    helper.succeed();
+                });
+    }
+
+    /**
+     * The computation family is the one machine whose L1 placement shape comes from something we register
+     * (the {@code ECOMultiblockDefinitions} provider in {@code NeoECOPrototype#commonSetup}, which answers
+     * only for {@code SimplifyTier.L1} + {@code COMPUTATION}), and until now the only thing saying it hands
+     * over to eco's L4 was the table check. Here the machine really stands, the 1-4 disk really clicks, and
+     * the host on eco's block has to answer {@code isFormed()} - which is the moment our provider must stop
+     * answering and eco's own definition must start.
+     */
+    @GameTest(template = "l1_room", batch = "migration_drive_comp_l4", timeoutTicks = 600,
+            templateNamespace = NeoECOPrototype.MOD_ID)
+    public static void migrationDriveHandsAFormedComputationHostToEcoL4(GameTestHelper helper) {
+        buildComputationStructureKept(helper, CARD_HOST,
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get(),
+                ModRegistration.SIMPLIFY_COMPUTATION_THREADING_CORE_BLOCK.get(), 0, false,
+                cn.dancingsnow.neoecoprototype.api.SimplifyMultiblockConfig.L1_PLACEMENT_EXPAND_MAX,
+                (controller, finish) -> {
+                    var anchor = helper.absolutePos(CARD_HOST);
+                    if (!controller.isFormed()) {
+                        helper.fail("the L1 computation machine did not form before the click, so this swap"
+                                + " would prove nothing");
+                        finish.run();
+                        return;
+                    }
+                    var tierBefore = controller.getTier();
+                    if (tierBefore != cn.dancingsnow.neoecoprototype.api.SimplifyTier.L1) {
+                        helper.fail("the L1 host reports tier " + tierBefore
+                                + ", so the provider row this test is about is not the one firing");
+                        finish.run();
+                        return;
+                    }
+
+                    var disk = ModRegistration.MIGRATION_DRIVE_1_4.get();
+                    var player = cardPlayer(helper);
+                    player.setShiftKeyDown(true);
+                    player.getInventory().clearContent();
+                    player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(disk, 1));
+                    useCard(helper, player, disk);
+
+                    var afterHost = helper.getLevel().getBlockState(anchor).getBlock();
+                    if (afterHost != cn.dancingsnow.neoecoae.all.NEBlocks.COMPUTATION_SYSTEM_L4.get()) {
+                        helper.fail("the disk left the computation host on " + name(afterHost)
+                                + " instead of computation_system_l4");
+                        finish.run();
+                        return;
+                    }
+                    if (!(helper.getLevel().getBlockEntity(anchor) instanceof NEBlockEntity<?, ?> tieredHost)
+                            || tieredHost.getTier() == tierBefore) {
+                        helper.fail("the block changed but the host behind it still reports the old tier,"
+                                + " so the swap only repainted the shell");
+                        finish.run();
+                        return;
+                    }
+                    if (!(helper.getLevel().getBlockEntity(anchor)
+                            instanceof MultiBlockBuildController.Host fresh) || !fresh.isFormed()) {
+                        helper.fail("the room is on eco's L4 computation host but not formed, so the two"
+                                + " definition sources did not hand over cleanly");
+                        finish.run();
+                        return;
+                    }
+                    if (carried(player).getOrDefault(disk, 0) != 0) {
+                        helper.fail("the swap landed but the disk was not eaten");
+                        finish.run();
+                        return;
+                    }
+                    finish.run();
                     helper.succeed();
                 });
     }
