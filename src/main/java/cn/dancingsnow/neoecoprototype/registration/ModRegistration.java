@@ -1361,13 +1361,11 @@ private static Supplier<BlockEntityType<SimplifyStorageVentBlockEntity>> registe
     }
 
     private static Supplier<BlockEntityType<ECOCraftingPatternBusBlockEntity>> registerCraftingPatternBusBe() {
-        // The type still names eco's parent class, so AE2's machine table and every
-        // {@code instanceof ECOCraftingPatternBusBlockEntity} site (our own expansion card among them) keep
-        // working; only the instance built here is ours, and it exists to answer one interface method.
+        // eco's own class again, and the shape this had before 1.4.0: the only reason an addon subclass
+        // stood here was to answer allowsPatternMigrationSource() true, and 1.4.1 withdrew that.
         return (Supplier) BLOCK_ENTITIES.register("simplify_crafting_pattern_bus",
                 () -> BlockEntityType.Builder.of(
-                        (pos, state) -> new cn.dancingsnow.neoecoprototype.blockentity.crafting
-                                        .SimplifyCraftingPatternBusBlockEntity(
+                        (pos, state) -> new ECOCraftingPatternBusBlockEntity(
                                 SIMPLIFY_CRAFTING_PATTERN_BUS_BE.get(), pos, state),
                         SIMPLIFY_CRAFTING_PATTERN_BUS_BLOCK.get()).build(null));
     }

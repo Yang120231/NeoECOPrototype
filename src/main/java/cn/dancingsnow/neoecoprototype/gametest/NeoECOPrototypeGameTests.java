@@ -7104,6 +7104,26 @@ public final class NeoECOPrototypeGameTests {
     private static void buildRoom(GameTestHelper helper, BlockPos controllerPos, Block hostBlock,
                                   Block planInterface, Block wantedInterface, boolean atMax,
                                   java.util.function.Consumer<MultiBlockBuildController.Host> onFormed) {
+        buildRoomKept(helper, controllerPos, hostBlock, planInterface, wantedInterface, atMax,
+                (host, finish) -> {
+                    try {
+                        onFormed.accept(host);
+                    } finally {
+                        finish.run();
+                        helper.succeed();
+                    }
+                });
+    }
+
+    /**
+     * The builder with the teardown handed back to the caller. Everything else about the room is the same,
+     * but the blocks come down when the callback says so - which a test needs the moment the thing under
+     * test spans ticks rather than one method body, because this file's synchronous shape would clear the
+     * buses before the machine has moved anything.
+     */
+    private static void buildRoomKept(GameTestHelper helper, BlockPos controllerPos, Block hostBlock,
+                                      Block planInterface, Block wantedInterface, boolean atMax,
+                                      java.util.function.BiConsumer<MultiBlockBuildController.Host, Runnable> onFormed) {
         helper.setBlock(controllerPos, hostBlock);
         BlockPos absolute = helper.absolutePos(controllerPos);
         helper.runAfterDelay(5, () -> {
@@ -7146,22 +7166,26 @@ public final class NeoECOPrototypeGameTests {
             }
             host.rebuildAfterBuild();
             helper.runAfterDelay(20, () -> {
-                try {
-                    if (!host.isFormed()) {
-                        helper.fail("the room built from the plan never formed, so the published shape "
-                                + "says nothing about the machine");
+                // Two standing machines seven blocks apart make every controller "not unique", so whoever
+                // takes the handle has to clear our own blocks before the next batch starts.
+                boolean[] down = {false};
+                Runnable finish = () -> {
+                    if (down[0]) {
                         return;
                     }
-                    onFormed.accept(host);
-                } finally {
-                    // Two standing machines seven blocks apart make every controller "not unique", so
-                    // clear our own blocks before the next batch starts.
+                    down[0] = true;
                     for (BlockPos pos : built) {
                         helper.getLevel().setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
                     }
                     helper.getLevel().setBlockAndUpdate(absolute, Blocks.AIR.defaultBlockState());
+                };
+                if (!host.isFormed()) {
+                    finish.run();
+                    helper.fail("the room built from the plan never formed, so the published shape "
+                            + "says nothing about the machine");
+                    return;
                 }
-                helper.succeed();
+                onFormed.accept(host, finish);
             });
         });
     }
@@ -7375,9 +7399,9 @@ public final class NeoECOPrototypeGameTests {
      * to it as the control, because "the default still applies to the class we did not touch" is the only way
      * this test cannot pass by having quietly widened the interface.
      */
-    @GameTest(template = "l1_room", batch = "pattern_bus_migration_source", timeoutTicks = 200,
+    @GameTest(template = "l1_room", batch = "pattern_bus_migration_source_closed", timeoutTicks = 200,
             templateNamespace = NeoECOPrototype.MOD_ID)
-    public static void addonPatternBusJoinsTheMigrationSourcePool(GameTestHelper helper) {
+    public static void addonPatternBusStaysOutOfTheMigrationSourcePool(GameTestHelper helper) {
         var oursPos = new BlockPos(3, 2, 3);
         var ecoPos = new BlockPos(5, 2, 3);
         helper.setBlock(oursPos, ModRegistration.SIMPLIFY_CRAFTING_PATTERN_BUS_BLOCK.get());
@@ -7390,15 +7414,21 @@ public final class NeoECOPrototypeGameTests {
                         + " instead of an eco pattern bus, so the machine table no longer sees it");
                 return;
             }
-            if (!(ours instanceof cn.dancingsnow.neoecoprototype.blockentity.crafting
-                    .SimplifyCraftingPatternBusBlockEntity)) {
-                helper.fail("our bus is still eco's own class - the registration factory does not build the"
-                        + " addon subclass, so nothing answers the migration hook");
+            if (ours.getClass() != cn.dancingsnow.neoecoae.blocks.entity.crafting
+                    .ECOCraftingPatternBusBlockEntity.class) {
+                helper.fail("our bus runs an addon subclass again (" + ours.getClass().getName() + "),"
+                        + " and 1.4.1 retired it: the only thing that subclass did was answer the hook"
+                        + " true");
                 return;
             }
-            if (!oursBus.allowsPatternMigrationSource()) {
-                helper.fail("the addon bus refuses to be a migration source, which is the whole symptom"
-                        + " #128 was about");
+            // 1.4.1 closes this door again. A player reported on 2026-10-25 that patterns were lost after
+            // a subsystem migration, and our bus had become the first container in this ecosystem sitting
+            // in the source pool and the writable target pool at once - so ours now answers what eco's own
+            // bus answers, until that loss is understood.
+            if (oursBus.allowsPatternMigrationSource()) {
+                helper.fail("the addon bus is back in the migration source pool - 1.4.1 took it out over"
+                        + " the reported pattern loss, so this is the change that must not come back"
+                        + " unnoticed");
                 return;
             }
             if (!(eco instanceof cn.dancingsnow.neoecoae.api.PatternStorageHost ecoBus)) {
@@ -7406,13 +7436,14 @@ public final class NeoECOPrototypeGameTests {
                 return;
             }
             if (ecoBus.allowsPatternMigrationSource()) {
-                helper.fail("eco's own bus now answers the hook true, which our subclass cannot do - the"
-                        + " interface default was changed upstream and this test's premise moved");
+                helper.fail("eco's own bus answers the hook true, so upstream changed its default and"
+                        + " this test is comparing against the wrong thing");
                 return;
             }
             helper.succeed();
         });
     }
+
 
     /**
      * eco's large-workstation recipe scan used to reach for lightning unconditionally: in the 21.2.10 build
