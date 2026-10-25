@@ -69,6 +69,18 @@ public final class NeoECOPrototypeServerConfig {
      */
     public static final ModConfigSpec.DoubleValue MIND_IDLE_POWER_SAVING;
 
+    /**
+     * AE per tick the charging plushie pays out, out of the box. A plain constant because the doll's own
+     * stat and this key's default have to be the same number, and a test has to pin the shipped value
+     * without loading a config file.
+     */
+    public static final double FUMO_CHARGE_AE_PER_TICK_DEFAULT = 100.0D;
+    /**
+     * AE per tick the charging plushie feeds into what its wearer carries. Zero switches the charging off.
+     * The tooltip cannot quote this number: it is a server key, and a dedicated client never loads one.
+     */
+    public static final ModConfigSpec.DoubleValue FUMO_CHARGE_AE_PER_TICK;
+
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         builder.push("l1_storage");
@@ -167,7 +179,22 @@ public final class NeoECOPrototypeServerConfig {
                         "Default: 0.10.")
                 .defineInRange("idle_power_saving", 0.10D, 0.0D, 0.25D);
         builder.pop();
+        builder.push("fumo_dolls");
+        FUMO_CHARGE_AE_PER_TICK = builder
+                .comment("AE per tick the wearing TedXenon plushie makes and feeds into the chargeable items",
+                        "in the wearer's inventory and armour slots, the held hotbar slot included.",
+                        "It is void-made, never drawn from the grid, and nothing is banked while there is",
+                        "nothing to charge. Zero switches the charging off; the tooltip line is static text",
+                        "either way, because a server config is not readable on a client.",
+                        "Default: 100.")
+                .defineInRange("charge_ae_per_tick", FUMO_CHARGE_AE_PER_TICK_DEFAULT, 0.0D, 1_000_000.0D);
+        builder.pop();
         SPEC = builder.build();
+    }
+
+    /** The plushie's rate, floored at zero and read on every sweep so a pack edit takes effect at once. */
+    public static double fumoChargeAePerTick() {
+        return Math.max(0.0D, FUMO_CHARGE_AE_PER_TICK.get());
     }
 
     /** The cell's interval, floored: the config range is the guard, this is the read-side one. */

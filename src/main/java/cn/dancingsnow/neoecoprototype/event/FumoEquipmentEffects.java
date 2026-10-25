@@ -1,6 +1,7 @@
 package cn.dancingsnow.neoecoprototype.event;
 
 import cn.dancingsnow.neoecoprototype.NeoECOPrototype;
+import cn.dancingsnow.neoecoprototype.config.NeoECOPrototypeServerConfig;
 import cn.dancingsnow.neoecoprototype.item.decoration.FumoItem;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -95,9 +96,11 @@ public final class FumoEquipmentEffects {
             }
         }
         // Last, and only for the doll that carries the stat: nothing above depends on it, and a doll with
-        // zero here never asks a single stack for its capability.
-        if (stats.chargeAEPerTick() > 0.0D && chargeDue(player.tickCount)) {
-            chargeInventory(player, stats.chargeAEPerTick() * CHARGE_SWEEP_TICKS);
+        // zero here never asks a single stack for its capability. The rate itself is the server's to set,
+        // so a pack that turns it off costs no capability lookup either.
+        double aePerTick = NeoECOPrototypeServerConfig.fumoChargeAePerTick();
+        if (stats.chargeAEPerTick() > 0.0D && aePerTick > 0.0D && chargeDue(player.tickCount)) {
+            chargeInventory(player, aePerTick * CHARGE_SWEEP_TICKS);
         }
     }
 }

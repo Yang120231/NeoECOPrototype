@@ -55,8 +55,10 @@ public class FumoItem extends BlockItem implements Equipable {
 
     /**
      * What the doll grants while worn: its own armour, the effects on top of the shared night vision, and
-     * the AE/t it pushes into chargeable things in the wearer's pockets - zero for the dolls that do not
-     * charge anything, which is most of them.
+     * the AE/t it is authored to push into chargeable things in the wearer's pockets - zero for the dolls
+     * that do not charge anything, which is most of them. A non-zero rate here marks the doll as the
+     * charging one; how much it actually pays is the server config's call, so the number is only the
+     * shipped default.
      */
     public record DollStats(float armor, float toughness, List<DollEffect> extraEffects, double chargeAEPerTick) {
     }
@@ -121,10 +123,9 @@ public class FumoItem extends BlockItem implements Equipable {
                     .withStyle(ChatFormatting.GRAY));
         }
         if (stats.chargeAEPerTick() > 0.0D) {
-            // The rate is read out of the same stat the sweep uses, so the tooltip cannot promise a number
-            // the doll does not deliver.
-            tooltip.add(Component.translatable("block.neoecoprototype.fumo_reliqwq.worn_charge",
-                            Component.literal(Long.toString(Math.round(stats.chargeAEPerTick()))))
+            // No number on this line: the rate is a server config key, and a dedicated client never loads
+            // one, so quoting it here would mean hard-coding a value the server may have changed.
+            tooltip.add(Component.translatable("block.neoecoprototype.fumo_reliqwq.worn_charge")
                     .withStyle(ChatFormatting.GRAY));
         }
     }
