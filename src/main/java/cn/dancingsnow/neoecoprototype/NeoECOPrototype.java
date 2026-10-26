@@ -29,6 +29,13 @@ public class NeoECOPrototype {
 
     public NeoECOPrototype(IEventBus modBus, ModContainer container) {
         LOGGER.info("Loading {}...", MOD_ID);
+        // AE2's part-model list is write-once: whoever resolves the cable-bus model or handles
+        // ModelEvent.RegisterAdditional first closes it, and registerModels throws after that. Mod
+        // construction is the one phase where no mod can have baked anything yet, so it cannot be a race -
+        // see NeoECOPrototypeClient#registerPartModels for the player-reported startup crash this fixes.
+        if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
+            cn.dancingsnow.neoecoprototype.client.NeoECOPrototypeClient.registerPartModels();
+        }
         container.registerConfig(net.neoforged.fml.config.ModConfig.Type.SERVER, NeoECOPrototypeServerConfig.SPEC);
 
         // Register blocks / items / block entity types / creative tab.

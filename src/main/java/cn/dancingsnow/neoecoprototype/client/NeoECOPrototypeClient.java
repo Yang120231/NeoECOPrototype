@@ -36,7 +36,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.extensions.common.IClientBlockExtensions;
@@ -70,14 +69,21 @@ public final class NeoECOPrototypeClient {
     }
 
     /**
-     * AE2 freezes the part-model set the first time its cable-bus model resolves dependencies or its
-     * own RegisterAdditional handler runs, and {@code registerModels} throws after that. Freezing can
-     * therefore happen before client setup in a large pack, so this has to run in the setup phase AE2
-     * names: pre-initialization. A missing entry here is worse than late - it crashes cable bus
-     * tessellation with "Trying to use an unregistered part model".
+     * AE2 freezes the part-model set the first time its cable-bus model resolves dependencies
+     * ({@code appeng/client/render/cablebus/CableBusModel}) or its own {@code RegisterAdditional} handler
+     * runs ({@code appeng/init/client/InitAdditionalModels}, whose first statement is the freeze), and
+     * {@code registerModels} throws after that. So this is not a matter of picking the "right" lifecycle
+     * event: it has to run before *any* mod's setup work can bake a model, which is mod construction -
+     * NeoForge constructs every mod before it dispatches {@code FMLCommonSetupEvent} to anyone. Measured on
+     * a player's pack where the common-setup call site was already too late (NeoForge 21.1.263, AE2
+     * 19.2.18; {@code PartModels} bytecode is identical in AE2 19.2.17, so this was never the AE2 version).
+     *
+     * <p>A missing entry here is worse than late: the three locations are read by
+     * {@code CableBusBakedModel}/{@code CableBusModel}/{@code FacadeBuilder}, and cable tessellation then
+     * crashes with "Trying to use an unregistered part model". That is also why there is no try/catch -
+     * swallowing it would trade a startup crash for a later one plus invisible broken parts.</p>
      */
-    @SubscribeEvent
-    public static void onCommonSetup(FMLCommonSetupEvent event) {
+    public static void registerPartModels() {
         PartModels.registerModels(
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "part/powered_me_interface"),
                 ResourceLocation.fromNamespaceAndPath(NeoECOPrototype.MOD_ID, "part/superconductive_interface"),
